@@ -1,0 +1,26 @@
+# DigitalOcean App Platform spec — Steelo frontend (staging).
+#   Create:  doctl apps create --spec .do/app.staging.yaml
+#   Update:  doctl apps update <APP_ID> --spec .do/app.staging.yaml
+name: steelo-frontend-staging
+region: blr
+static_sites:
+  - name: steelo-frontend
+    github:
+      repo: YOUR_ORG/WFM-Frontend        # set to the real repo
+      branch: main
+      deploy_on_push: false               # deploy per phase, deliberately
+    build_command: npm ci && npm run build
+    output_dir: dist
+    catchall_document: index.html         # SPA routing
+    envs:
+      # Build-time: Vite inlines these. Must be a sibling subdomain of the SPA's domain
+      # so the httpOnly refresh cookie works (see backend docs, OD-26).
+      - key: VITE_API_BASE_URL
+        value: https://steelo-api.staging.steel.study
+        scope: BUILD_TIME
+      - key: VITE_APP_VERSION
+        value: v0.2.0
+        scope: BUILD_TIME
+domains:
+  - domain: steelo.staging.steel.study
+    type: PRIMARY
