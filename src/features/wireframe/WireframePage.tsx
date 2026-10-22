@@ -20,6 +20,9 @@ import { IsometricPreview } from './IsometricPreview'
 import { LevelProposalsCard } from './LevelProposals'
 import type { CameraView } from './Wireframe3D'
 
+/** Built from every page that has been run, not only pages added to the project. */
+const isDraftBuild = (w: Wireframe) => Boolean((w as Wireframe & { draft?: boolean }).draft)
+
 // three.js loads only when the 3D view is shown.
 const Wireframe3D = lazy(() => import('./Wireframe3D'))
 
@@ -64,7 +67,7 @@ export function WireframePage() {
   })
   const current: Wireframe | undefined = revisions.data?.find((w) => w.id === chosen) ?? revisions.data?.[0]
   const generate = useMutation({
-    mutationFn: () => generateWireframe(projectId),
+    mutationFn: (draft: boolean) => generateWireframe(projectId, { draft }),
     meta: { successMessage: 'Generating the wireframe' },
     onSuccess: (w) => {
       setChosen(w.id)
@@ -106,9 +109,16 @@ export function WireframePage() {
               loading={generate.isPending || generating}
               disabled={!pages.length}
               aria-describedby={pages.length ? undefined : 'wireframe-needs-pages'}
-              onClick={() => generate.mutate()}
+              onClick={() => generate.mutate(false)}
             >
               {revisions.data.length ? 'Generate again' : 'Generate wireframe'}
+            </Button>
+            <Button
+              loading={generate.isPending || generating}
+              onClick={() => generate.mutate(true)}
+              title="Build from every page that has been run (with its level set), without adding pages to the project. For checking only: the wireframe to issue is built from added pages."
+            >
+              Generate draft (all run pages)
             </Button>
             {!pages.length && (
               <p id="wireframe-needs-pages" className="page-header__hint">
@@ -288,7 +298,8 @@ function RevisionSection({
     <section className="card" aria-labelledby="wf-revision">
       <div className="card__header">
         <h2 id="wf-revision">
-          Revision {current.revision_no} <StatusBadge {...(STATUS[current.status] ?? STATUS.draft!)} />
+          Revision {current.revision_no} <StatusBadge {...(STATUS[current.status] ?? STATUS.draft!)} />{' '}
+          {isDraftBuild(current) && <StatusBadge tone="warning" label="Draft — all run pages" />}
         </h2>
         {revisions.length > 1 && (
           <SelectField
@@ -297,7 +308,7 @@ function RevisionSection({
             onChange={(e) => onChoose(e.target.value)}
             options={revisions.map((w) => ({
               value: w.id,
-              label: `Revision ${w.revision_no} · ${STATUS[w.status]?.label ?? w.status} · ${new Date(w.created_at).toLocaleString()}`,
+              label: `Revision ${w.revision_no} · ${STATUS[w.status]?.label ?? w.status}${isDraftBuild(w) ? ' · all run pages' : ''} · ${new Date(w.created_at).toLocaleString()}`,
             }))}
           />
         )}

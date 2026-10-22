@@ -16,6 +16,8 @@ const totals = {
   not_weighed: { entries: 0, quantity: 0, reasons: { no_length: count, not_in_section_data: count, unsupported: count } },
   not_in_tonnage: { entries: 2, quantity: 2, length_mm: '25603.2', families: ['K', 'KCS', 'LH', 'DLH', 'JG'] },
   estimate_all_weighed: { lb: '520.0', kg: '235.9', short_tons: '0.260', tonnes: '0.236' },
+  connection_material: { lines: 0, weight: { lb: '0.0', kg: '0.0', short_tons: '0.000', tonnes: '0.000' }, unweighed: 0 },
+  estimate_with_connections: { lb: '520.0', kg: '235.9', short_tons: '0.260', tonnes: '0.236' },
   complete: true,
   groups: [
     { profile: 'LH', designation: '36LH10', entries: 1, quantity: 1, measured_length_mm: '19507.2', unmeasured: 0, unit_weight_lb_per_ft: null, unit_weight_kg_per_m: null, reviewed: null, incomplete: null, weighed: null, not_weighed: 0, counted_in_tonnage: false },

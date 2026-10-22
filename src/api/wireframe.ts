@@ -24,8 +24,11 @@ export async function listWireframes(projectId: string): Promise<Wireframe[]> {
   return data
 }
 
-export async function generateWireframe(projectId: string): Promise<Wireframe> {
-  const { data } = await apiClient.post<Wireframe>(`/api/v1/projects/${projectId}/wireframes/`)
+/** ``draft``: build from every page that has been run, not only pages added to the project. */
+export async function generateWireframe(projectId: string, options: { draft?: boolean } = {}): Promise<Wireframe> {
+  const { data } = await apiClient.post<Wireframe>(`/api/v1/projects/${projectId}/wireframes/`, {
+    draft: options.draft ?? false,
+  })
   return data
 }
 

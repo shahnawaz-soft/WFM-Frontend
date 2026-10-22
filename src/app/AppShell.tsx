@@ -19,6 +19,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { to: '/', label: 'Home', icon: 'home', end: true },
   { to: '/projects', label: 'Projects', icon: 'projects' },
+  { to: '/connection-templates', label: 'Connection templates', icon: 'templates' },
   { to: '/admin/users', label: 'Users', icon: 'users', requires: 'users.manage' },
   { to: '/admin/sections', label: 'Section data', icon: 'sections', requires: 'users.manage' },
   { to: '/ops', label: 'Operations', icon: 'operations', requires: 'ops.view' },

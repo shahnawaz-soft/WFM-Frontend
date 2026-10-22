@@ -86,6 +86,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/connection-material/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["connection_material_destroy"];
+        options?: never;
+        head?: never;
+        patch: operations["connection_material_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/connection-templates/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["connection_templates_list"];
+        put?: never;
+        post: operations["connection_templates_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/connection-templates/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["connection_templates_destroy"];
+        options?: never;
+        head?: never;
+        patch: operations["connection_templates_partial_update"];
+        trace?: never;
+    };
     "/api/v1/drawing-pages/{id}/": {
         parameters: {
             query?: never;
@@ -344,6 +392,40 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["drawing_sets_retry_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/drawing-sets/{id}/revision/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description What changed between a drawing set and the earlier set it revises. */
+        get: operations["drawing_sets_revision_retrieve"];
+        /** @description What changed between a drawing set and the earlier set it revises. */
+        put: operations["drawing_sets_revision_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/drawing-sets/{id}/revision/pairs/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["drawing_sets_revision_pairs_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -686,6 +768,22 @@ export interface paths {
         put?: never;
         /** @description Bring the ABM in line with the schedule (heights, symbol-only columns). */
         post: operations["projects_column_schedule_sync_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/connection-material/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["projects_connection_material_retrieve"];
+        put?: never;
+        post: operations["projects_connection_material_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1258,6 +1356,10 @@ export interface components {
             not_in_tonnage: components["schemas"]["_NotInTonnage"];
             /** @description Reviewed + incomplete: an estimate, not a total */
             estimate_all_weighed: components["schemas"]["_Amounts"];
+            /** @description Connection material on the entries: lines, weight, lines that can't be weighed */
+            connection_material: components["schemas"]["_ConnectionTotals"];
+            /** @description The estimate plus connection material */
+            estimate_with_connections: components["schemas"]["_Amounts"];
             /** @description Every entry is reviewed and weighed */
             complete: boolean;
             groups: components["schemas"]["_TotalsGroup"][];
@@ -1277,6 +1379,24 @@ export interface components {
          * @enum {string}
          */
         ActorTypeEnum: "user" | "system" | "job";
+        AddConnectionMaterialRequest: {
+            members: string[];
+            /**
+             * @description With one member: also every entry of its section on its page or in the ABM
+             *
+             *     * `entry` - This entry
+             *     * `page` - Every entry of its section on its page
+             *     * `project` - Every entry of its section in the project's ABM
+             * @default entry
+             */
+            scope: components["schemas"]["ScopeEnum"];
+            lines?: components["schemas"]["ConnectionLineInputRequest"][];
+            /**
+             * Format: uuid
+             * @description Apply this template's lines (instead of ``lines``)
+             */
+            template?: string;
+        };
         ApplyProposalsRequest: {
             pages: string[];
         };
@@ -1422,6 +1542,103 @@ export interface components {
          * @enum {string}
          */
         CompletenessEnum: "ok" | "missing_data" | "unsupported";
+        /**
+         * @description * `manual` - Manual
+         *     * `continuous` - Continuous
+         *     * `spaced` - Spaced
+         *     * `stock` - Stock
+         * @enum {string}
+         */
+        ConnectionKindEnum: "manual" | "continuous" | "spaced" | "stock";
+        ConnectionLineInputRequest: {
+            kind: components["schemas"]["ConnectionKindEnum"];
+            description: string;
+            /** @description manual / spaced: each piece; stock: the stock length bought */
+            length?: string | null;
+            /** @description spaced: the spacing along the member */
+            spacing?: string | null;
+            /** @default 1 */
+            quantity: number;
+            /** @default  */
+            grade: string;
+            /** @default  */
+            finish: string;
+        };
+        ConnectionMaterialLine: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            member: string;
+            member_designation: string;
+            member_length_display: string;
+            /** Format: uuid */
+            page: string;
+            kind: components["schemas"]["ConnectionKindEnum"];
+            description: string;
+            /** Format: decimal */
+            length_mm: string | null;
+            length_display: string;
+            /** Format: decimal */
+            spacing_mm: string | null;
+            spacing_display: string;
+            quantity: number;
+            grade: string;
+            finish: string;
+            version: number;
+            /** Format: uuid */
+            batch: string;
+            /** @description The template it came from; empty if none */
+            template_name: string;
+            /** @description Null: needs the member's length */
+            pieces: number | null;
+            piece_length_display: string;
+            /** Format: decimal */
+            total_length_mm: string | null;
+            total_length_display: string;
+            /** Format: decimal */
+            unit_weight_lb_per_ft: string | null;
+            weight: components["schemas"]["_Amounts"] | null;
+            /** @description Why it isn't worked out or weighed: member_length_missing, not_weighed (no plate size or section data), no_length; empty when it is */
+            reason: string;
+        };
+        ConnectionMaterialList: {
+            lines: components["schemas"]["ConnectionMaterialLine"][];
+            totals: components["schemas"]["ConnectionTotals"];
+        };
+        ConnectionTemplate: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            note: string;
+            version: number;
+            /** Format: date-time */
+            updated_at: string;
+            lines: components["schemas"]["ConnectionTemplateLine"][];
+        };
+        ConnectionTemplateInputRequest: {
+            name: string;
+            /** @default  */
+            note: string;
+            lines: components["schemas"]["ConnectionLineInputRequest"][];
+        };
+        ConnectionTemplateLine: {
+            kind: components["schemas"]["ConnectionKindEnum"];
+            description: string;
+            /** Format: decimal */
+            length_mm: string | null;
+            length_display: string;
+            /** Format: decimal */
+            spacing_mm: string | null;
+            spacing_display: string;
+            quantity: number;
+            grade: string;
+            finish: string;
+        };
+        ConnectionTotals: {
+            lines: number;
+            weight: components["schemas"]["_Amounts"];
+            unweighed: number;
+        };
         /** @description The signed-in user, including what they may do (drives permission-aware UI). */
         CurrentUser: {
             /** Format: uuid */
@@ -1492,6 +1709,8 @@ export interface components {
             readonly pages_ready: number;
             readonly pages_failed: number;
             readonly can_retry: boolean;
+            /** Format: uuid */
+            readonly revises: string | null;
         };
         /**
          * @description * `processing` - Preparing pages
@@ -1503,6 +1722,11 @@ export interface components {
         DrawingSetUploadRequest: {
             /** Format: binary */
             file: string;
+            /**
+             * Format: uuid
+             * @description An earlier set of the project this one revises
+             */
+            revises?: string | null;
             /**
              * @description Upload anyway when the same file already exists in the project.
              * @default false
@@ -1773,11 +1997,6 @@ export interface components {
          * @enum {string}
          */
         JobStatusEnum: "queued" | "processing" | "completed" | "needs_review" | "failed";
-        /**
-         * @description * `run_plan` - Run Plan
-         * @enum {string}
-         */
-        KindEnum: "run_plan";
         /**
          * @description * `leader` - leader
          *     * `tag` - tag
@@ -2059,8 +2278,35 @@ export interface components {
             previous?: string | null;
             results: components["schemas"]["User"][];
         };
+        PairSheetRequest: {
+            /** Format: uuid */
+            revised_page: string;
+            /**
+             * Format: uuid
+             * @description Null: a new sheet
+             */
+            original_page: string | null;
+        };
         PasswordResetRequest: {
             new_password: string;
+        };
+        PatchedEditConnectionMaterialRequest: {
+            kind?: components["schemas"]["ConnectionKindEnum"];
+            description?: string;
+            /** @description manual / spaced: each piece; stock: the stock length bought */
+            length?: string | null;
+            /** @description spaced: the spacing along the member */
+            spacing?: string | null;
+            quantity?: number;
+            grade?: string;
+            finish?: string;
+            version?: number;
+        };
+        PatchedEditConnectionTemplateRequest: {
+            version?: number;
+            name?: string;
+            note?: string;
+            lines?: components["schemas"]["ConnectionLineInputRequest"][];
         };
         PatchedElementEditRequest: {
             version?: number;
@@ -2119,7 +2365,7 @@ export interface components {
             /** Format: uuid */
             readonly page: string;
             /** @default run_plan */
-            readonly kind: components["schemas"]["KindEnum"];
+            readonly kind: components["schemas"]["ProcessingJobKindEnum"];
             /** @default queued */
             readonly status: components["schemas"]["JobStatusEnum"];
             readonly progress: number;
@@ -2136,6 +2382,11 @@ export interface components {
             readonly error_message: string;
             readonly run: components["schemas"]["ExtractionRun"] | null;
         };
+        /**
+         * @description * `run_plan` - Run Plan
+         * @enum {string}
+         */
+        ProcessingJobKindEnum: "run_plan";
         /**
          * @description * `not_started` - not_started
          *     * `in_progress` - in_progress
@@ -2262,6 +2513,19 @@ export interface components {
          * @enum {string}
          */
         ReviewStatusEnum: "unreviewed" | "accepted" | "rejected" | "needs_review" | "unsupported";
+        /**
+         * @description * `added` - Added
+         *     * `removed` - Removed
+         *     * `changed` - Changed
+         * @enum {string}
+         */
+        RevisionChangeKindEnum: "added" | "removed" | "changed";
+        RevisionReport: {
+            revision: components["schemas"]["_SetRef"];
+            original: components["schemas"]["_SetRef"];
+            summary: components["schemas"]["_Summary"];
+            sheets: components["schemas"]["_SheetComparison"][];
+        };
         RunPlanRequest: {
             /**
              * @description Confirm re-running a page whose members have already been reviewed/corrected.
@@ -2330,6 +2594,13 @@ export interface components {
             /** @description Columns with no ABM entry yet (symbols only): Update adds them. Columns the column schedule sheet counts are not included */
             readonly not_in_bill: number;
         };
+        /**
+         * @description * `entry` - This entry
+         *     * `page` - Every entry of its section on its page
+         *     * `project` - Every entry of its section in the project's ABM
+         * @enum {string}
+         */
+        ScopeEnum: "entry" | "page" | "project";
         SectionDataset: {
             /** Format: uuid */
             readonly id: string;
@@ -2367,6 +2638,20 @@ export interface components {
         Session: {
             access: string;
             user: components["schemas"]["CurrentUser"];
+        };
+        SetRevises: {
+            /**
+             * Format: uuid
+             * @description The earlier set; null: none
+             */
+            revises: string | null;
+        };
+        SetRevisesRequest: {
+            /**
+             * Format: uuid
+             * @description The earlier set; null: none
+             */
+            revises: string | null;
         };
         /**
          * @description * `plan` - plan
@@ -2530,6 +2815,15 @@ export interface components {
             /** Format: decimal */
             tonnes: string;
         };
+        /**
+         * @description * `size` - size
+         *     * `length` - length
+         *     * `quantity` - quantity
+         *     * `studs` - studs
+         *     * `camber` - camber
+         * @enum {string}
+         */
+        WhatEnum: "size" | "length" | "quantity" | "studs" | "camber";
         Wireframe: {
             /** Format: uuid */
             readonly id: string;
@@ -2684,6 +2978,17 @@ export interface components {
             not_reviewed: number;
             not_added: number;
         };
+        _Change: {
+            kind: components["schemas"]["RevisionChangeKindEnum"];
+            what: components["schemas"]["WhatEnum"][];
+            original: components["schemas"]["_Member"] | null;
+            revised: components["schemas"]["_Member"] | null;
+            /**
+             * Format: decimal
+             * @description Null: can't be weighed
+             */
+            weight_delta_lb: string | null;
+        };
         _ChangedPage: {
             /** Format: uuid */
             id: string;
@@ -2692,9 +2997,20 @@ export interface components {
             level_label: string;
             elevation_mm: string | null;
         };
+        _ConnectionTotals: {
+            lines: number;
+            weight: components["schemas"]["_Amounts"];
+            unweighed: number;
+        };
         _Count: {
             entries: number;
             quantity: number;
+        };
+        _Counts: {
+            added: number;
+            removed: number;
+            changed: number;
+            unchanged: number;
         };
         _CurrentLevel: {
             level_label: string;
@@ -2742,6 +3058,21 @@ export interface components {
             occurred_at: string;
             actor: string | null;
             action: string;
+        };
+        _Member: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            page: string;
+            designation: string;
+            member_type: string;
+            /** Format: decimal */
+            length_mm: string | null;
+            length_display: string;
+            quantity: number;
+            studs_text: string;
+            camber_display: string;
+            label_bbox: number[] | null;
         };
         _NotInTonnage: {
             entries: number;
@@ -2803,6 +3134,11 @@ export interface components {
             /** @description The level marker as printed, e.g. 2ND TOS 116'-2 3/4" */
             text: string;
         };
+        _SetRef: {
+            /** Format: uuid */
+            id: string;
+            original_filename: string;
+        };
         _SetupPage: {
             /** Format: uuid */
             id: string;
@@ -2823,6 +3159,58 @@ export interface components {
             sheet_kind: string | null;
             /** @description False for elevation, section, detail and schedule sheets: their members are not placed in 3D and need no level set-up */
             placed_in_3d: boolean;
+        };
+        _Sheet: {
+            /** Format: uuid */
+            page_id: string;
+            page_number: number;
+            /** @description As read from the title block; empty if none */
+            sheet_number: string;
+            /** @description Its first view title */
+            title: string;
+            /** @description The page's status (processed, added …) */
+            status: string;
+        };
+        _SheetComparison: {
+            original: components["schemas"]["_Sheet"] | null;
+            revised: components["schemas"]["_Sheet"] | null;
+            /** @description How the sheets were paired: sheet_number, title, page_order or person */
+            method: string;
+            /**
+             * @description not_run: run Run Plan on the revised sheet to compare it
+             *
+             *     * `compared` - compared
+             *     * `not_run` - not_run
+             *     * `new_sheet` - new_sheet
+             *     * `removed_sheet` - removed_sheet
+             */
+            status: components["schemas"]["_SheetComparisonStatusEnum"];
+            notes: string[];
+            counts: components["schemas"]["_Counts"];
+            /** Format: decimal */
+            weight_delta_lb: string | null;
+            changes: components["schemas"]["_Change"][];
+        };
+        /**
+         * @description * `compared` - compared
+         *     * `not_run` - not_run
+         *     * `new_sheet` - new_sheet
+         *     * `removed_sheet` - removed_sheet
+         * @enum {string}
+         */
+        _SheetComparisonStatusEnum: "compared" | "not_run" | "new_sheet" | "removed_sheet";
+        _Summary: {
+            added: number;
+            removed: number;
+            changed: number;
+            unchanged: number;
+            sheets_compared: number;
+            sheets_not_run: number;
+            sheets_new: number;
+            sheets_removed: number;
+            /** Format: decimal */
+            weight_delta_lb: string;
+            unweighed_changes: number;
         };
         _Tonnage: {
             reviewed: components["schemas"]["_Amounts"];
@@ -2992,6 +3380,138 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Session"];
+                };
+            };
+        };
+    };
+    connection_material_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    connection_material_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedEditConnectionMaterialRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectionMaterialLine"];
+                };
+            };
+        };
+    };
+    connection_templates_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectionTemplate"][];
+                };
+            };
+        };
+    };
+    connection_templates_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectionTemplateInputRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectionTemplate"];
+                };
+            };
+        };
+    };
+    connection_templates_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    connection_templates_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedEditConnectionTemplateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectionTemplate"];
                 };
             };
         };
@@ -3398,6 +3918,76 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["DrawingSet"];
                 };
+            };
+        };
+    };
+    drawing_sets_revision_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevisionReport"];
+                };
+            };
+        };
+    };
+    drawing_sets_revision_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetRevisesRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetRevises"];
+                };
+            };
+        };
+    };
+    drawing_sets_revision_pairs_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PairSheetRequest"];
+            };
+        };
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -3969,6 +4559,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SyncResult"];
+                };
+            };
+        };
+    };
+    projects_connection_material_retrieve: {
+        parameters: {
+            query?: {
+                /** @description Every page that has been run */
+                draft?: boolean;
+                /** @description Only this ABM entry's lines */
+                member?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectionMaterialList"];
+                };
+            };
+        };
+    };
+    projects_connection_material_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddConnectionMaterialRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectionMaterialLine"][];
                 };
             };
         };

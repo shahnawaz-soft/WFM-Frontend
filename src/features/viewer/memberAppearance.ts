@@ -27,6 +27,7 @@ export const WARNING_LABELS: Record<string, string> = {
   length_not_determined: 'Length not measured',
   support_not_found: 'Support not found',
   length_implausible: 'Length implausible',
+  length_long: 'Over 60 ft — check the length',
   member_line_ambiguous: 'Line ambiguous',
   scale_unconfirmed: 'Scale unconfirmed',
   column_by_leader: 'Column: height from levels',
@@ -35,6 +36,7 @@ export const WARNING_LABELS: Record<string, string> = {
   not_on_plan: 'Not on a plan sheet',
   curved_member: 'Curved: length along the arc',
   same_column: 'Same column as on another page',
+  overall_sheet: 'Overall plan: counted on its segment plans',
   label_shared: 'Label names several columns',
   from_column_schedule: 'Column: from the column schedule',
   locations_not_read: 'Column locations not read',
@@ -46,10 +48,13 @@ export const WARNING_LABELS: Record<string, string> = {
   typical_label: 'Column: named by a TYP label',
   brace_from_elevation: 'Brace: measured level to level on the elevation',
   counted_on_plans: 'On an elevation: counted on the plans',
+  from_beam_legend: 'Beam: section from the beam legend, measured c/c',
+  length_from_legend: 'Not measured: legend piece length, not c/c',
+  measured_on_image: 'Measured c/c on the drawing image',
 }
 
 /** Warnings that explain how (or whether) a length was measured, most important first. */
-const LENGTH_WARNINGS = ['same_column', 'in_column_schedule', 'from_column_schedule', 'length_from_levels', 'post_label', 'column_by_leader', 'length_implausible', 'length_not_determined', 'support_not_found', 'member_line_ambiguous', 'scale_unconfirmed']
+const LENGTH_WARNINGS = ['same_column', 'in_column_schedule', 'from_column_schedule', 'length_from_legend', 'from_beam_legend', 'measured_on_image', 'length_from_levels', 'post_label', 'column_by_leader', 'length_long', 'length_implausible', 'length_not_determined', 'support_not_found', 'member_line_ambiguous', 'scale_unconfirmed']
 
 export function lengthNote(member: ExtractedMember): string | null {
   const code = LENGTH_WARNINGS.find((w) => member.warnings.includes(w))
@@ -78,6 +83,16 @@ export function weightPerFoot(member: ExtractedMember): string | null {
 
 /** A column's length is its storey height, set from the page levels once the page is in the
  *  project (column schedule); until then it has none, and says so instead of "—". */
+/** A column counted on another sheet (the same column on another plan of its storey, or on the
+ * column schedule): no length here by design, and not in the ABM. Null otherwise. */
+export function countedElsewhere(member: { warnings?: readonly string[] | null }): string | null {
+  const warnings = member.warnings ?? []
+  if (warnings.includes('same_column')) return 'Counted on another plan'
+  if (warnings.includes('in_column_schedule')) return 'Counted on the column schedule'
+  if (warnings.includes('overall_sheet')) return 'Counted on the segment plans'
+  return null
+}
+
 export function isColumnMember(member: { member_type?: string | null }): boolean {
   return (member.member_type ?? '').trim().toLowerCase().startsWith('col')
 }

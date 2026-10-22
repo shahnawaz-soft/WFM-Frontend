@@ -1,4 +1,4 @@
-import { Canvas, useThree } from '@react-three/fiber'
+import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { useEffect, useLayoutEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
@@ -75,16 +75,35 @@ function aimFlat(camera: THREE.OrthographicCamera, controls: OrbitControls, box:
  *  columns stay points (top) or upright (front, side) instead of leaning with perspective. */
 function CameraRig({ box, view, nonce }: { box: THREE.Box3; view: CameraView; nonce: number }) {
   const { gl, size, set } = useThree()
-  const perspective = useMemo(() => new THREE.PerspectiveCamera(45, 1, 1, 1e7), [])
+  const perspective = useMemo(() => {
+    const camera = new THREE.PerspectiveCamera(45, 1, 1, 1e7)
+    // Z is up in the project. OrbitControls reads "up" once, when it is made: set it first, or
+    // dragging tumbles the model about the wrong axis (19 Oct 2026).
+    camera.up.set(0, 0, 1)
+    return camera
+  }, [])
   const ortho = useMemo(() => {
     const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 1e7)
     ;(camera as THREE.OrthographicCamera & { manual: boolean }).manual = true // we size it, not R3F
+    camera.up.copy(FLAT[view === '3d' ? 'top' : view].up)
     return camera
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- remade per flat view, below
+  }, [view])
   const camera = view === '3d' ? perspective : ortho
   useLayoutEffect(() => set({ camera }), [camera, set])
-  const controls = useMemo(() => new OrbitControls(camera, gl.domElement), [camera, gl])
+  const controls = useMemo(() => {
+    const c = new OrbitControls(camera, gl.domElement)
+    // As in other 3D viewers: eased motion, zoom towards the cursor, pan in the screen plane.
+    c.enableDamping = true
+    c.dampingFactor = 0.12
+    c.rotateSpeed = 0.7
+    c.zoomSpeed = 1.2
+    c.zoomToCursor = true
+    c.screenSpacePanning = true
+    return c
+  }, [camera, gl])
   useEffect(() => () => controls.dispose(), [controls])
+  useFrame(() => controls.update()) // damping needs an update each frame
 
   useEffect(() => {
     if (view === '3d') aimPerspective(perspective, controls, box, size.width / Math.max(size.height, 1))
@@ -93,22 +112,62 @@ function CameraRig({ box, view, nonce }: { box: THREE.Box3; view: CameraView; no
   return null
 }
 
-function Element3D({ p, selected, onSelect }: { p: Placed; selected: boolean; onSelect: (id: string) => void }) {
-  const line = useMemo(() => {
-    const geometry = new THREE.BufferGeometry().setFromPoints(p.points)
-    const color = selected ? COLORS.selected : p.e.provenance === 'added' ? COLORS.added : COLORS[p.e.element_type]
-    return new THREE.Line(geometry, new THREE.LineBasicMaterial({ color, linewidth: selected ? 3 : 1 }))
-  }, [p, selected])
-  useEffect(() => () => line.geometry.dispose(), [line])
+/** Every element in one line object (one draw call, one hit test), coloured per element; a
+ *  click maps the segment hit back to its element. 931 separate objects made orbiting stutter:
+ *  each was hit-tested on every pointer move. */
+function Elements3D({ items, onSelect }: { items: Placed[]; onSelect: (id: string) => void }) {
+  const { lines, owners } = useMemo(() => {
+    const positions: number[] = []
+    const colours: number[] = []
+    const owners: string[] = [] // element id per segment
+    const colour = new THREE.Color()
+    for (const p of items) {
+      colour.set(p.e.provenance === 'added' ? COLORS.added : COLORS[p.e.element_type])
+      for (let i = 0; i < p.points.length - 1; i++) {
+        const [a, b] = [p.points[i]!, p.points[i + 1]!]
+        positions.push(a.x, a.y, a.z, b.x, b.y, b.z)
+        colours.push(colour.r, colour.g, colour.b, colour.r, colour.g, colour.b)
+        owners.push(p.e.id)
+      }
+    }
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colours, 3))
+    geometry.computeBoundingSphere()
+    return { lines: new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ vertexColors: true })), owners }
+  }, [items])
+  useEffect(() => () => lines.geometry.dispose(), [lines])
   return (
     <primitive
-      object={line}
-      onClick={(event: { stopPropagation: () => void }) => {
+      object={lines}
+      onClick={(event: ThreeEvent<MouseEvent>) => {
         event.stopPropagation()
-        onSelect(p.e.id)
+        if (event.delta > 4) return // the end of an orbit drag, not a pick
+        // The member under the cursor: of the segments within reach, the one nearest the ray
+        // (the first hit is only the nearest to the camera).
+        let best: { index: number; gap: number } | null = null
+        for (const hit of event.intersections) {
+          if (hit.object !== lines || hit.index == null) continue
+          const gap = event.ray.distanceToPoint((hit as { pointOnLine?: THREE.Vector3 }).pointOnLine ?? hit.point)
+          if (!best || gap < best.gap) best = { index: hit.index, gap }
+        }
+        const id = best ? owners[Math.floor(best.index / 2)] : undefined
+        if (id) onSelect(id)
       }}
     />
   )
+}
+
+function Selected3D({ p }: { p: Placed }) {
+  const line = useMemo(() => {
+    const geometry = new THREE.BufferGeometry().setFromPoints(p.points)
+    const material = new THREE.LineBasicMaterial({ color: COLORS.selected, depthTest: false })
+    const object = new THREE.Line(geometry, material)
+    object.renderOrder = 1 // drawn over the rest
+    return object
+  }, [p])
+  useEffect(() => () => line.geometry.dispose(), [line])
+  return <primitive object={line} />
 }
 
 /** Interactive 3D view of the wireframe: orbit (drag), zoom (wheel), pick (click). */
@@ -123,11 +182,13 @@ export default function Wireframe3D({ elements, selectedId, view, viewNonce, onS
   const size = box.getSize(new THREE.Vector3())
   const grid = Math.max(size.x, size.y, 10_000) * 1.2
   const centre = box.getCenter(new THREE.Vector3())
+  const selected = items.find((p) => p.e.id === selectedId)
 
   return (
     <Canvas
       className="wf3d__canvas"
       camera={{ fov: 45 }}
+      dpr={[1, 2]}
       raycaster={{ params: { Line: { threshold: Math.max(grid / 300, 50) } } as THREE.RaycasterParameters }}
       onPointerMissed={() => onSelect(null)}
     >
@@ -138,9 +199,8 @@ export default function Wireframe3D({ elements, selectedId, view, viewNonce, onS
         position={[centre.x, centre.y, box.min.z]}
         rotation={[Math.PI / 2, 0, 0]}
       />
-      {items.map((p) => (
-        <Element3D key={p.e.id} p={p} selected={p.e.id === selectedId} onSelect={onSelect} />
-      ))}
+      <Elements3D items={items} onSelect={onSelect} />
+      {selected && <Selected3D p={selected} />}
     </Canvas>
   )
 }

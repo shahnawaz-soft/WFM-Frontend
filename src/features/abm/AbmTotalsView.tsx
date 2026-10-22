@@ -105,6 +105,14 @@ export function AbmTotalsView({ totals, onShow }: AbmTotalsViewProps) {
           : `The reviewed total is not complete yet. Including entries awaiting review, the estimate is ${formatTons(totals.estimate_all_weighed)} (${formatTonnes(totals.estimate_all_weighed)}); entries that cannot be weighed are not included.`}
       </p>
 
+      {totals.connection_material.lines > 0 && (
+        <p className="muted" role="note">
+          Connection material: {plural(totals.connection_material.lines, 'line', 'lines')}, {formatLb(totals.connection_material.weight)}
+          {totals.connection_material.unweighed > 0 && ` (${totals.connection_material.unweighed} not weighed)`}. Estimate
+          including it: {formatTons(totals.estimate_with_connections)} ({formatTonnes(totals.estimate_with_connections)}).
+        </p>
+      )}
+
       <div className="abm__table">
         <table className="table table--compact tonnage__groups">
           <caption className="visually-hidden">Quantities and weights by section</caption>

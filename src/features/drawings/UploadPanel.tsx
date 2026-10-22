@@ -3,11 +3,11 @@ import { useRef, useState, type DragEvent } from 'react'
 
 import { getUploadLimits, uploadDrawingSet } from '../../api/drawings'
 import { toApiError } from '../../api/errors'
-import type { Project } from '../../api/types'
+import type { DrawingSet, Project } from '../../api/types'
 import { notify } from '../../components/feedback/toastStore'
 import { Button } from '../../components/ui/Button'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
-import { FormAlert } from '../../components/ui/Field'
+import { FormAlert, SelectField } from '../../components/ui/Field'
 import { precheck } from './status'
 
 interface Duplicate {
@@ -15,7 +15,7 @@ interface Duplicate {
   message: string
 }
 
-export function UploadPanel({ project }: { project: Project }) {
+export function UploadPanel({ project, drawingSets = [] }: { project: Project; drawingSets?: DrawingSet[] }) {
   const queryClient = useQueryClient()
   const inputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -25,6 +25,8 @@ export function UploadPanel({ project }: { project: Project }) {
   const [error, setError] = useState<string | null>(null)
   const [duplicate, setDuplicate] = useState<Duplicate | null>(null)
   const [dragging, setDragging] = useState(false)
+  // A reissue of a set already here: compared with it sheet by sheet once uploaded.
+  const [revises, setRevises] = useState('')
   const busy = progress !== null
 
   async function start(file: File, confirmDuplicate = false) {
@@ -40,10 +42,17 @@ export function UploadPanel({ project }: { project: Project }) {
     try {
       const created = await uploadDrawingSet(project.id, file, {
         confirmDuplicate,
+        revises: revises || null,
         onProgress: setProgress,
         signal: abortRef.current.signal,
       })
-      notify.success('Drawing set uploaded', `${created.page_count} pages are being prepared.`)
+      notify.success(
+        'Drawing set uploaded',
+        revises
+          ? `${created.page_count} pages are being prepared. Run Plan on them, then compare the revision.`
+          : `${created.page_count} pages are being prepared.`,
+      )
+      setRevises('')
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['project', project.id, 'drawing-sets'] }),
         queryClient.invalidateQueries({ queryKey: ['projects'] }),
@@ -74,8 +83,19 @@ export function UploadPanel({ project }: { project: Project }) {
   }
 
   const hintId = 'upload-limits-hint'
+  const active = drawingSets.filter((set) => set.status !== 'failed')
   return (
     <div className="upload">
+      {active.length > 0 && (
+        <SelectField
+          label="This upload revises"
+          hint="A reissue is compared with the set it revises: every added, removed and changed member."
+          value={revises}
+          disabled={busy}
+          onChange={(e) => setRevises(e.target.value)}
+          options={[{ value: '', label: 'Nothing: a new drawing set' }, ...active.map((set) => ({ value: set.id, label: set.original_filename }))]}
+        />
+      )}
       <div
         className="upload__zone"
         data-dragging={dragging || undefined}

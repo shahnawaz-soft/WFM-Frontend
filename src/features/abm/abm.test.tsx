@@ -226,6 +226,82 @@ describe('Adding pages to the project', () => {
 
 // Mock data: W12X26 (no length), W12X26 33'-4" = 26 × 33.33 = 866.7 lb, HSS unsupported.
 describe('Tonnage', () => {
+  it('adds connection material to an entry, weighs it and counts it in the estimate', async () => {
+    const { table } = await openAbm()
+    await userEvent.click(within(table).getByRole('button', { name: /^W12X26, entry 1/ }))
+    const panel = await screen.findByRole('region', { name: 'Connection material' })
+    expect(await within(panel).findByText('None on this entry.')).toBeInTheDocument()
+
+    await userEvent.click(within(panel).getByRole('button', { name: '+ Add' }))
+    const form = within(panel).getByRole('form', { name: 'Add connection material' })
+    await userEvent.click(within(form).getByRole('button', { name: 'Add' }))
+    expect(await within(form).findByText(/Say what the material is/)).toBeInTheDocument()
+
+    await userEvent.type(within(form).getByLabelText('Material'), 'PL1/2X8')
+    await userEvent.type(within(form).getByLabelText('Length each'), `1'-0"`)
+    await userEvent.clear(within(form).getByLabelText('Pieces'))
+    await userEvent.type(within(form).getByLabelText('Pieces'), '2')
+    expect(within(form).getByLabelText('Apply to')).toHaveTextContent('Every W12X26 in the ABM')
+    await userEvent.click(within(form).getByRole('button', { name: 'Add' }))
+
+    const lines = await within(panel).findByRole('list', { name: 'Connection material on W12X26' })
+    expect(within(lines).getByText('PL1/2X8')).toBeInTheDocument()
+    expect(within(lines).getByText(/pcs × 1'-0"/)).toBeInTheDocument()
+    expect(within(lines).getByText(/\d+(\.\d)? lb/)).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Totals by section' }))
+    expect(await screen.findByText(/Connection material: 1 line/)).toHaveTextContent(/Estimate including it/)
+  })
+
+  it('edits a line, saves an entry’s lines as a template and applies it to another entry', async () => {
+    const { table } = await openAbm()
+    await userEvent.click(within(table).getByRole('button', { name: /^W12X26, entry 1/ }))
+    let panel = await screen.findByRole('region', { name: 'Connection material' })
+    await userEvent.click(within(panel).getByRole('button', { name: '+ Add' }))
+    let form = within(panel).getByRole('form', { name: 'Add connection material' })
+    await userEvent.type(within(form).getByLabelText('Material'), 'PL3/8X4')
+    await userEvent.type(within(form).getByLabelText('Length each'), `0'-9"`)
+    await userEvent.click(within(form).getByRole('button', { name: 'Add' }))
+    await within(panel).findByText('PL3/8X4')
+
+    // Edit: three pieces now.
+    await userEvent.click(within(panel).getByRole('button', { name: 'Edit PL3/8X4' }))
+    form = within(panel).getByRole('form', { name: 'Edit PL3/8X4' })
+    expect(within(form).getByLabelText('Length each')).toHaveValue(`0'-9"`)
+    await userEvent.clear(within(form).getByLabelText('Pieces'))
+    await userEvent.type(within(form).getByLabelText('Pieces'), '3')
+    await userEvent.click(within(form).getByRole('button', { name: 'Save line' }))
+    expect(await within(panel).findByText(/3 pcs × 0'-9"/)).toBeInTheDocument()
+
+    // Save as a template.
+    await userEvent.click(within(panel).getByRole('button', { name: 'Save these lines as a template' }))
+    form = within(panel).getByRole('form', { name: 'Save as a template' })
+    await userEvent.type(within(form).getByLabelText('Template name'), 'Shear tab W12')
+    await userEvent.click(within(form).getByRole('button', { name: 'Save template' }))
+    await waitFor(() => expect(within(panel).queryByRole('form')).not.toBeInTheDocument())
+
+    // Apply it to entry 2.
+    await userEvent.click(within(table).getByRole('button', { name: /^W12X26, entry 2/ }))
+    panel = await screen.findByRole('region', { name: 'Connection material' })
+    expect(await within(panel).findByText('None on this entry.')).toBeInTheDocument()
+    await userEvent.click(within(panel).getByRole('button', { name: 'Apply template' }))
+    form = await within(panel).findByRole('form', { name: 'Apply a template' })
+    expect(within(form).getByRole('list', { name: 'Lines in Shear tab W12' })).toHaveTextContent(`3 × PL3/8X4 × 0'-9"`)
+    await userEvent.click(within(form).getByRole('button', { name: 'Apply' }))
+    expect(await within(panel).findByText('from Shear tab W12')).toBeInTheDocument()
+    expect(within(panel).getByText('PL3/8X4')).toBeInTheDocument()
+  })
+
+  it('viewers see connection material but cannot add or remove it', async () => {
+    const { project } = await projectWithReviewedPage()
+    mockBackend.startSession('viewer@steelo.test')
+    renderApp(`/projects/${project.id}/abm`)
+    const table = await screen.findByRole('table', { name: /ABM/ })
+    await userEvent.click(within(table).getByRole('button', { name: /^W12X26, entry 1/ }))
+    const panel = await screen.findByRole('region', { name: 'Connection material' })
+    expect(within(panel).queryByRole('button', { name: '+ Add' })).not.toBeInTheDocument()
+  })
+
   it('shows the reviewed tonnage and says when it is not complete', async () => {
     await openAbm()
     const summary = screen.getByLabelText('ABM summary')

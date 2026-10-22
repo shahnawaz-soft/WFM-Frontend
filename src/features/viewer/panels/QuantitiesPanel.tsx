@@ -4,7 +4,7 @@ import type { ExtractedMember } from '../../../api/types'
 import { Button } from '../../../components/ui/Button'
 import { TextField } from '../../../components/ui/Field'
 import { REVIEW_STATUS } from '../../review/reviewStatus'
-import { isColumnMember, lengthNote, matchNote, memberKind, MEMBER_KINDS, weightPerFoot } from '../memberAppearance'
+import { countedElsewhere, isColumnMember, lengthNote, matchNote, memberKind, MEMBER_KINDS, weightPerFoot } from '../memberAppearance'
 
 interface QuantitiesPanelProps {
   members: ExtractedMember[]
@@ -171,6 +171,10 @@ export function QuantitiesPanel({ members, loading, selectedId, hoveredId, onSel
                     <td className="muted nowrap">
                       {m.length_mm != null ? (
                         m.length_display
+                      ) : countedElsewhere(m) ? (
+                        <span title="The same column is counted on another sheet: it has no length here and is not in the ABM">
+                          {countedElsewhere(m)}
+                        </span>
                       ) : isColumnMember(m) ? (
                         <span title="A column's length is its storey height: set the page's level and add it to the project">From levels</span>
                       ) : (

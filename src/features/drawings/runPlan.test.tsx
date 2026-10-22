@@ -89,4 +89,22 @@ describe('Run Plan', () => {
     const grid = await projectWithPages(2, 'viewer')
     expect(within(grid).queryByRole('button', { name: /Run Plan/ })).not.toBeInTheDocument()
   })
+
+  it('runs every page not run yet with "Run all pages"', async () => {
+    const grid = await projectWithPages(3)
+    await userEvent.click(within(pageCard(grid, 1)).getByRole('button', { name: 'Run Plan — page 1' }))
+    expect(await within(pageCard(grid, 1)).findByText('Completed')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Run all pages' }))
+    expect(await screen.findByText('Running 2 pages')).toBeInTheDocument() // page 1 was already run
+    for (const n of [2, 3]) expect(await within(pageCard(grid, n)).findByText('Completed')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Run all pages' }))
+    expect(await screen.findByText('Every page has already been run')).toBeInTheDocument()
+  })
+
+  it('does not offer "Run all pages" to viewers', async () => {
+    await projectWithPages(2, 'viewer')
+    expect(screen.queryByRole('button', { name: 'Run all pages' })).not.toBeInTheDocument()
+  })
 })

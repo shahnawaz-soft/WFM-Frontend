@@ -1,6 +1,7 @@
 import { createBrowserRouter, type RouteObject } from 'react-router'
 
 import { RequireAuth, RequireCapability } from '../auth/guards'
+import { TemplatesPage } from '../features/connections/TemplatesPage'
 import { ProjectDetailPage } from '../features/projects/ProjectDetailPage'
 import { ProjectsPage } from '../features/projects/ProjectsPage'
 import { OpsPage } from '../features/ops/OpsPage'
@@ -44,9 +45,14 @@ export const routes: RouteObject[] = [
             lazy: async () => ({ Component: (await import('../features/columns/ColumnSchedulePage')).ColumnSchedulePage }),
           },
           {
+            path: 'projects/:projectId/revisions/:setId',
+            lazy: async () => ({ Component: (await import('../features/revisions/RevisionPage')).RevisionPage }),
+          },
+          {
             path: 'projects/:projectId/wireframe',
             lazy: async () => ({ Component: (await import('../features/wireframe/WireframePage')).WireframePage }),
           },
+          { path: 'connection-templates', element: <TemplatesPage /> },
           { path: 'profile', element: <ProfilePage /> },
           {
             path: 'admin/users',

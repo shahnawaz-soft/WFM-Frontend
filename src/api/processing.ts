@@ -9,6 +9,19 @@ export async function runPlan(pageId: string, options: { discardReview?: boolean
   return data
 }
 
+/** What "Run all pages" did: page numbers queued now, already running, or skipped (and why). */
+export interface SetRunResult {
+  queued: number[]
+  running: number[]
+  skipped: { page: number; reason: string }[]
+}
+
+/** Run Plan on every page of a drawing set not run yet (pending or failed pages). */
+export async function runAllPages(drawingSetId: string): Promise<SetRunResult> {
+  const { data } = await apiClient.post<SetRunResult>(`/api/v1/drawing-sets/${drawingSetId}/run-plan/`)
+  return data
+}
+
 export async function listPageJobs(pageId: string): Promise<ProcessingJob[]> {
   const { data } = await apiClient.get<ProcessingJob[]>(`/api/v1/drawing-pages/${pageId}/jobs/`)
   return data

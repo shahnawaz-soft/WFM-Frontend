@@ -14,6 +14,8 @@ export interface AbmFilters {
   length_min?: string
   length_max?: string
   length_missing?: boolean
+  /** No length, a length flagged as doubtful, or a column without its section. */
+  to_check?: boolean
   quantity_min?: string
   quantity_max?: string
   include_rejected?: boolean

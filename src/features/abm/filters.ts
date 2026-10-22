@@ -14,6 +14,7 @@ export interface FilterState {
   length_min: string
   length_max: string
   length_missing: boolean
+  to_check: boolean
   quantity_min: string
   quantity_max: string
   ordering: string
@@ -34,6 +35,7 @@ export const EMPTY: FilterState = {
   length_min: '',
   length_max: '',
   length_missing: false,
+  to_check: false,
   quantity_min: '',
   quantity_max: '',
   ordering: 'page',
@@ -82,6 +84,7 @@ export function fromSearch(params: URLSearchParams): FilterState {
   const state: FilterState = { ...EMPTY }
   for (const key of TEXT_KEYS) state[key] = params.get(key) ?? EMPTY[key]
   state.length_missing = params.get('length_missing') === 'true'
+  state.to_check = params.get('to_check') === 'true'
   state.offset = Math.max(0, Number(params.get('offset')) || 0)
   return state
 }
@@ -95,6 +98,8 @@ export function toSearch(state: FilterState, params: URLSearchParams): URLSearch
   }
   if (state.length_missing) next.set('length_missing', 'true')
   else next.delete('length_missing')
+  if (state.to_check) next.set('to_check', 'true')
+  else next.delete('to_check')
   if (state.offset) next.set('offset', String(state.offset))
   else next.delete('offset')
   return next
@@ -119,6 +124,7 @@ export function toApi(state: FilterState): AbmFilters {
     length_min: state.length_min.trim(),
     length_max: state.length_max.trim(),
     length_missing: state.length_missing,
+    to_check: state.to_check,
     quantity_min: state.quantity_min,
     quantity_max: state.quantity_max,
     ordering: state.ordering,
@@ -130,6 +136,8 @@ export function toApi(state: FilterState): AbmFilters {
 /** Number of filters in use (not counting sort order and paging). */
 export function activeCount(state: FilterState): number {
   return (
-    TEXT_KEYS.filter((k) => k !== 'ordering' && state[k] !== EMPTY[k]).length + (state.length_missing ? 1 : 0)
+    TEXT_KEYS.filter((k) => k !== 'ordering' && state[k] !== EMPTY[k]).length +
+    (state.length_missing ? 1 : 0) +
+    (state.to_check ? 1 : 0)
   )
 }

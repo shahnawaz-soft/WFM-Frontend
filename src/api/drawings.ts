@@ -19,11 +19,12 @@ export async function listPages(drawingSetId: string): Promise<DrawingPage[]> {
 export async function uploadDrawingSet(
   projectId: string,
   file: File,
-  options: { confirmDuplicate?: boolean; onProgress?: (fraction: number) => void; signal?: AbortSignal } = {},
+  options: { confirmDuplicate?: boolean; revises?: string | null; onProgress?: (fraction: number) => void; signal?: AbortSignal } = {},
 ): Promise<DrawingSet> {
   const form = new FormData()
   form.append('file', file)
   form.append('confirm_duplicate', options.confirmDuplicate ? 'true' : 'false')
+  if (options.revises) form.append('revises', options.revises)
   const { data } = await apiClient.post<DrawingSet>(`/api/v1/projects/${projectId}/drawing-sets/`, form, {
     signal: options.signal,
     timeout: 0, // large uploads: progress is shown; the user can cancel

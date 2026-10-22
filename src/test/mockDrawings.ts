@@ -16,6 +16,8 @@ interface StoredSet {
 }
 
 let sets: StoredSet[] = []
+let connectionLines: Record<string, unknown>[] = []
+let connectionTemplates: { id: string; name: string; note: string; version: number; updated_at: string; lines: ReturnType<typeof templateLine>[] }[] = []
 /** Page numbers that will fail during the next ingestion (per filename). */
 let failingPages: Record<string, number[]> = {}
 /** Outcome of the next Run Plan per page number (default: completed vector drawing). */
@@ -511,6 +513,8 @@ let noProposedElevation = new Set<string>()
 export const mockDrawings = {
   reset() {
     sets = []
+    connectionLines = []
+    connectionTemplates = []
     wireframes = []
     versions = []
     failingPages = {}
@@ -682,7 +686,125 @@ function columnSchedule(projectId: string) {
   }
 }
 
+const connectionLb = () => connectionLines.reduce((sum, l) => sum + Number((l.weight as Amounts | null)?.lb ?? 0), 0)
+
+/** Connection material, manual lines worked out like the server (plates weighed by size). */
+type MockLineInput = { kind: string; description: string; length?: string; spacing?: string; quantity?: number; grade?: string; finish?: string }
+
+const feetInchesMm = (text = '') => {
+  const m = /^(\d+)'-(\d+)"$/.exec(text)
+  return m ? (Number(m[1]) * 12 + Number(m[2])) * 25.4 : null
+}
+
+function templateLine(line: MockLineInput) {
+  const length = feetInchesMm(line.length)
+  const spacing = feetInchesMm(line.spacing)
+  return {
+    kind: line.kind as 'manual',
+    description: line.description,
+    length_mm: length != null ? length.toFixed(1) : null,
+    length_display: line.length ?? '',
+    spacing_mm: spacing != null ? spacing.toFixed(1) : null,
+    spacing_display: line.spacing ?? '',
+    quantity: line.quantity ?? 1,
+    grade: line.grade ?? '',
+    finish: line.finish ?? '',
+  }
+}
+
+function connectionLine(memberId: string, line: MockLineInput, templateName = '') {
+  const { member } = findMember(memberId)!
+  const pieces = (line.quantity ?? 1) * member.quantity
+  const lengthMm = feetInchesMm(line.length)
+  const plate = /^PL(\d+)\/(\d+)X(\d+)/i.exec(line.description)
+  const lbPerFt = plate ? ((490 / 144) * Number(plate[1]) * Number(plate[3])) / Number(plate[2]) : null
+  const total = lengthMm != null ? lengthMm * pieces : null
+  return {
+    id: crypto.randomUUID(),
+    member: memberId,
+    member_designation: member.designation,
+    member_length_display: '',
+    page: '',
+    kind: line.kind,
+    description: line.description,
+    length_mm: lengthMm,
+    length_display: line.length ?? '',
+    spacing_mm: null,
+    spacing_display: '',
+    quantity: line.quantity ?? 1,
+    grade: line.grade ?? '',
+    finish: line.finish ?? '',
+    version: 1,
+    batch: crypto.randomUUID(),
+    template_name: templateName,
+    pieces,
+    piece_length_display: line.length ?? '',
+    total_length_mm: total,
+    total_length_display: total != null ? `${Math.floor(total / 304.8)}'-${Math.round((total % 304.8) / 25.4)}"` : '',
+    unit_weight_lb_per_ft: lbPerFt?.toFixed(3) ?? null,
+    weight: lbPerFt != null && total != null ? amounts((lbPerFt * total) / 304.8) : null,
+    reason: lbPerFt == null ? 'not_weighed' : '',
+  }
+}
+
 export const drawingHandlers = [
+  http.get('*/api/v1/projects/:id/connection-material/', ({ request }) => {
+    const member = new URL(request.url).searchParams.get('member')
+    const lines = connectionLines.filter((l) => !member || l.member === member)
+    return HttpResponse.json({ lines, totals: { lines: lines.length, weight: amounts(connectionLb()), unweighed: 0 } })
+  }),
+  http.post('*/api/v1/projects/:id/connection-material/', async ({ request }) => {
+    const body = (await request.json()) as { members: string[]; lines?: MockLineInput[]; template?: string }
+    if (body.template) {
+      const template = connectionTemplates.find((t) => t.id === body.template)!
+      const created = body.members.flatMap((m) => template.lines.map((l) => connectionLine(m, { ...l, length: l.length_display }, template.name)))
+      connectionLines.push(...created)
+      return HttpResponse.json(created, { status: 201 })
+    }
+    const lines = body.lines ?? []
+    if (lines.some((l) => !l.description.trim())) {
+      return err(400, 'validation_error', 'Invalid input.', { description: ['Say what the material is, e.g. PL1/2X8 or L4X4X1/2.'] })
+    }
+    const created = body.members.flatMap((m) => lines.map((l) => connectionLine(m, l)))
+    connectionLines.push(...created)
+    return HttpResponse.json(created, { status: 201 })
+  }),
+  http.patch('*/api/v1/connection-material/:id/', async ({ params, request }) => {
+    const body = (await request.json()) as MockLineInput & { version: number }
+    const i = connectionLines.findIndex((l) => l.id === params.id)
+    const old = connectionLines[i]!
+    const line = { ...connectionLine(old.member as string, body, old.template_name as string), id: old.id, version: body.version + 1 }
+    connectionLines[i] = line
+    return HttpResponse.json(line)
+  }),
+  http.get('*/api/v1/connection-templates/', () => HttpResponse.json(connectionTemplates)),
+  http.post('*/api/v1/connection-templates/', async ({ request }) => {
+    const body = (await request.json()) as { name: string; note?: string; lines: MockLineInput[] }
+    if (!body.name.trim()) return err(400, 'validation_error', 'Invalid input.', { name: ['Give the template a name, e.g. Shear tab W12.'] })
+    if (connectionTemplates.some((t) => t.name.toLowerCase() === body.name.trim().toLowerCase())) {
+      return err(400, 'validation_error', 'Invalid input.', { name: ['A template already has this name.'] })
+    }
+    const missing = body.lines.map((l) => (l.description.trim() ? {} : { description: ['Say what the material is.'] }))
+    if (missing.some((m) => 'description' in m)) return err(400, 'validation_error', 'Invalid input.', { lines: missing })
+    const template = { id: crypto.randomUUID(), name: body.name.trim(), note: body.note ?? '', version: 1, updated_at: new Date().toISOString(), lines: body.lines.map(templateLine) }
+    connectionTemplates.push(template)
+    return HttpResponse.json(template, { status: 201 })
+  }),
+  http.patch('*/api/v1/connection-templates/:id/', async ({ params, request }) => {
+    const body = (await request.json()) as { version: number; name?: string; note?: string; lines?: MockLineInput[] }
+    const t = connectionTemplates.find((x) => x.id === params.id)!
+    Object.assign(t, { name: body.name ?? t.name, note: body.note ?? t.note, version: t.version + 1 })
+    if (body.lines) t.lines = body.lines.map(templateLine)
+    return HttpResponse.json(t)
+  }),
+  http.delete('*/api/v1/connection-templates/:id/', ({ params }) => {
+    connectionTemplates = connectionTemplates.filter((t) => t.id !== params.id)
+    return new HttpResponse(null, { status: 204 })
+  }),
+  http.delete('*/api/v1/connection-material/:id/', ({ params }) => {
+    connectionLines = connectionLines.filter((l) => l.id !== params.id)
+    return new HttpResponse(null, { status: 204 })
+  }),
   http.get('*/api/v1/drawing-sets/limits/', () => HttpResponse.json(LIMITS)),
 
   http.get('*/api/v1/projects/:id/drawing-sets/', ({ params }) =>
@@ -730,6 +852,29 @@ export const drawingHandlers = [
     }
     sets = sets.filter((x) => x !== s)
     return new HttpResponse(null, { status: 204 })
+  }),
+
+  // "Run all pages": every page not run yet (pending or failed), through the page route above.
+  http.post('*/api/v1/drawing-sets/:id/run-plan/', async ({ params, request }) => {
+    const s = sets.find((x) => x.set.id === params.id)!
+    const result = { queued: [] as number[], running: [] as number[], skipped: [] as { page: number; reason: string }[] }
+    for (const page of [...s.pages].sort((a, b) => a.page_number - b.page_number)) {
+      if (page.latest_job && ['queued', 'processing'].includes(page.latest_job.status)) {
+        result.running.push(page.page_number)
+      } else if (['pending', 'failed'].includes(page.status)) {
+        if (page.thumbnail_status !== 'ready') {
+          result.skipped.push({ page: page.page_number, reason: 'page_not_ready' })
+          continue
+        }
+        await fetch(new URL(`/api/v1/drawing-pages/${page.id}/run-plan/`, request.url), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: request.headers.get('Authorization') ?? '' },
+          body: '{}',
+        })
+        result.queued.push(page.page_number)
+      }
+    }
+    return HttpResponse.json(result, { status: 202 })
   }),
 
   http.post('*/api/v1/drawing-pages/:id/run-plan/', async ({ params, request }) => {
@@ -1299,6 +1444,8 @@ export const drawingHandlers = [
       },
       not_in_tonnage: { entries: 0, quantity: 0, length_mm: null, families: ['K', 'KCS', 'LH', 'DLH', 'JG'] },
       estimate_all_weighed: amounts(lb(reviewed) + lb(incomplete)),
+      connection_material: { lines: connectionLines.length, weight: amounts(connectionLb()), unweighed: connectionLines.filter((l) => !l.weight).length },
+      estimate_with_connections: amounts(lb(reviewed) + lb(incomplete) + connectionLb()),
       complete: incomplete.length + unsupported.length + noSection.length + noLength.length === 0,
       groups: designations.map((d) => {
         const list = entries.filter((e) => e.designation === d)

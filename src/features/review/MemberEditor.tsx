@@ -8,7 +8,7 @@ import { Button } from '../../components/ui/Button'
 import { FormAlert, SelectField, TextField } from '../../components/ui/Field'
 import { StatusBadge } from '../../components/ui/StatusBadge'
 import { NO_ERRORS, toFormErrors, type FormErrors } from '../../lib/formErrors'
-import { isColumnMember, lengthNote, MATCH_LABELS } from '../viewer/memberAppearance'
+import { countedElsewhere, isColumnMember, lengthNote, MATCH_LABELS } from '../viewer/memberAppearance'
 import { formatKg, formatLb } from '../abm/format'
 import { REVIEW_STATUS } from './reviewStatus'
 
@@ -37,7 +37,8 @@ function typeOptions(current: string) {
 }
 
 /** A column whose length (its storey height) is still to come from the page levels. */
-const awaitingHeight = (member: ExtractedMember) => isColumnMember(member) && member.length_mm == null
+const awaitingHeight = (member: ExtractedMember) =>
+  isColumnMember(member) && member.length_mm == null && !countedElsewhere(member)
 
 /** How the current length was obtained, in words. */
 function lengthHint(member: ExtractedMember): string | undefined {

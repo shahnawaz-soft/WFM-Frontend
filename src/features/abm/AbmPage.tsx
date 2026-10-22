@@ -14,6 +14,7 @@ import { FormAlert, SelectField, TextField } from '../../components/ui/Field'
 import { AbmExport } from '../finalize/AbmExport'
 import { projectCan } from '../projects/useProjectPermissions'
 import { AddMemberForm } from '../review/AddMemberForm'
+import { ConnectionJump, ConnectionPanel } from '../connections/ConnectionPanel'
 import { MemberEditor } from '../review/MemberEditor'
 import type { FocusRequest } from '../viewer/DrawingStage'
 import { AbmDrawing } from './AbmDrawing'
@@ -330,6 +331,7 @@ export function AbmPage() {
                 ) : (
                   selected && (
                     <>
+                      {inList && <ConnectionJump projectId={projectId} member={selected} />}
                       <MemberEditor
                         key={selected.id}
                         member={selected}
@@ -341,6 +343,7 @@ export function AbmPage() {
                         onStale={refetchAll}
                         onClose={() => select(null)}
                       />
+                      {inList && <ConnectionPanel projectId={projectId} member={selected} canEdit={canEdit} />}
                       {!inList && selected.review_status === 'rejected' && (
                         <p className="muted">Rejected members are not in the ABM. Accept it to bring it back.</p>
                       )}
@@ -489,6 +492,12 @@ function Filters({ filters, summary, onChange }: { filters: FilterState; summary
         />
         <SelectField label="Status" value={filters.status} onChange={(e) => onChange({ status: e.target.value })} options={STATUS_OPTIONS} />
         <SelectField label="Values" value={filters.source} onChange={(e) => onChange({ source: e.target.value })} options={SOURCE_OPTIONS} />
+        <label
+          className="checkbox"
+          title="Entries to look at before sending the ABM: no length, a length flagged as doubtful, or a column without its section"
+        >
+          <input type="checkbox" checked={filters.to_check} onChange={(e) => onChange({ to_check: e.target.checked })} /> To check
+        </label>
         <div className="abm-filters__buttons">
           <Button aria-expanded={more} aria-controls="abm-more-filters" onClick={() => setMore((m) => !m)}>
             More filters
