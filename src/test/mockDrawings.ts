@@ -657,6 +657,7 @@ function columnSchedule(projectId: string) {
       member_id: synced ? `col-${i}-${p.id}` : null,
       in_bill: true,
       same_as_page: null,
+      size_from_page: null,
       schedule_page: null,
       height_mm: p.elevation_mm,
       height_display: p.elevation_display,
@@ -1317,6 +1318,8 @@ export const drawingHandlers = [
   http.get('*/api/v1/wireframes/:id/elements/', ({ params }) =>
     HttpResponse.json(wireframes.find((w) => w.id === params.id)?.elements.filter((e) => !e.removed) ?? []),
   ),
+  // Column Scheduler: tested on its own (ColumnScheduler.test.tsx); the page only needs a list.
+  http.get('*/api/v1/wireframes/:id/columns/', () => HttpResponse.json({ levels: [], columns: [] })),
   http.get('*/api/v1/ops/metrics/', () =>
     HttpResponse.json({
       days: 30,

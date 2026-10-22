@@ -16,8 +16,8 @@ export function ProjectAbmCard({ project }: { project: Project }) {
       <div className="card__header">
         <h2 id="abm-card-heading">ABM</h2>
         <div className="button-row button-row--tight">
-          <Link className="button button--secondary" to={`/projects/${project.id}/columns`}>
-            Column schedule
+          <Link className="button button--secondary" to={`/projects/${project.id}/wireframe?tab=columns`}>
+            Column scheduler
           </Link>
           <Link className="button button--primary" to={`/projects/${project.id}/abm`}>
             Open ABM

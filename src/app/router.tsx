@@ -41,8 +41,9 @@ export const routes: RouteObject[] = [
             lazy: async () => ({ Component: (await import('../features/review-summary/ProjectHistoryPage')).ProjectHistoryPage }),
           },
           {
+            // One column scheduler: on the wireframe page (the old read-only schedule page's link).
             path: 'projects/:projectId/columns',
-            lazy: async () => ({ Component: (await import('../features/columns/ColumnSchedulePage')).ColumnSchedulePage }),
+            lazy: async () => ({ Component: (await import('../features/wireframe/ColumnsRedirect')).ColumnsRedirect }),
           },
           {
             path: 'projects/:projectId/revisions/:setId',

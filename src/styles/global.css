@@ -850,6 +850,13 @@ a.button { text-decoration: none; justify-content: center; }
 .level-form__point p { margin: 0 0 var(--space-1); font-size: 0.9rem; }
 .iso-preview { width: 100%; max-height: 420px; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius); margin: var(--space-3) 0; }
 .iso-preview line, .iso-preview polyline { stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+/* The canvas fills the view (520px, or the whole window in full screen): sized by its box,
+   never by its own bitmap (flex-basis 0), so redrawing at the new size can't grow it. */
+.iso-view { position: relative; height: 520px; display: flex; flex-direction: column; }
+.iso-view .iso-preview { display: block; flex: 1 1 0; min-height: 0; width: 100%; height: auto; max-height: none; margin: 0; border: none; touch-action: none; user-select: none; cursor: grab; }
+.iso-view .iso-preview[data-mode='move'] { cursor: move; }
+.iso-view .iso-preview:active { cursor: grabbing; }
+.iso-view__mode { position: absolute; top: var(--space-2); left: 50%; transform: translateX(-50%); z-index: 1; }
 .iso-preview__beam { stroke: #2563eb; }
 .iso-preview__column { stroke: #b45309; stroke-width: 2.5 !important; }
 .iso-preview line[data-selected] { stroke: #7c3aed; stroke-width: 4 !important; }
@@ -899,6 +906,36 @@ a.button { text-decoration: none; justify-content: center; }
 .wf3d__stage { position: relative; min-width: 0; border: 1px solid var(--color-border); border-radius: var(--radius); background: #f8fafc; display: flex; flex-direction: column; }
 .wf3d__canvas { height: 520px !important; }
 .wf3d__views { position: absolute; top: var(--space-2); left: var(--space-2); z-index: 1; }
+/* Column Scheduler (wireframe page). */
+.wf3d__viewport { position: relative; }
+.wf3d__tooltip { position: absolute; z-index: 3; display: flex; flex-direction: column; gap: 2px; max-width: 280px; padding: 6px 10px; font-size: 0.8rem; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius); box-shadow: 0 4px 14px rgb(0 0 0 / 0.12); pointer-events: none; }
+.wf3d__dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; vertical-align: middle; }
+.wf3d__dot--bottom { background: #15803d; }
+.wf3d__dot--top { background: #b91c1c; }
+.iso-preview__dim line { stroke: #334155; stroke-width: 1; }
+.iso-preview__dim text { font-size: 10px; fill: #334155; paint-order: stroke; stroke: #fff; stroke-width: 3px; }
+.iso-preview__bottom { fill: #15803d; }
+.iso-preview__top { fill: #b91c1c; }
+.col-quick { margin: 0 0 var(--space-3); padding: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius); }
+.col-quick__facts { display: grid; grid-template-columns: auto 1fr; gap: 4px var(--space-2); margin: 0; }
+.col-quick__facts > div { display: contents; }
+.col-quick__facts dt { font-weight: 600; align-self: center; }
+.col-quick__facts dd { margin: 0; }
+.wf-tabs { margin: var(--space-3) 0 var(--space-2); }
+.col-sched__tools { align-items: center; flex-wrap: wrap; }
+.col-sched__hint { font-size: 0.8rem; }
+.col-sched__wrap { max-height: 560px; overflow: auto; }
+.col-sched__table tbody tr { cursor: pointer; }
+.col-sched__table tbody tr:hover { background: var(--color-surface-hover, #eef2ff); }
+.col-sched__table tbody tr[data-selected] { background: #e0e7ff; }
+.col-sched__table select { min-height: 30px; }
+.col-sched__input { width: 8.5rem; min-height: 30px; padding: 2px 6px; font: inherit; }
+.col-sched__end { display: inline-flex; gap: 4px; align-items: center; }
+.col-sched__end .col-sched__input { width: 6.5rem; }
+.col-sched__id { font-family: ui-monospace, monospace; font-size: 0.8rem; color: var(--color-text-muted); }
+.col-sched__bulk { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; padding: var(--space-2); margin: var(--space-2) 0; border: 1px solid var(--color-border); border-radius: var(--radius); background: var(--color-surface); }
+/* Below the buttons floating over the top of the stage. */
+.wf3d__empty { margin: 0; padding: calc(var(--space-2) + 48px) var(--space-3) var(--space-4); text-align: center; }
 .wf3d__legend { padding: var(--space-2); border-top: 1px solid var(--color-border); background: var(--color-surface); }
 .wf3d__help { margin: 0; padding: 0 var(--space-2) var(--space-2); font-size: 0.8rem; background: var(--color-surface); }
 .wf3d__key { display: inline-block; width: 18px; height: 3px; border-radius: 2px; vertical-align: middle; }
@@ -907,7 +944,7 @@ a.button { text-decoration: none; justify-content: center; }
 .wf3d__key--added { background: #15803d; }
 .wf3d__key--selected { background: #7c3aed; height: 5px; }
 .wf3d__panel { width: 340px; max-height: 620px; overflow-y: auto; }
-.wf3d .iso-preview { margin: 0; border: none; max-height: 520px; }
+.wf3d .iso-preview { margin: 0; border: none; }
 .element-panel__fields { border: none; margin: 0; padding: 0; min-width: 0; }
 .element-panel__fields .field { margin-bottom: var(--space-2); }
 .element-panel__notes, .element-panel__hint { margin: 0; font-size: 0.8rem; }

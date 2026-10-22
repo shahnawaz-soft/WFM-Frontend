@@ -3,7 +3,7 @@ import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
 
 import { toApiError } from '../../api/errors'
-import type { WireframeElement } from '../../api/types'
+import type { SchedulerLevel, SchedulerRow, WireframeElement } from '../../api/types'
 import { addElement, editElement, removeElement, type Point } from '../../api/wireframe'
 import { Button } from '../../components/ui/Button'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
@@ -11,6 +11,7 @@ import { FormAlert, SelectField, TextField } from '../../components/ui/Field'
 import { StatusBadge } from '../../components/ui/StatusBadge'
 import { NO_ERRORS, toFormErrors, type FormErrors } from '../../lib/formErrors'
 import { signedFeetInches } from '../abm/format'
+import { ColumnQuickEdit } from './ColumnScheduler'
 
 const AXES = ['x', 'y', 'z'] as const
 const PROVENANCE: Record<string, string> = { generated: 'Generated', edited: 'Edited', added: 'Added by hand' }
@@ -40,13 +41,16 @@ interface ElementPanelProps {
   projectId: string
   element: WireframeElement
   editable: boolean
-  onChanged: (element: WireframeElement | null) => void
+  /** A column: its schedule row and the levels, for its height, top, bottom and rotation. */
+  column?: { wireframeId: string; row: SchedulerRow; levels: SchedulerLevel[] } | null
+  /** ``null``: removed (or, with ``keep``, changed elsewhere: reload it and keep it open). */
+  onChanged: (element: WireframeElement | null, keep?: boolean) => void
   onStale: () => void
   onClose: () => void
 }
 
 /** One element: what it is, where it came from, and (on the editable revision) its values. */
-export function ElementPanel({ projectId, element, editable, onChanged, onStale, onClose }: ElementPanelProps) {
+export function ElementPanel({ projectId, element, editable, column, onChanged, onStale, onClose }: ElementPanelProps) {
   const [form, setForm] = useState({
     element_type: element.element_type,
     designation: element.designation,
@@ -119,6 +123,9 @@ export function ElementPanel({ projectId, element, editable, onChanged, onStale,
         <p className="member-editor__note" role="status">
           Changes saved
         </p>
+      )}
+      {column && (
+        <ColumnQuickEdit wireframeId={column.wireframeId} row={column.row} levels={column.levels} editable={editable} onChanged={() => onChanged(null, true)} />
       )}
       <FormAlert message={errors.form} />
       <form onSubmit={submit} noValidate>

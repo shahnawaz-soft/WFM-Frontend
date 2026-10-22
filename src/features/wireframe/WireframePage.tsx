@@ -1,11 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 
 import { toApiError } from '../../api/errors'
 import { getProject } from '../../api/projects'
 import type { Wireframe, WireframeElement } from '../../api/types'
-import { copyWireframe, generateWireframe, getWireframeSetup, listWireframeElements, listWireframes, markWireframeReviewed } from '../../api/wireframe'
+import {
+  copyWireframe,
+  generateWireframe,
+  getSchedulerColumns,
+  getWireframeSetup,
+  listWireframeElements,
+  listWireframes,
+  markWireframeReviewed,
+} from '../../api/wireframe'
 import { ErrorState, LoadingState } from '../../components/feedback/States'
 import { Button } from '../../components/ui/Button'
 import { Dialog } from '../../components/ui/Dialog'
@@ -16,6 +24,7 @@ import { signedFeetInches } from '../abm/format'
 import { projectCan } from '../projects/useProjectPermissions'
 import { AddElementForm, ElementPanel } from './ElementPanel'
 import { describeColumn } from '../viewer/columnSymbols'
+import { ColumnScheduler } from './ColumnScheduler'
 import { IsometricPreview } from './IsometricPreview'
 import { LevelProposalsCard } from './LevelProposals'
 import type { CameraView } from './Wireframe3D'
@@ -57,6 +66,7 @@ export function WireframePage() {
   const [chosen, setChosen] = useState<string | null>(null)
   const [params] = useSearchParams()
   const linkedMember = params.get('member')
+  const openTab = params.get('tab') === 'columns' ? 'columns' : 'elements'
 
   const project = useQuery({ queryKey: ['project', projectId], queryFn: () => getProject(projectId) })
   const setup = useQuery({ queryKey: ['wireframe-setup', projectId], queryFn: () => getWireframeSetup(projectId) })
@@ -211,6 +221,8 @@ export function WireframePage() {
           revisions={revisions.data}
           canEdit={canEdit}
           linkedMember={linkedMember}
+          openTab={openTab}
+          datasetId={project.data.section_dataset?.id ?? null}
           onChoose={setChosen}
         />
       )}
@@ -240,6 +252,8 @@ function RevisionSection({
   revisions,
   canEdit,
   linkedMember,
+  openTab,
+  datasetId,
   onChoose,
 }: {
   projectId: string
@@ -247,11 +261,25 @@ function RevisionSection({
   revisions: Wireframe[]
   canEdit: boolean
   linkedMember: string | null
+  /** Open on the Column scheduler (the project page's link) or the element list. */
+  openTab: 'elements' | 'columns'
+  datasetId: string | null
   onChoose: (id: string) => void
 }) {
   const queryClient = useQueryClient()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [onlyProblems, setOnlyProblems] = useState(false)
+  const [tab, setTab] = useState<'elements' | 'columns'>(openTab)
+  const tabs = useRef<HTMLDivElement>(null)
+  // Opened on the scheduler: bring it into view once the revision is shown.
+  useEffect(() => {
+    if (openTab === 'columns') tabs.current?.scrollIntoView?.({ block: 'start' })
+  }, [openTab])
+  // Columns picked in the schedule or in the view (Ctrl+click): one selection for both.
+  const [picked, setPicked] = useState<Set<string>>(new Set())
+  const [allHeights, setAllHeights] = useState(false)
+  // Bumped when a column's values change in its panel: the panel re-reads the element.
+  const [panelNonce, setPanelNonce] = useState(0)
   const [view, setView] = useState<{ id: CameraView; nonce: number }>({ id: '3d', nonce: 0 })
   const [adding, setAdding] = useState(false)
   const [reviewing, setReviewing] = useState(false)
@@ -264,8 +292,29 @@ function RevisionSection({
     enabled: generated,
   })
   const editable = canEdit && current.status === 'draft' && current.is_latest
+  const columnRows = useQuery({
+    queryKey: ['wireframe', current.id, 'columns'],
+    queryFn: () => getSchedulerColumns(current.id),
+    enabled: generated,
+  })
+  const columnById = useMemo(() => new Map((columnRows.data?.columns ?? []).map((r) => [r.id, r])), [columnRows.data])
+  const pick = (id: string | null, additive = false) => {
+    if (!id) {
+      setSelectedId(null)
+      setPicked(new Set())
+    } else if (additive) {
+      const next = new Set(picked)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      setPicked(next)
+    } else {
+      setSelectedId(id)
+      setPicked(new Set([id]))
+    }
+  }
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ['wireframe', current.id, 'elements'] })
+    void queryClient.invalidateQueries({ queryKey: ['wireframe', current.id, 'columns'] })
     void queryClient.invalidateQueries({ queryKey: ['wireframes', projectId] })
   }
   const copy = useMutation({
@@ -391,28 +440,64 @@ function RevisionSection({
               <Button className="wf3d__expand" aria-pressed={expanded} onClick={() => setExpanded(!expanded)}>
                 {expanded ? 'Exit full screen' : 'Full screen'}
               </Button>
-              <div className="family-tabs wf3d__views" role="group" aria-label="View">
-                {VIEWS.map((v) => (
-                  <button key={v.id} type="button" aria-pressed={view.id === v.id} onClick={() => setView((s) => ({ id: v.id, nonce: s.nonce + 1 }))}>
-                    {v.label}
-                  </button>
-                ))}
-              </div>
+              {elements.data && elements.data.some((e) => e.start) && (
+                <div className="family-tabs wf3d__views" role="group" aria-label="View">
+                  {VIEWS.map((v) => (
+                    <button key={v.id} type="button" aria-pressed={view.id === v.id} onClick={() => setView((s) => ({ id: v.id, nonce: s.nonce + 1 }))}>
+                      {v.label}
+                    </button>
+                  ))}
+                </div>
+              )}
               {elements.data &&
                 (webgl ? (
                   <Suspense fallback={<LoadingState label="Starting the 3D view…" />}>
-                    <Wireframe3D elements={elements.data} selectedId={selectedId} view={view.id} viewNonce={view.nonce} onSelect={setSelectedId} />
+                    <Wireframe3D
+                      elements={elements.data}
+                      selectedId={selectedId}
+                      marked={picked}
+                      columns={columnById}
+                      allHeights={allHeights}
+                      view={view.id}
+                      viewNonce={view.nonce}
+                      onSelect={pick}
+                    />
                   </Suspense>
                 ) : (
-                  <IsometricPreview elements={elements.data} selectedId={selectedId} />
+                  <IsometricPreview
+                    elements={elements.data}
+                    selectedId={selectedId}
+                    marked={picked}
+                    labels={columnById}
+                    allHeights={allHeights}
+                    view={view.id}
+                    viewNonce={view.nonce}
+                    onSelect={pick}
+                  />
                 ))}
               <ul className="legend wf3d__legend" aria-label="Wireframe legend">
                 <li><span className="wf3d__key wf3d__key--beam" aria-hidden="true" /> Beam</li>
                 <li><span className="wf3d__key wf3d__key--column" aria-hidden="true" /> Column</li>
                 <li><span className="wf3d__key wf3d__key--added" aria-hidden="true" /> Added by hand</li>
                 <li><span className="wf3d__key wf3d__key--selected" aria-hidden="true" /> Selected</li>
+                <li><span className="wf3d__dot wf3d__dot--bottom" aria-hidden="true" /> Column bottom</li>
+                <li><span className="wf3d__dot wf3d__dot--top" aria-hidden="true" /> Column top</li>
+                <li>
+                  <label className="checkbox">
+                    <input type="checkbox" checked={allHeights} onChange={(e) => setAllHeights(e.target.checked)} /> Show every column’s height
+                  </label>
+                </li>
               </ul>
-              <p className="muted wf3d__help">Drag to orbit · right-drag to pan · wheel to zoom · click an element to select it.</p>
+              <p className="muted wf3d__help">
+                Drag to orbit · right-drag to pan · wheel to zoom · click an element to select it (Ctrl+click to pick several).
+                {!webgl && (
+                  <>
+                    {' '}
+                    <strong>Simple view:</strong> this browser has 3D graphics (WebGL) turned off, so the model is drawn without it. For the full 3D view,
+                    turn on “Use graphics acceleration when available” in Chrome’s settings (System) and restart Chrome.
+                  </>
+                )}
+              </p>
             </div>
             {(adding || selected) && (
               <div className="wf3d__panel">
@@ -429,15 +514,25 @@ function RevisionSection({
                 ) : (
                   selected && (
                     <ElementPanel
-                      key={selected.id}
+                      key={`${selected.id}:${panelNonce}`}
                       projectId={projectId}
                       element={selected}
                       editable={editable}
-                      onChanged={(updated) => {
+                      column={
+                        columnById.get(selected.id) && columnRows.data
+                          ? { wireframeId: current.id, row: columnById.get(selected.id)!, levels: columnRows.data.levels }
+                          : null
+                      }
+                      onChanged={(updated, keep) => {
                         if (updated) {
                           queryClient.setQueryData<WireframeElement[]>(['wireframe', current.id, 'elements'], (list) =>
                             list?.map((e) => (e.id === updated.id ? updated : e)),
                           )
+                        } else if (keep) {
+                          // Re-open the panel on the element as it now is (its new version).
+                          void queryClient
+                            .refetchQueries({ queryKey: ['wireframe', current.id, 'elements'] })
+                            .then(() => setPanelNonce((n) => n + 1))
                         } else setSelectedId(null)
                         refresh()
                       }}
@@ -450,12 +545,36 @@ function RevisionSection({
             )}
           </div>
 
-          <label className="checkbox">
-            <input type="checkbox" checked={onlyProblems} onChange={(e) => setOnlyProblems(e.target.checked)} /> Only
-            elements that are not placed
-          </label>
-          {elements.isPending && <LoadingState label="Loading elements…" />}
-          {shown.length > 0 && <ElementTable projectId={projectId} elements={shown} selectedId={selectedId} onSelect={setSelectedId} />}
+          <div className="family-tabs wf-tabs" role="group" aria-label="Table" ref={tabs}>
+            <button type="button" aria-pressed={tab === 'elements'} onClick={() => setTab('elements')}>
+              Elements
+            </button>
+            <button type="button" aria-pressed={tab === 'columns'} onClick={() => setTab('columns')}>
+              Column scheduler
+            </button>
+          </div>
+          {tab === 'columns' ? (
+            <ColumnScheduler
+              wireframeId={current.id}
+              revisionNo={current.revision_no}
+              datasetId={datasetId}
+              editable={editable}
+              selectedId={selectedId}
+              selection={picked}
+              onSelectionChange={setPicked}
+              onSelect={setSelectedId}
+              onChanged={refresh}
+            />
+          ) : (
+            <>
+              <label className="checkbox">
+                <input type="checkbox" checked={onlyProblems} onChange={(e) => setOnlyProblems(e.target.checked)} /> Only
+                elements that are not placed
+              </label>
+              {elements.isPending && <LoadingState label="Loading elements…" />}
+              {shown.length > 0 && <ElementTable projectId={projectId} elements={shown} selectedId={selectedId} onSelect={setSelectedId} />}
+            </>
+          )}
           {reviewing && (
             <ReviewDialog
               wireframe={current}

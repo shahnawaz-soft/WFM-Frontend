@@ -1,5 +1,14 @@
 import { apiClient } from './client'
-import type { DrawingPage, LevelProposals, Wireframe, WireframeElement, WireframeSetup } from './types'
+import type {
+  ApplyToAbmResult,
+  ColumnChanges,
+  DrawingPage,
+  LevelProposals,
+  SchedulerColumns,
+  Wireframe,
+  WireframeElement,
+  WireframeSetup,
+} from './types'
 
 export interface LevelChanges {
   level_label?: string
@@ -85,5 +94,46 @@ export async function getLevelProposals(projectId: string): Promise<LevelProposa
 /** Set the proposed values on these pages (audited, as when typed). */
 export async function applyLevelProposals(projectId: string, pages: string[]): Promise<{ applied: number }> {
   const { data } = await apiClient.post<{ applied: number }>(`/api/v1/projects/${projectId}/level-proposals/apply/`, { pages })
+  return data
+}
+
+// --- Column Scheduler ---------------------------------------------------------------------------
+
+export async function getSchedulerColumns(wireframeId: string): Promise<SchedulerColumns> {
+  const { data } = await apiClient.get<SchedulerColumns>(`/api/v1/wireframes/${wireframeId}/columns/`)
+  return data
+}
+
+/** Change one column or many at once (all or none). Height moves the top; levels snap. */
+export async function bulkEditColumns(
+  wireframeId: string,
+  items: { id: string; version: number }[],
+  changes: ColumnChanges,
+  reason = '',
+): Promise<SchedulerColumns> {
+  const { data } = await apiClient.post<SchedulerColumns>(`/api/v1/wireframes/${wireframeId}/columns/bulk-edit/`, {
+    items,
+    changes,
+    reason,
+  })
+  return data
+}
+
+/** The columns as CSV, in the old Wireframer export's columns (mm). */
+export async function downloadColumnsCsv(wireframeId: string, filename: string): Promise<void> {
+  const { data } = await apiClient.get<Blob>(`/api/v1/wireframes/${wireframeId}/columns.csv`, { responseType: 'blob' })
+  const url = URL.createObjectURL(data)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
+/** Give the ABM entries the revision's column sections and heights. */
+export async function applyColumnsToAbm(wireframeId: string): Promise<ApplyToAbmResult> {
+  const { data } = await apiClient.post<ApplyToAbmResult>(`/api/v1/wireframes/${wireframeId}/columns/apply-to-abm/`)
   return data
 }

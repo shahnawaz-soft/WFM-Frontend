@@ -31,6 +31,9 @@ export const WARNING_LABELS: Record<string, string> = {
   member_line_ambiguous: 'Line ambiguous',
   scale_unconfirmed: 'Scale unconfirmed',
   column_by_leader: 'Column: height from levels',
+  column_by_mark: 'Column: section from its mark in the column schedule',
+  section_from_below: 'Column: section of the column below — check for a splice',
+  text_recognised: 'Text read by recognition: check it',
   length_from_levels: 'Height from levels',
   size_not_shown: 'Size not given',
   not_on_plan: 'Not on a plan sheet',
@@ -54,7 +57,7 @@ export const WARNING_LABELS: Record<string, string> = {
 }
 
 /** Warnings that explain how (or whether) a length was measured, most important first. */
-const LENGTH_WARNINGS = ['same_column', 'in_column_schedule', 'from_column_schedule', 'length_from_legend', 'from_beam_legend', 'measured_on_image', 'length_from_levels', 'post_label', 'column_by_leader', 'length_long', 'length_implausible', 'length_not_determined', 'support_not_found', 'member_line_ambiguous', 'scale_unconfirmed']
+const LENGTH_WARNINGS = ['same_column', 'in_column_schedule', 'from_column_schedule', 'length_from_legend', 'from_beam_legend', 'measured_on_image', 'length_from_levels', 'post_label', 'column_by_leader', 'column_by_mark', 'length_long', 'length_implausible', 'length_not_determined', 'support_not_found', 'member_line_ambiguous', 'scale_unconfirmed']
 
 export function lengthNote(member: ExtractedMember): string | null {
   const code = LENGTH_WARNINGS.find((w) => member.warnings.includes(w))

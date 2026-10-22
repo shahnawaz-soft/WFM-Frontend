@@ -432,6 +432,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/drawing-sets/{id}/run-plan/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Run Plan on every page of a drawing set not run yet (pending or failed pages). */
+        post: operations["drawing_sets_run_plan_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/drawing-sets/limits/": {
         parameters: {
             query?: never;
@@ -1179,6 +1196,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/wireframes/{id}/columns/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The revision's columns as a schedule (PRD "Column Scheduler"). */
+        get: operations["wireframes_columns_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/wireframes/{id}/columns.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The columns as CSV, in the old Wireframer export's columns (mm). */
+        get: operations["wireframes_columns.csv_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/wireframes/{id}/columns/apply-to-abm/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Give the ABM entries the revision's column sections and heights. */
+        post: operations["wireframes_columns_apply_to_abm_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/wireframes/{id}/columns/bulk-edit/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Change one column or many at once: all or none. */
+        post: operations["wireframes_columns_bulk_edit_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/wireframes/{id}/copy/": {
         parameters: {
             query?: never;
@@ -1403,6 +1488,14 @@ export interface components {
         ApplyResult: {
             applied: number;
         };
+        ApplyToAbmResult: {
+            /** @description ABM entries given the revision's values */
+            updated: number;
+            /** @description On reviewed pages: they update once added */
+            locked: number;
+            /** @description Columns added in the model: no ABM entry */
+            not_in_abm: number;
+        };
         ApproveRequest: {
             /** @default true */
             make_default: boolean;
@@ -1447,6 +1540,8 @@ export interface components {
             in_bill: boolean;
             /** @description Counted on that page */
             same_as_page: number | null;
+            /** @description Its section is the one named below it, on that page */
+            size_from_page: number | null;
             /** @description The column schedule sheet that counts this column */
             schedule_page: number | null;
             /** Format: decimal */
@@ -1476,6 +1571,71 @@ export interface components {
          * @enum {string}
          */
         CodeEnum: "no_section_data" | "test_section_data" | "entries_awaiting_review" | "entries_no_length" | "entries_not_in_section_data" | "entries_unsupported";
+        ColumnBulkEditRequest: {
+            items: components["schemas"]["_ColumnRefRequest"][];
+            changes: components["schemas"]["ColumnChangesRequest"];
+            /** @default  */
+            reason: string;
+        };
+        ColumnChangesRequest: {
+            designation?: string;
+            rotation?: components["schemas"]["RotationEnum"];
+            column_type?: components["schemas"]["ColumnTypeEnum"];
+            /** @description Elevation: mm or feet-inches text */
+            bottom_mm?: string | null;
+            /** @description Feet-inches (24'-3"), inches (291"), or mm (7391 mm) */
+            top_mm?: string | null;
+            bottom_level?: string;
+            top_level?: string;
+            /** @description Moves the top; the bottom stays */
+            height_mm?: string | null;
+        };
+        ColumnLevel: {
+            label: string;
+            /** Format: decimal */
+            elevation_mm: string;
+            readonly elevation_display: string;
+        };
+        ColumnRow: {
+            /** Format: uuid */
+            id: string;
+            version: number;
+            /** @description Preliminary mark: same profile, height and rotation */
+            mark: string;
+            /** @description Grid crossing, e.g. "A/1" */
+            grid: string;
+            designation: string;
+            column_type: components["schemas"]["ColumnTypeEnum"];
+            rotation: components["schemas"]["RotationEnum"];
+            /** Format: decimal */
+            x_mm: string | null;
+            /** Format: decimal */
+            y_mm: string | null;
+            /** Format: decimal */
+            bottom_mm: string | null;
+            /** Format: decimal */
+            top_mm: string | null;
+            /** Format: decimal */
+            height_mm: string | null;
+            readonly bottom_display: string;
+            readonly top_display: string;
+            readonly height_display: string;
+            /** @description The level it starts at */
+            bottom_level: string;
+            /** @description The level it runs up to */
+            top_level: string;
+            level_label: string;
+            page_number: number | null;
+            /** Format: uuid */
+            source_member: string | null;
+            provenance: string;
+            completeness: string;
+            issues: string[];
+        };
+        ColumnSchedule: {
+            levels: components["schemas"]["ColumnLevel"][];
+            columns: components["schemas"]["ColumnRow"][];
+        };
         /**
          * @description * `wide_flange` - wide_flange
          *     * `square_tube` - square_tube
@@ -1535,6 +1695,12 @@ export interface components {
             found_by: components["schemas"]["FoundByEnum"];
             label_via?: (components["schemas"]["LabelViaEnum"] | components["schemas"]["NullEnum"]) | null;
         };
+        /**
+         * @description * `column` - Column
+         *     * `post` - Post
+         * @enum {string}
+         */
+        ColumnTypeEnum: "column" | "post";
         /**
          * @description * `ok` - Placed
          *     * `missing_data` - Missing data
@@ -1863,6 +2029,13 @@ export interface components {
          * @enum {string}
          */
         FoundByEnum: "symbol" | "label";
+        GenerateWireframeRequest: {
+            /**
+             * @description Build from every page that has been run, not only pages added to the project (for checking before review; never the wireframe to issue).
+             * @default false
+             */
+            draft: boolean;
+        };
         /**
          * @description * `member` - Member
          *     * `operator` - Operator
@@ -2313,6 +2486,8 @@ export interface components {
             element_type?: components["schemas"]["WireframeElementTypeEnum"];
             designation?: string;
             level_label?: string;
+            rotation?: components["schemas"]["RotationEnum"] | components["schemas"]["BlankEnum"];
+            column_type?: components["schemas"]["ColumnTypeEnum"] | components["schemas"]["BlankEnum"];
             /** @description [x, y, z]: mm numbers, or feet-inches / mm text */
             start?: (number | string)[];
             /** @description [x, y, z]: mm numbers, or feet-inches / mm text */
@@ -2526,6 +2701,14 @@ export interface components {
             summary: components["schemas"]["_Summary"];
             sheets: components["schemas"]["_SheetComparison"][];
         };
+        /**
+         * @description * `F` - Front
+         *     * `T` - Top
+         *     * `B` - Back
+         *     * `BL` - Below
+         * @enum {string}
+         */
+        RotationEnum: "F" | "T" | "B" | "BL";
         RunPlanRequest: {
             /**
              * @description Confirm re-running a page whose members have already been reviewed/corrected.
@@ -2652,6 +2835,17 @@ export interface components {
              * @description The earlier set; null: none
              */
             revises: string | null;
+        };
+        /** @description What "Run all pages" did: page numbers queued now, already running, or skipped. */
+        SetRun: {
+            queued: number[];
+            running: number[];
+            skipped: components["schemas"]["SetRunSkipped"][];
+        };
+        SetRunSkipped: {
+            page: number;
+            /** @description page_not_ready, page_not_runnable, … */
+            reason: string;
         };
         /**
          * @description * `plan` - plan
@@ -2828,6 +3022,8 @@ export interface components {
             /** Format: uuid */
             readonly id: string;
             readonly revision_no: number;
+            /** @description Built from every page that has been run, not only pages added to the project */
+            readonly draft: boolean;
             readonly status: components["schemas"]["WireframeStatusEnum"];
             readonly created_by: string;
             /** Format: date-time */
@@ -2996,6 +3192,11 @@ export interface components {
             original_filename: string;
             level_label: string;
             elevation_mm: string | null;
+        };
+        _ColumnRefRequest: {
+            /** Format: uuid */
+            id: string;
+            version: number;
         };
         _ConnectionTotals: {
             lines: number;
@@ -3991,6 +4192,27 @@ export interface operations {
             };
         };
     };
+    drawing_sets_run_plan_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetRun"];
+                };
+            };
+        };
+    };
     drawing_sets_limits_retrieve: {
         parameters: {
             query?: never;
@@ -4408,6 +4630,8 @@ export interface operations {
                 search?: string;
                 size?: string;
                 source?: ("detected" | "corrected" | "manual")[];
+                /** @description Entries a person should look at: no length, a length flagged as doubtful, or a column without a section */
+                to_check?: boolean;
             };
             header?: never;
             path: {
@@ -4881,7 +5105,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["GenerateWireframeRequest"];
+            };
+        };
         responses: {
             202: {
                 headers: {
@@ -5333,6 +5561,94 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Wireframe"];
+                };
+            };
+        };
+    };
+    wireframes_columns_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ColumnSchedule"];
+                };
+            };
+        };
+    };
+    "wireframes_columns.csv_retrieve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+        };
+    };
+    wireframes_columns_apply_to_abm_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplyToAbmResult"];
+                };
+            };
+        };
+    };
+    wireframes_columns_bulk_edit_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ColumnBulkEditRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ColumnSchedule"];
                 };
             };
         };

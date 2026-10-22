@@ -333,7 +333,7 @@ h2 { letter-spacing: -0.01em; }
   background: var(--color-bg);
 }
 .wf3d[data-expanded] .wf3d__stage { height: 100%; }
-.wf3d[data-expanded] .wf3d__stage > :is(.wf3d__canvas, .iso-preview) { flex: 1; min-height: 0; height: auto !important; max-height: none; }
+.wf3d[data-expanded] .wf3d__stage > :is(.wf3d__canvas, .iso-preview, .iso-view, .wf3d__viewport) { flex: 1; min-height: 0; height: auto !important; max-height: none; }
 .wf3d[data-expanded] .wf3d__panel { max-height: 100%; }
 
 /* ABM: a preliminary piece mark proposed by Steelo (a typed mark shows upright). */

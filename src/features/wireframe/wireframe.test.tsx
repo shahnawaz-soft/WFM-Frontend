@@ -227,7 +227,7 @@ describe('Wireframe', () => {
     expect(within(stats).getByText('Missing data').nextSibling).toHaveTextContent('1')
     expect(within(stats).getByText('Not in 3D').nextSibling).toHaveTextContent('1')
     expect(within(revision).getByText(/Levels: Level 2 at 14'-0"/)).toBeInTheDocument()
-    expect(within(revision).getByRole('img', { name: 'Isometric preview: 1 beams and 3 columns placed' })).toBeInTheDocument()
+    expect(within(revision).getByRole('img', { name: 'Wireframe view: 1 beams and 3 columns placed' })).toBeInTheDocument()
     expect(within(revision).queryByText(/No columns:/)).not.toBeInTheDocument()
 
     const elements = within(revision).getByRole('table', { name: 'Wireframe elements' })

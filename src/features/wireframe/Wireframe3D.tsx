@@ -1,5 +1,5 @@
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
-import { useEffect, useLayoutEffect, useMemo } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 
@@ -8,15 +8,32 @@ import { elementPoints } from './elementPoints'
 
 export type CameraView = '3d' | 'top' | 'front' | 'side'
 
+/** What the view says about a column: its mark, section, height and levels (Column Scheduler). */
+export interface ColumnLabel {
+  mark: string
+  designation: string
+  height_display: string
+  bottom_level: string
+  top_level: string
+}
+
 interface Wireframe3DProps {
   elements: WireframeElement[]
   selectedId: string | null
+  /** Columns picked in the schedule or here with Ctrl+click: highlighted, with their heights. */
+  marked?: Set<string>
+  columns?: Map<string, ColumnLabel>
+  /** Every column's height, not only the picked ones. */
+  allHeights?: boolean
   view: CameraView
   viewNonce: number
-  onSelect: (id: string | null) => void
+  /** ``additive``: Ctrl/⌘+click adds to (or takes from) the picked columns. */
+  onSelect: (id: string | null, additive?: boolean) => void
 }
 
-const COLORS = { beam: '#2563eb', column: '#c2410c', selected: '#7c3aed', added: '#15803d' }
+const COLORS = { beam: '#2563eb', column: '#c2410c', selected: '#7c3aed', added: '#15803d', hover: '#db2777' }
+// Column ends are told apart: the bottom (where it stands) green, the top red.
+const END_COLORS = { bottom: '#15803d', top: '#b91c1c', dimension: '#334155' }
 
 interface Placed {
   e: WireframeElement
@@ -115,7 +132,15 @@ function CameraRig({ box, view, nonce }: { box: THREE.Box3; view: CameraView; no
 /** Every element in one line object (one draw call, one hit test), coloured per element; a
  *  click maps the segment hit back to its element. 931 separate objects made orbiting stutter:
  *  each was hit-tested on every pointer move. */
-function Elements3D({ items, onSelect }: { items: Placed[]; onSelect: (id: string) => void }) {
+function Elements3D({
+  items,
+  onSelect,
+  onHover,
+}: {
+  items: Placed[]
+  onSelect: (id: string, additive: boolean) => void
+  onHover: (hover: { id: string; x: number; y: number } | null) => void
+}) {
   const { lines, owners } = useMemo(() => {
     const positions: number[] = []
     const colours: number[] = []
@@ -137,42 +162,133 @@ function Elements3D({ items, onSelect }: { items: Placed[]; onSelect: (id: strin
     return { lines: new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ vertexColors: true })), owners }
   }, [items])
   useEffect(() => () => lines.geometry.dispose(), [lines])
+
+  // The member under the cursor: of the segments within reach, the one nearest the ray (the
+  // first hit is only the nearest to the camera).
+  const ownerOf = (event: ThreeEvent<PointerEvent | MouseEvent>): string | undefined => {
+    let best: { index: number; gap: number } | null = null
+    for (const hit of event.intersections) {
+      if (hit.object !== lines || hit.index == null) continue
+      const gap = event.ray.distanceToPoint((hit as { pointOnLine?: THREE.Vector3 }).pointOnLine ?? hit.point)
+      if (!best || gap < best.gap) best = { index: hit.index, gap }
+    }
+    return best ? owners[Math.floor(best.index / 2)] : undefined
+  }
   return (
     <primitive
       object={lines}
       onClick={(event: ThreeEvent<MouseEvent>) => {
         event.stopPropagation()
         if (event.delta > 4) return // the end of an orbit drag, not a pick
-        // The member under the cursor: of the segments within reach, the one nearest the ray
-        // (the first hit is only the nearest to the camera).
-        let best: { index: number; gap: number } | null = null
-        for (const hit of event.intersections) {
-          if (hit.object !== lines || hit.index == null) continue
-          const gap = event.ray.distanceToPoint((hit as { pointOnLine?: THREE.Vector3 }).pointOnLine ?? hit.point)
-          if (!best || gap < best.gap) best = { index: hit.index, gap }
-        }
-        const id = best ? owners[Math.floor(best.index / 2)] : undefined
-        if (id) onSelect(id)
+        const id = ownerOf(event)
+        if (id) onSelect(id, event.nativeEvent.ctrlKey || event.nativeEvent.metaKey)
       }}
+      onPointerMove={(event: ThreeEvent<PointerEvent>) => {
+        if (event.nativeEvent.buttons) return // orbiting: no hover work while dragging
+        const id = ownerOf(event)
+        onHover(id ? { id, x: event.nativeEvent.offsetX, y: event.nativeEvent.offsetY } : null)
+      }}
+      onPointerOut={() => onHover(null)}
     />
   )
 }
 
-function Selected3D({ p }: { p: Placed }) {
+function Selected3D({ p, color = COLORS.selected }: { p: Placed; color?: string }) {
   const line = useMemo(() => {
     const geometry = new THREE.BufferGeometry().setFromPoints(p.points)
-    const material = new THREE.LineBasicMaterial({ color: COLORS.selected, depthTest: false })
+    const material = new THREE.LineBasicMaterial({ color, depthTest: false })
     const object = new THREE.Line(geometry, material)
     object.renderOrder = 1 // drawn over the rest
     return object
-  }, [p])
+  }, [p, color])
   useEffect(() => () => line.geometry.dispose(), [line])
   return <primitive object={line} />
 }
 
-/** Interactive 3D view of the wireframe: orbit (drag), zoom (wheel), pick (click). */
-export default function Wireframe3D({ elements, selectedId, view, viewNonce, onSelect }: Wireframe3DProps) {
+/** A text label drawn on a canvas, always facing the camera and the same size on screen. */
+function textSprite(text: string): THREE.Sprite {
+  const canvas = document.createElement('canvas')
+  canvas.width = 256
+  canvas.height = 64
+  const ctx = canvas.getContext('2d')
+  if (ctx) {
+    ctx.fillStyle = 'rgba(255,255,255,0.9)'
+    ctx.fillRect(0, 8, 256, 48)
+    ctx.fillStyle = END_COLORS.dimension
+    ctx.font = 'bold 30px system-ui, sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(text, 128, 33)
+  }
+  const material = new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), depthTest: false, sizeAttenuation: false })
+  const sprite = new THREE.Sprite(material)
+  sprite.scale.set(0.16, 0.04, 1)
+  sprite.renderOrder = 3
+  return sprite
+}
+
+/** Each column's height as a drawing shows it: a dimension line beside the column with ticks
+ *  and extension lines at its ends, the height written at its middle, and the bottom (green)
+ *  and top (red) of the column marked. */
+function ColumnDimensions({ items, labels, reach }: { items: Placed[]; labels?: Map<string, ColumnLabel>; reach: number }) {
+  const group = useMemo(() => {
+    const g = new THREE.Group()
+    const offset = new THREE.Vector3(Math.max(reach / 60, 300), 0, 0)
+    const tick = new THREE.Vector3(1, 0, 1).normalize().multiplyScalar(offset.x * 0.35)
+    const lines: number[] = []
+    const ends: number[] = []
+    const endColours: number[] = []
+    const bottom = new THREE.Color(END_COLORS.bottom)
+    const top = new THREE.Color(END_COLORS.top)
+    for (const p of items) {
+      const [low, high] = p.a.z <= p.b.z ? [p.a, p.b] : [p.b, p.a]
+      const [d0, d1] = [low.clone().add(offset), high.clone().add(offset)]
+      const ext = offset.clone().multiplyScalar(1.25)
+      const push = (u: THREE.Vector3, v: THREE.Vector3) => lines.push(u.x, u.y, u.z, v.x, v.y, v.z)
+      push(low, low.clone().add(ext)) // extension lines
+      push(high, high.clone().add(ext))
+      push(d0, d1) // the dimension line
+      push(d0.clone().sub(tick), d0.clone().add(tick)) // ticks
+      push(d1.clone().sub(tick), d1.clone().add(tick))
+      ends.push(low.x, low.y, low.z, high.x, high.y, high.z)
+      endColours.push(bottom.r, bottom.g, bottom.b, top.r, top.g, top.b)
+      const label = labels?.get(p.e.id)?.height_display || `${Math.round(high.z - low.z)} mm`
+      const sprite = textSprite(label)
+      sprite.position.copy(d0.clone().add(d1).multiplyScalar(0.5).add(offset.clone().multiplyScalar(0.9)))
+      g.add(sprite)
+    }
+    const lineGeometry = new THREE.BufferGeometry()
+    lineGeometry.setAttribute('position', new THREE.Float32BufferAttribute(lines, 3))
+    const dims = new THREE.LineSegments(lineGeometry, new THREE.LineBasicMaterial({ color: END_COLORS.dimension, depthTest: false }))
+    dims.renderOrder = 2
+    g.add(dims)
+    const endGeometry = new THREE.BufferGeometry()
+    endGeometry.setAttribute('position', new THREE.Float32BufferAttribute(ends, 3))
+    endGeometry.setAttribute('color', new THREE.Float32BufferAttribute(endColours, 3))
+    const points = new THREE.Points(endGeometry, new THREE.PointsMaterial({ size: 9, sizeAttenuation: false, vertexColors: true, depthTest: false }))
+    points.renderOrder = 2
+    g.add(points)
+    return g
+  }, [items, labels, reach])
+  useEffect(
+    () => () => {
+      group.traverse((o) => {
+        if (o instanceof THREE.Sprite) {
+          o.material.map?.dispose()
+          o.material.dispose()
+        } else if (o instanceof THREE.LineSegments || o instanceof THREE.Points) o.geometry.dispose()
+      })
+    },
+    [group],
+  )
+  return <primitive object={group} />
+}
+
+/** Interactive 3D view of the wireframe: orbit (drag), zoom (wheel), pick (click; Ctrl+click
+ *  to pick several), hover a column for its mark, section, height and levels. */
+export default function Wireframe3D({ elements, selectedId, marked, columns, allHeights = false, view, viewNonce, onSelect }: Wireframe3DProps) {
   const items = useMemo(() => placed(elements), [elements])
+  const [hover, setHover] = useState<{ id: string; x: number; y: number } | null>(null)
   const box = useMemo(() => {
     const b = new THREE.Box3()
     for (const p of items) b.expandByPoint(p.a).expandByPoint(p.b)
@@ -182,25 +298,61 @@ export default function Wireframe3D({ elements, selectedId, view, viewNonce, onS
   const size = box.getSize(new THREE.Vector3())
   const grid = Math.max(size.x, size.y, 10_000) * 1.2
   const centre = box.getCenter(new THREE.Vector3())
-  const selected = items.find((p) => p.e.id === selectedId)
+  const picked = useMemo(() => items.filter((p) => p.e.id === selectedId || marked?.has(p.e.id)), [items, selectedId, marked])
+  const hovered = hover ? items.find((p) => p.e.id === hover.id) : undefined
+  const dimensioned = useMemo(() => {
+    const shown = items.filter(
+      (p) => p.e.element_type === 'column' && (allHeights || p.e.id === selectedId || marked?.has(p.e.id) || p.e.id === hover?.id),
+    )
+    return shown
+  }, [items, allHeights, selectedId, marked, hover?.id])
+  const hoverLabel = hovered && hovered.e.element_type === 'column' ? columns?.get(hovered.e.id) : undefined
 
   return (
-    <Canvas
-      className="wf3d__canvas"
-      camera={{ fov: 45 }}
-      dpr={[1, 2]}
-      raycaster={{ params: { Line: { threshold: Math.max(grid / 300, 50) } } as THREE.RaycasterParameters }}
-      onPointerMissed={() => onSelect(null)}
-    >
-      <color attach="background" args={['#f8fafc']} />
-      <CameraRig box={box} view={view} nonce={viewNonce} />
-      <gridHelper
-        args={[grid, 20, '#cbd5e1', '#e2e8f0']}
-        position={[centre.x, centre.y, box.min.z]}
-        rotation={[Math.PI / 2, 0, 0]}
-      />
-      <Elements3D items={items} onSelect={onSelect} />
-      {selected && <Selected3D p={selected} />}
-    </Canvas>
+    <div className="wf3d__viewport">
+      <Canvas
+        className="wf3d__canvas"
+        camera={{ fov: 45 }}
+        dpr={[1, 2]}
+        raycaster={{ params: { Line: { threshold: Math.max(grid / 300, 50) } } as THREE.RaycasterParameters }}
+        onPointerMissed={() => onSelect(null)}
+      >
+        <color attach="background" args={['#f8fafc']} />
+        <CameraRig box={box} view={view} nonce={viewNonce} />
+        <gridHelper
+          args={[grid, 20, '#cbd5e1', '#e2e8f0']}
+          position={[centre.x, centre.y, box.min.z]}
+          rotation={[Math.PI / 2, 0, 0]}
+        />
+        <Elements3D items={items} onSelect={onSelect} onHover={setHover} />
+        {picked.map((p) => (
+          <Selected3D key={p.e.id} p={p} />
+        ))}
+        {hovered && !picked.includes(hovered) && <Selected3D p={hovered} color={COLORS.hover} />}
+        {dimensioned.length > 0 && <ColumnDimensions items={dimensioned} labels={columns} reach={size.length()} />}
+      </Canvas>
+      {hovered && (
+        <div className="wf3d__tooltip" role="tooltip" style={{ left: hover!.x + 14, top: hover!.y + 14 }}>
+          {hoverLabel ? (
+            <>
+              <strong>
+                {hoverLabel.mark && `${hoverLabel.mark} · `}
+                {hoverLabel.designation || 'Size not given'}
+              </strong>
+              <span>
+                {hoverLabel.height_display}
+                {(hoverLabel.bottom_level || hoverLabel.top_level) &&
+                  ` · ${hoverLabel.bottom_level || '?'} → ${hoverLabel.top_level || '?'}`}
+              </span>
+            </>
+          ) : (
+            <strong>
+              {hovered.e.element_type === 'column' ? 'Column' : 'Beam'} {hovered.e.designation || ''} {hovered.e.length_display && `· ${hovered.e.length_display}`}
+            </strong>
+          )}
+          <span className="muted">Click to edit · Ctrl+click to add to the selection</span>
+        </div>
+      )}
+    </div>
   )
 }
