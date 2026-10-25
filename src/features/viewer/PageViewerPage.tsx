@@ -93,7 +93,7 @@ export function PageViewerPage() {
   const pdf = useQuery({
     queryKey: ['drawing-set', setId, 'pdf'],
     queryFn: async () => loadPdf(await fetchOriginalPdf(setId!, (loaded, total) => setDownload({ loaded, total }))),
-    enabled: Boolean(setId) && siblings.isSuccess,
+    enabled: Boolean(setId), // in parallel with the page strip: the PDF is the longest request
     staleTime: Infinity,
     gcTime: 5 * 60_000,
     retry: false,

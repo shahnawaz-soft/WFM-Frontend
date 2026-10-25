@@ -1,11 +1,13 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { http } from 'msw'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 
 import { mockBackend } from '../../test/mockBackend'
 import { acceptUpload, mockDrawings } from '../../test/mockDrawings'
 import { mockProjects } from '../../test/mockProjects'
 import { renderApp } from '../../test/renderApp'
+import { server } from '../../test/server'
 
 // PDF.js needs a real canvas. The stand-in renders nothing but reports a viewport with the
 // same contract as PDF.js (PDF points, y up → CSS pixels, y down) so overlays can be tested.
@@ -75,6 +77,26 @@ async function runPlan() {
 }
 
 describe('Page workspace', () => {
+  it('downloads the drawing without waiting for the page strip', async () => {
+    let downloadStarted = false
+    let releaseStrip = () => {}
+    const stripHeld = new Promise<void>((resolve) => (releaseStrip = resolve))
+    server.events.on('request:start', ({ request }) => {
+      if (new URL(request.url).pathname.endsWith('/file/')) downloadStarted = true
+    })
+    onTestFinished(() => {
+      releaseStrip()
+      server.events.removeAllListeners()
+    })
+    server.use(
+      http.get('*/api/v1/drawing-sets/:id/pages/', async () => {
+        await stripHeld // then falls through to the default handler
+      }),
+    )
+    await openViewer()
+    await waitFor(() => expect(downloadStarted).toBe(true))
+  })
+
   it('opens from a page thumbnail', async () => {
     const project = mockProjects.create('Warehouse', OWNER)
     mockBackend.startSession(OWNER)
