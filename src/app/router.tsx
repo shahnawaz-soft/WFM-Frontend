@@ -1,7 +1,6 @@
 import { createBrowserRouter, Outlet, type RouteObject } from 'react-router'
 
 import { RequireAuth, RequireCapability } from '../auth/guards'
-import { TemplatesPage } from '../features/connections/TemplatesPage'
 import { ProjectDetailPage } from '../features/projects/ProjectDetailPage'
 import { ProjectsPage } from '../features/projects/ProjectsPage'
 import { HomePage } from '../pages/HomePage'
@@ -50,7 +49,10 @@ export const routes: RouteObject[] = [
             path: 'projects/:projectId/wireframe',
             lazy: async () => ({ Component: (await import('../features/wireframe/WireframePage')).WireframePage }),
           },
-          { path: 'connection-templates', element: <TemplatesPage /> },
+          {
+            path: 'connection-templates',
+            lazy: async () => ({ Component: (await import('../features/connections/TemplatesPage')).TemplatesPage }),
+          },
           { path: 'profile', element: <ProfilePage /> },
           {
             // Admin pages: few people open them, so they stay out of the main bundle.
