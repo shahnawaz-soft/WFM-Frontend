@@ -192,11 +192,28 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * @description A column symbol Steelo missed, pointed at: every mark drawn like it becomes a column,
-         *     on this page or every plan of its drawing set.
-         */
+        /** @description With scope=set the whole drawing set is searched in the request, which a large set can make time out: use POST /drawing-pages/{id}/find-similar-columns/jobs/ instead (kept here until the frontend has moved). */
         post: operations["drawing_pages_find_similar_columns_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/drawing-pages/{id}/find-similar-columns/jobs/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Find similar on every plan of the page's drawing set, run by a worker: answers 202 with
+         *     the job to poll (``GET /similar-columns-jobs/{id}/``).
+         */
+        post: operations["drawing_pages_find_similar_columns_jobs_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1148,6 +1165,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/similar-columns-jobs/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["similar_columns_jobs_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users/": {
         parameters: {
             query?: never;
@@ -1916,7 +1949,7 @@ export interface components {
             readonly rotation: number;
             readonly error_code: string;
             readonly error_message: string;
-            readonly latest_job: components["schemas"]["ProcessingJob"] | null;
+            readonly latest_job: components["schemas"]["PageJob"] | null;
             readonly current_run: components["schemas"]["ExtractionRun"] | null;
             readonly level_label: string;
             /** Format: decimal */
@@ -2098,6 +2131,10 @@ export interface components {
             acknowledge_exceptions: boolean;
             /** @default  */
             note: string;
+        };
+        FindSimilarJobRequest: {
+            /** @description [x, y] in PDF points on the page: a column symbol Steelo missed */
+            point: number[];
         };
         FindSimilarRequest: {
             /** @description [x, y] in PDF points on the page: a column symbol Steelo missed */
@@ -2492,6 +2529,32 @@ export interface components {
             reopen_reason: string;
             /** @description The version the project is finalised at now */
             readonly is_current: boolean;
+        };
+        /**
+         * @description A page's latest job: the job without its run, which the page shows once, as
+         *     ``current_run`` (26 Oct 2026: repeating it was half of a drawing set's page list).
+         */
+        PageJob: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly page: string;
+            /** @default run_plan */
+            readonly kind: components["schemas"]["ProcessingJobKindEnum"];
+            /** @default queued */
+            readonly status: components["schemas"]["JobStatusEnum"];
+            readonly progress: number;
+            readonly stage: string;
+            readonly attempt: number;
+            readonly requested_by: components["schemas"]["UserSummary"];
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly started_at: string | null;
+            /** Format: date-time */
+            readonly finished_at: string | null;
+            readonly error_code: string;
+            readonly error_message: string;
         };
         /**
          * @description * `vector` - Vector drawing
@@ -2957,6 +3020,40 @@ export interface components {
          * @enum {string}
          */
         SheetKindEnum: "plan" | "elevation" | "section" | "detail" | "schedule" | "notes" | "unknown";
+        /** @description A search of every plan of a drawing set for marks drawn like the one pointed at. */
+        SimilarColumnsJob: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly page: string;
+            /** Format: uuid */
+            readonly drawing_set: string;
+            readonly point: number[];
+            readonly status: components["schemas"]["SimilarColumnsJobStatusEnum"];
+            readonly progress: number;
+            readonly stage: string;
+            readonly pages_total: number;
+            readonly pages_done: number;
+            /** @description Columns added so far (complete when status is completed; kept when the search stopped early); null before the first plan is searched */
+            readonly result: components["schemas"]["FindSimilarResult"] | null;
+            readonly error_code: string;
+            readonly error_message: string;
+            readonly requested_by: components["schemas"]["UserSummary"];
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly started_at: string | null;
+            /** Format: date-time */
+            readonly finished_at: string | null;
+        };
+        /**
+         * @description * `queued` - Queued
+         *     * `processing` - Processing
+         *     * `completed` - Completed
+         *     * `failed` - Failed
+         * @enum {string}
+         */
+        SimilarColumnsJobStatusEnum: "queued" | "processing" | "completed" | "failed";
         SkippedPage: {
             /** Format: uuid */
             page_id: string;
@@ -3128,6 +3225,7 @@ export interface components {
             readonly created_at: string;
             /** Format: date-time */
             readonly finished_at: string | null;
+            readonly error_code: string;
             readonly error_message: string;
             /** @description Counts, levels and page set-up at generation */
             summary: {
@@ -3911,6 +4009,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FindSimilarResult"];
+                };
+            };
+        };
+    };
+    drawing_pages_find_similar_columns_jobs_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FindSimilarJobRequest"];
+            };
+        };
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimilarColumnsJob"];
                 };
             };
         };
@@ -5530,6 +5653,27 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SectionProfile"][];
+                };
+            };
+        };
+    };
+    similar_columns_jobs_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimilarColumnsJob"];
                 };
             };
         };
