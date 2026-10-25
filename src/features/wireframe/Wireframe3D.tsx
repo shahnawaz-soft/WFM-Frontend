@@ -180,7 +180,13 @@ function Elements3D({
     geometry.computeBoundingSphere()
     return { lines: new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ vertexColors: true })), owners }
   }, [items])
-  useEffect(() => () => lines.geometry.dispose(), [lines])
+  useEffect(
+    () => () => {
+      lines.geometry.dispose()
+      lines.material.dispose()
+    },
+    [lines],
+  )
 
   // The member under the cursor: of the segments within reach, the one nearest the ray (the
   // first hit is only the nearest to the camera).
@@ -212,14 +218,19 @@ function Elements3D({
   )
 }
 
-function Selected3D({ p, color = COLORS.selected }: { p: Placed; color?: string }) {
+/** The two highlight looks, shared by every highlighted element for the life of the page: hovering
+ *  or selecting makes a new line, never a new material (nor its GPU program). */
+const HIGHLIGHT = {
+  selected: new THREE.LineBasicMaterial({ color: COLORS.selected, depthTest: false }),
+  hover: new THREE.LineBasicMaterial({ color: COLORS.hover, depthTest: false }),
+}
+
+function Selected3D({ p, tone = 'selected' }: { p: Placed; tone?: keyof typeof HIGHLIGHT }) {
   const line = useMemo(() => {
-    const geometry = new THREE.BufferGeometry().setFromPoints(p.points)
-    const material = new THREE.LineBasicMaterial({ color, depthTest: false })
-    const object = new THREE.Line(geometry, material)
+    const object = new THREE.Line(new THREE.BufferGeometry().setFromPoints(p.points), HIGHLIGHT[tone])
     object.renderOrder = 1 // drawn over the rest
     return object
-  }, [p, color])
+  }, [p, tone])
   useEffect(() => () => line.geometry.dispose(), [line])
   return <primitive object={line} />
 }
@@ -266,7 +277,10 @@ function ColumnDimensions({ items, reach }: { items: Placed[]; reach: number }) 
   useEffect(
     () => () => {
       group.traverse((o) => {
-        if (o instanceof THREE.LineSegments || o instanceof THREE.Points) o.geometry.dispose()
+        if (o instanceof THREE.LineSegments || o instanceof THREE.Points) {
+          o.geometry.dispose()
+          o.material.dispose()
+        }
       })
     },
     [group],
@@ -457,7 +471,7 @@ export default function Wireframe3D({
         {picked.map((p) => (
           <Selected3D key={p.e.id} p={p} />
         ))}
-        {hovered && !picked.includes(hovered) && <Selected3D p={hovered} color={COLORS.hover} />}
+        {hovered && !picked.includes(hovered) && <Selected3D p={hovered} tone="hover" />}
         {dimensioned.length > 0 && <ColumnDimensions items={dimensioned} reach={size.length()} />}
         <HeightTags items={dimensioned} reach={size.length()} overlay={overlay} />
       </Canvas>
