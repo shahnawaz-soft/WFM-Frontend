@@ -887,7 +887,7 @@ export const drawingHandlers = [
   http.post('*/api/v1/drawing-pages/:id/run-plan/', async ({ params, request }) => {
     const page = sets.flatMap((s) => s.pages).find((p) => p.id === params.id) as Mutable<DrawingPage>
     if (page.latest_job && ['queued', 'processing'].includes(page.latest_job.status)) {
-      return HttpResponse.json(page.latest_job)
+      return HttpResponse.json({ ...page.latest_job, run: null })
     }
     const body = (await request.json().catch(() => ({}))) as { discard_review?: boolean }
     const reviewed = ((runMembers[page.id] ?? []) as MockMember[]).some((m) => m.review_status !== 'unreviewed' || m.is_corrected)
@@ -907,25 +907,28 @@ export const drawingHandlers = [
       finished_at: null,
       error_code: '',
       error_message: '',
-      run: null,
     }
+    // A page's latest_job is a PageJob: the job without its run (the page shows that once, as
+    // current_run). The run-plan response is the full ProcessingJob, run included.
     if (outcome === 'stay_processing') {
       page.status = 'processing'
-      page.latest_job = { ...base, status: 'processing', progress: 40, stage: 'Analysing page content' } as never
-      return HttpResponse.json(page.latest_job, { status: 202 })
+      const job = { ...base, status: 'processing', progress: 40, stage: 'Analysing page content' }
+      page.latest_job = job as never
+      return HttpResponse.json({ ...job, run: null }, { status: 202 })
     }
     if (outcome === 'failed') {
       page.status = page.current_run ? 'processed' : 'failed'
-      page.latest_job = {
+      const job = {
         ...base,
         status: 'failed',
         progress: 15,
         stage: 'Opening drawing',
         error_code: 'processing_error',
         error_message: 'Processing failed unexpectedly. Nothing was lost. Run Plan again to retry.',
-      } as never
+      }
+      page.latest_job = job as never
       delete runOutcomes[page.page_number]
-      return HttpResponse.json(page.latest_job, { status: 202 })
+      return HttpResponse.json({ ...job, run: null }, { status: 202 })
     }
     const run = {
       id: crypto.randomUUID(),
@@ -997,8 +1000,9 @@ export const drawingHandlers = [
           ]
     page.status = 'processed'
     page.current_run = run as never
-    page.latest_job = { ...base, status: outcome, progress: 100, stage: 'Done', run } as never
-    return HttpResponse.json(page.latest_job, { status: 202 })
+    const job = { ...base, status: outcome, progress: 100, stage: 'Done' }
+    page.latest_job = job as never
+    return HttpResponse.json({ ...job, run }, { status: 202 })
   }),
 
   http.get('*/api/v1/drawing-pages/:id/members/', ({ params }) => HttpResponse.json(runMembers[params.id as string] ?? [])),
