@@ -94,7 +94,7 @@ function aimFlat(camera: THREE.OrthographicCamera, controls: OrbitControls, box:
 /** The 3D view in perspective; Top, Front and Side are orthographic: true proportions, and
  *  columns stay points (top) or upright (front, side) instead of leaning with perspective. */
 function CameraRig({ box, view, nonce, dragMode }: { box: THREE.Box3; view: CameraView; nonce: number; dragMode: 'turn' | 'move' }) {
-  const { gl, size, set } = useThree()
+  const { gl, size, set, invalidate } = useThree()
   const perspective = useMemo(() => {
     const camera = new THREE.PerspectiveCamera(45, 1, 1, 1e7)
     // Z is up in the project. OrbitControls reads "up" once, when it is made: set it first, or
@@ -122,7 +122,16 @@ function CameraRig({ box, view, nonce, dragMode }: { box: THREE.Box3; view: Came
     c.screenSpacePanning = true
     return c
   }, [camera, gl])
-  useEffect(() => () => controls.dispose(), [controls])
+  // The canvas draws on demand: each camera move (drag, wheel, and every damping step, which
+  // controls.update() below reports as a change until the motion settles) asks for a frame.
+  useEffect(() => {
+    const redraw = () => invalidate()
+    controls.addEventListener('change', redraw)
+    return () => {
+      controls.removeEventListener('change', redraw)
+      controls.dispose()
+    }
+  }, [controls, invalidate])
   // The switch above the view: what a left-drag does; a right-drag does the other.
   useEffect(() => {
     const [turn, move] = [THREE.MOUSE.ROTATE, THREE.MOUSE.PAN]
@@ -133,7 +142,8 @@ function CameraRig({ box, view, nonce, dragMode }: { box: THREE.Box3; view: Came
   useEffect(() => {
     if (view === '3d') aimPerspective(perspective, controls, box, size.width / Math.max(size.height, 1))
     else aimFlat(ortho, controls, box, view, size.width / Math.max(size.height, 1))
-  }, [box, view, nonce, size, perspective, ortho, controls])
+    invalidate()
+  }, [box, view, nonce, size, perspective, ortho, controls, invalidate])
   return null
 }
 
@@ -263,41 +273,100 @@ function ColumnDimensions({ items, reach }: { items: Placed[]; reach: number }) 
   return <primitive object={group} />
 }
 
-/** Where each column's height tag goes on screen, every frame: beside the middle of its
- *  dimension line. Tags that would cover one already placed (nearer columns first) are hidden,
- *  so they stay readable; zooming in shows more. Moved directly in the page (no re-render). */
+interface PlacedTag {
+  el: HTMLElement
+  x: number
+  y: number
+  depth: number
+  w: number
+  h: number
+}
+
+/** Where each column's height tag goes on screen: beside the middle of its dimension line.
+ *  Tags that would cover one already placed (nearer columns first) are hidden, so they stay
+ *  readable; zooming in shows more. Moved directly in the page (no re-render), and only when
+ *  the camera, the view's size or the tags change. Tag sizes are measured once per change of
+ *  the tags, so placing them only writes to the page (no layout per tag). */
 function HeightTags({ items, reach, overlay }: { items: Placed[]; reach: number; overlay: React.RefObject<HTMLDivElement | null> }) {
+  const { invalidate } = useThree()
   const point = useMemo(() => new THREE.Vector3(), [])
   const offset = Math.max(reach / 60, 300) * 1.6
+  // What the tags were last placed for: the camera, its matrices and the view's size.
+  const last = useRef({ camera: null as THREE.Camera | null, world: new THREE.Matrix4(), projection: new THREE.Matrix4(), width: 0, height: 0 })
+  const remeasure = useRef(true)
+  const sizes = useRef<{ w: number; h: number }[]>([])
+  const pool = useRef<PlacedTag[]>([]) // reused between placements
+  const order = useRef<PlacedTag[]>([])
+  const taken = useRef<number[]>([]) // boxes of the tags shown, four numbers each
+
+  // The tags (which ones, their text) may have changed with this render: measure and place again.
+  useLayoutEffect(() => {
+    remeasure.current = true
+    invalidate()
+  })
+
   useFrame(({ camera, size }) => {
     const tags = overlay.current?.children
     if (!tags) return
-    const placed: { el: HTMLElement; x: number; y: number; depth: number }[] = []
+    camera.updateMatrixWorld() // as the coming render will: tags match this frame, not the last
+    const seen = last.current
+    const moved =
+      seen.camera !== camera ||
+      seen.width !== size.width ||
+      seen.height !== size.height ||
+      !seen.world.equals(camera.matrixWorld) ||
+      !seen.projection.equals(camera.projectionMatrix)
+    if (!moved && !remeasure.current) return
+    seen.camera = camera
+    seen.width = size.width
+    seen.height = size.height
+    seen.world.copy(camera.matrixWorld)
+    seen.projection.copy(camera.projectionMatrix)
+
+    // Reads first, all at once: the page lays out at most once.
+    if (remeasure.current) {
+      sizes.current = Array.from(tags, (el) => ({ w: (el as HTMLElement).offsetWidth || 60, h: (el as HTMLElement).offsetHeight || 18 }))
+      remeasure.current = false
+    }
+    const placed = order.current
+    placed.length = 0
     items.forEach((p, i) => {
       const el = tags[i] as HTMLElement | undefined
-      if (!el) return
+      const measured = sizes.current[i]
+      if (!el || !measured) return
       point.copy(p.a).add(p.b).multiplyScalar(0.5)
       point.x += offset
       point.project(camera)
       const behind = point.z > 1 || point.z < -1
-      placed.push({ el, x: ((point.x + 1) / 2) * size.width, y: ((1 - point.y) / 2) * size.height, depth: behind ? Infinity : point.z })
+      const t = (pool.current[i] ??= { el, x: 0, y: 0, depth: 0, w: 0, h: 0 })
+      t.el = el
+      t.x = ((point.x + 1) / 2) * size.width
+      t.y = ((1 - point.y) / 2) * size.height
+      t.depth = behind ? Infinity : point.z
+      t.w = measured.w
+      t.h = measured.h
+      placed.push(t)
     })
     placed.sort((a, b) => a.depth - b.depth)
-    const taken: [number, number, number, number][] = []
+
+    // Then writes only.
+    const boxes = taken.current
+    boxes.length = 0
     for (const t of placed) {
-      const w = t.el.offsetWidth || 60
-      const h = t.el.offsetHeight || 18
-      const box: [number, number, number, number] = [t.x - 2, t.y - h / 2 - 2, t.x + w + 2, t.y + h / 2 + 2]
+      const [x0, y0, x1, y1] = [t.x - 2, t.y - t.h / 2 - 2, t.x + t.w + 2, t.y + t.h / 2 + 2]
+      let clash = false
+      for (let b = 0; b < boxes.length && !clash; b += 4) {
+        clash = x0 < boxes[b + 2]! && boxes[b]! < x1 && y0 < boxes[b + 3]! && boxes[b + 1]! < y1
+      }
       const picked = t.el.dataset.picked !== undefined
-      const clash = taken.some((r) => box[0] < r[2] && r[0] < box[2] && box[1] < r[3] && r[1] < box[3])
       const off = t.depth === Infinity || t.x < 0 || t.y < 0 || t.x > size.width || t.y > size.height
       if (off || (clash && !picked)) {
         t.el.style.visibility = 'hidden'
         continue
       }
-      taken.push(box)
+      boxes.push(x0, y0, x1, y1)
       t.el.style.visibility = 'visible'
-      t.el.style.transform = `translate(${Math.round(t.x)}px, ${Math.round(t.y - h / 2)}px)`
+      t.el.style.transform = `translate(${Math.round(t.x)}px, ${Math.round(t.y - t.h / 2)}px)`
     }
   })
   return null
@@ -347,6 +416,9 @@ export default function Wireframe3D({
     <div className="wf3d__viewport">
       <Canvas
         className="wf3d__canvas"
+        // Drawn only when something changes (camera moves, scene objects added, removed or
+        // updated), not 60 times a second while the model sits still.
+        frameloop="demand"
         camera={{ fov: 45 }}
         dpr={[1, 2]}
         raycaster={{ params: { Line: { threshold: Math.max(grid / 300, 50) } } as THREE.RaycasterParameters }}
