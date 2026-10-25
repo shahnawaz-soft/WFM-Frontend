@@ -71,6 +71,7 @@ function Shared({ editable }: { editable: boolean }) {
   const [selection, setSelection] = useState<Set<string>>(new Set())
   return (
     <ColumnScheduler
+      projectId="p1"
       wireframeId="w1"
       revisionNo={2}
       datasetId={null}
@@ -84,9 +85,9 @@ function Shared({ editable }: { editable: boolean }) {
   )
 }
 
-function renderScheduler(editable = true) {
+function renderScheduler(editable = true, client = createTestQueryClient()) {
   return render(
-    <QueryClientProvider client={createTestQueryClient()}>
+    <QueryClientProvider client={client}>
       <Shared editable={editable} />
     </QueryClientProvider>,
   )
@@ -159,5 +160,18 @@ describe('Column scheduler', () => {
     await user.click(await screen.findByRole('button', { name: 'Apply to ABM…' }))
     await user.click(screen.getByRole('button', { name: 'Apply to ABM' }))
     expect(await screen.findByText(/ABM updated: 2 column entries changed/)).toBeInTheDocument()
+  })
+
+  it("refreshes this project's ABM only", async () => {
+    const user = userEvent.setup()
+    const client = createTestQueryClient()
+    client.setQueryData(['abm', 'p1', 'summary', false], {})
+    client.setQueryData(['abm', 'p2', 'summary', false], {})
+    renderScheduler(true, client)
+    await user.click(await screen.findByRole('button', { name: 'Apply to ABM…' }))
+    await user.click(screen.getByRole('button', { name: 'Apply to ABM' }))
+    await screen.findByText(/ABM updated/)
+    expect(client.getQueryState(['abm', 'p1', 'summary', false])?.isInvalidated).toBe(true)
+    expect(client.getQueryState(['abm', 'p2', 'summary', false])?.isInvalidated).toBe(false)
   })
 })

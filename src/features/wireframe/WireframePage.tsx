@@ -594,6 +594,7 @@ function RevisionSection({
           </div>
           {tab === 'columns' ? (
             <ColumnScheduler
+              projectId={projectId}
               wireframeId={current.id}
               revisionNo={current.revision_no}
               datasetId={datasetId}

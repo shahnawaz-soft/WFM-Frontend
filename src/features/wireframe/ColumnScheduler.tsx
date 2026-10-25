@@ -62,6 +62,7 @@ const describe = (changes: ColumnChanges): string =>
  *  inline edits, Ctrl/Shift multi-select, bulk edits, undo/redo, CSV and Apply to ABM.
  *  Editing a cell of a selected column changes every selected column. */
 export function ColumnScheduler({
+  projectId,
   wireframeId,
   revisionNo,
   datasetId,
@@ -72,6 +73,7 @@ export function ColumnScheduler({
   onSelect,
   onChanged,
 }: {
+  projectId: string
   wireframeId: string
   revisionNo: number
   datasetId: string | null
@@ -214,7 +216,7 @@ export function ColumnScheduler({
           (r.locked ? ` ${r.locked} are on reviewed pages and update once those pages are added.` : '') +
           (r.not_in_abm ? ` ${r.not_in_abm} columns added in the model have no ABM entry.` : ''),
       )
-      void queryClient.invalidateQueries({ queryKey: ['abm'] })
+      void queryClient.invalidateQueries({ queryKey: ['abm', projectId] })
     },
   })
 
