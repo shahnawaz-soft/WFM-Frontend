@@ -22,8 +22,13 @@ function isClientError(error: unknown): boolean {
  *   (`meta: { suppressErrorToast: true }`).
  * - 4xx responses are never retried; network/5xx errors retry twice.
  */
+/** A PDF.js document (['drawing-set', id, 'pdf']), typed by shape so PDF.js stays out of this chunk. */
+function isPdfDocument(key: readonly unknown[], data: unknown): data is { destroy: () => Promise<void> } {
+  return key[0] === 'drawing-set' && key[2] === 'pdf' && typeof (data as { destroy?: unknown } | undefined)?.destroy === 'function'
+}
+
 export function createQueryClient() {
-  return new QueryClient({
+  const client = new QueryClient({
     queryCache: new QueryCache({
       onError: (error, query) => {
         if (query.state.data !== undefined) {
@@ -50,4 +55,13 @@ export function createQueryClient() {
       mutations: { retry: false },
     },
   })
+  // A PDF document holds its memory in the PDF.js worker until destroyed. The cache removes a
+  // query only once no view observes it (after gcTime) or on removeQueries, so no viewer is
+  // still drawing from it.
+  client.getQueryCache().subscribe((event) => {
+    if (event.type !== 'removed') return
+    const { queryKey, state } = event.query
+    if (isPdfDocument(queryKey, state.data)) void state.data.destroy()
+  })
+  return client
 }
