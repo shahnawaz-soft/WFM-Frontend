@@ -1,14 +1,16 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { mockBackend } from '../../test/mockBackend'
 import { acceptUpload, mockDrawings } from '../../test/mockDrawings'
 import { mockProjects } from '../../test/mockProjects'
-import { renderApp } from '../../test/renderApp'
+import { preloadRoutes, renderApp } from '../../test/renderApp'
 
 vi.mock('../viewer/pdf', () => ({ loadPdf: async () => ({ numPages: 1 }) }))
 vi.mock('../viewer/PdfPageCanvas', () => ({ PdfPageCanvas: ({ label }: { label: string }) => <div role="img" aria-label={label} /> }))
+
+beforeAll(() => preloadRoutes('/projects/p/abm'))
 
 const OWNER = 'estimator@steelo.test'
 

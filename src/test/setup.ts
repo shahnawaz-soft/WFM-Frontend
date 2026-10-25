@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest'
 
-import { cleanup } from '@testing-library/react'
+import { cleanup, configure } from '@testing-library/react'
 import { afterAll, afterEach, beforeAll, beforeEach, vi } from 'vitest'
 
 import { tokenStore } from '../auth/tokenStore'
@@ -9,6 +9,12 @@ import { mockBackend } from './mockBackend'
 import { mockDrawings } from './mockDrawings'
 import { mockProjects } from './mockProjects'
 import { server } from './server'
+
+// findBy/waitFor wait up to 3 s, not the default 1 s. Most tests render the whole app, and
+// their first wait spans a chain of dependent requests (session restore, /me, then the page's
+// own data) that takes ~0.9 s on an idle machine. Waits end as soon as the element appears, so
+// this only changes how long a real failure takes to report.
+configure({ asyncUtilTimeout: 3000 })
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }))
 beforeEach(() => {

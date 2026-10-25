@@ -1,12 +1,12 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http } from 'msw'
-import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import { beforeAll, describe, expect, it, onTestFinished, vi } from 'vitest'
 
 import { mockBackend } from '../../test/mockBackend'
 import { acceptUpload, mockDrawings } from '../../test/mockDrawings'
 import { mockProjects } from '../../test/mockProjects'
-import { renderApp } from '../../test/renderApp'
+import { preloadRoutes, renderApp } from '../../test/renderApp'
 import { server } from '../../test/server'
 
 // PDF.js needs a real canvas. The stand-in renders nothing but reports a viewport with the
@@ -43,6 +43,8 @@ vi.mock('./PdfPageCanvas', async () => {
     },
   }
 })
+
+beforeAll(() => preloadRoutes('/projects/p/pages/p'))
 
 const OWNER = 'estimator@steelo.test'
 

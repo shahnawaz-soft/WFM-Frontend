@@ -1,12 +1,14 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 
 import { mockBackend } from '../../test/mockBackend'
 import { mockProjects } from '../../test/mockProjects'
-import { renderApp } from '../../test/renderApp'
+import { preloadRoutes, renderApp } from '../../test/renderApp'
 import { server } from '../../test/server'
+
+beforeAll(() => preloadRoutes('/projects/p/revisions/r'))
 
 const OWNER = 'estimator@steelo.test'
 

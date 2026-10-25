@@ -4,15 +4,17 @@
  */
 import { screen } from '@testing-library/react'
 import axe from 'axe-core'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { mockBackend } from './mockBackend'
 import { acceptUpload, mockDrawings } from './mockDrawings'
 import { mockProjects } from './mockProjects'
-import { renderApp } from './renderApp'
+import { preloadRoutes, renderApp } from './renderApp'
 
 vi.mock('../features/viewer/pdf', () => ({ loadPdf: async () => ({ numPages: 1 }) }))
 vi.mock('../features/viewer/PdfPageCanvas', () => ({ PdfPageCanvas: ({ label }: { label: string }) => <div role="img" aria-label={label} /> }))
+
+beforeAll(() => preloadRoutes('/ops', '/projects/p/abm', '/projects/p/pages/p', '/projects/p/wireframe'))
 
 async function violations() {
   const results = await axe.run(document.body, {
