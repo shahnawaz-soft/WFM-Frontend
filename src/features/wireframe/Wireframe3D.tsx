@@ -1,5 +1,5 @@
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 
@@ -157,7 +157,8 @@ function Elements3D({
 }: {
   items: Placed[]
   onSelect: (id: string, additive: boolean) => void
-  onHover: (hover: { id: string; x: number; y: number } | null) => void
+  /** The element under the pointer (null: none) and where the pointer is, on every move. */
+  onHover: (id: string | null, x?: number, y?: number) => void
 }) {
   const { lines, owners } = useMemo(() => {
     const positions: number[] = []
@@ -204,7 +205,7 @@ function Elements3D({
       onPointerMove={(event: ThreeEvent<PointerEvent>) => {
         if (event.nativeEvent.buttons) return // orbiting: no hover work while dragging
         const id = ownerOf(event)
-        onHover(id ? { id, x: event.nativeEvent.offsetX, y: event.nativeEvent.offsetY } : null)
+        onHover(id ?? null, event.nativeEvent.offsetX, event.nativeEvent.offsetY)
       }}
       onPointerOut={() => onHover(null)}
     />
@@ -386,7 +387,26 @@ export default function Wireframe3D({
   onSelect,
 }: Wireframe3DProps) {
   const items = useMemo(() => placed(elements), [elements])
-  const [hover, setHover] = useState<{ id: string; x: number; y: number } | null>(null)
+  // Only which element is hovered is state: the pointer moves the tooltip directly, so a move
+  // within the same element re-renders nothing.
+  const [hoverId, setHoverId] = useState<string | null>(null)
+  const pointer = useRef({ x: 0, y: 0 })
+  const tooltip = useRef<HTMLDivElement>(null)
+  const placeTooltip = useCallback(() => {
+    const el = tooltip.current
+    if (!el) return
+    el.style.left = `${pointer.current.x + 14}px`
+    el.style.top = `${pointer.current.y + 14}px`
+  }, [])
+  const onHover = useCallback(
+    (id: string | null, x = 0, y = 0) => {
+      pointer.current.x = x
+      pointer.current.y = y
+      placeTooltip()
+      setHoverId(id) // the same id again: no re-render
+    },
+    [placeTooltip],
+  )
   const box = useMemo(() => {
     const b = new THREE.Box3()
     for (const p of items) b.expandByPoint(p.a).expandByPoint(p.b)
@@ -397,14 +417,16 @@ export default function Wireframe3D({
   const grid = Math.max(size.x, size.y, 10_000) * 1.2
   const centre = box.getCenter(new THREE.Vector3())
   const picked = useMemo(() => items.filter((p) => p.e.id === selectedId || marked?.has(p.e.id)), [items, selectedId, marked])
-  const hovered = hover ? items.find((p) => p.e.id === hover.id) : undefined
+  const hovered = hoverId ? items.find((p) => p.e.id === hoverId) : undefined
   const dimensioned = useMemo(() => {
     const shown = items.filter(
-      (p) => p.e.element_type === 'column' && (allHeights || p.e.id === selectedId || marked?.has(p.e.id) || p.e.id === hover?.id),
+      (p) => p.e.element_type === 'column' && (allHeights || p.e.id === selectedId || marked?.has(p.e.id) || p.e.id === hoverId),
     )
     return shown
-  }, [items, allHeights, selectedId, marked, hover?.id])
+  }, [items, allHeights, selectedId, marked, hoverId])
   const hoverLabel = hovered && hovered.e.element_type === 'column' ? columns?.get(hovered.e.id) : undefined
+  // The tooltip appears with the hovered element: put it at the pointer before it is painted.
+  useLayoutEffect(placeTooltip, [hoverId, placeTooltip])
   const overlay = useRef<HTMLDivElement>(null)
   const tagText = (p: Placed) => {
     const label = columns?.get(p.e.id)
@@ -431,7 +453,7 @@ export default function Wireframe3D({
           position={[centre.x, centre.y, box.min.z]}
           rotation={[Math.PI / 2, 0, 0]}
         />
-        <Elements3D items={items} onSelect={onSelect} onHover={setHover} />
+        <Elements3D items={items} onSelect={onSelect} onHover={onHover} />
         {picked.map((p) => (
           <Selected3D key={p.e.id} p={p} />
         ))}
@@ -455,7 +477,7 @@ export default function Wireframe3D({
         ))}
       </div>
       {hovered && (
-        <div className="wf3d__tooltip" role="tooltip" style={{ left: hover!.x + 14, top: hover!.y + 14 }}>
+        <div className="wf3d__tooltip" role="tooltip" ref={tooltip}>
           {hoverLabel ? (
             <>
               <strong>
