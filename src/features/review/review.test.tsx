@@ -1,11 +1,12 @@
 import { cleanup, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 
 import { mockBackend } from '../../test/mockBackend'
 import { acceptUpload, mockDrawings } from '../../test/mockDrawings'
 import { mockProjects } from '../../test/mockProjects'
 import { renderApp } from '../../test/renderApp'
+import { server } from '../../test/server'
 
 vi.mock('../viewer/pdf', () => ({ loadPdf: async () => ({ numPages: 3 }) }))
 vi.mock('../viewer/PdfPageCanvas', async () => {
@@ -203,6 +204,23 @@ describe('Find similar', () => {
     expect(await screen.findByText(/3 columns added on this page/)).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Also on every plan of this set' }))
     expect(await screen.findByText(/5 columns added on 1 page/)).toBeInTheDocument()
+  })
+
+  it('refreshes the pages without downloading the drawing again', async () => {
+    let downloads = 0
+    server.events.on('request:start', ({ request }) => {
+      if (/\/drawing-sets\/[^/]+\/file\/$/.test(new URL(request.url).pathname)) downloads++
+    })
+    onTestFinished(() => server.events.removeAllListeners())
+    await openProcessedPage()
+    await screen.findByRole('table', { name: /Detected members/ })
+    await waitFor(() => expect(downloads).toBe(1))
+    await userEvent.click(screen.getByRole('button', { name: 'Find similar' }))
+    await userEvent.click(screen.getByRole('img', { name: /Drawing/ }))
+    expect(await screen.findByText(/3 columns added on this page/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Also on every plan of this set' }))
+    expect(await screen.findByText(/5 columns added on 1 page/)).toBeInTheDocument()
+    expect(downloads).toBe(1)
   })
 })
 

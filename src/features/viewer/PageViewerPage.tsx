@@ -139,8 +139,9 @@ export function PageViewerPage() {
     onSuccess: (result, { point, scope }) => {
       setSimilar({ pageId, point, result, scope })
       // The page's columns, its members (new ABM entries) and the set's pages all change.
+      // The set's PDF does not: invalidating it would download and parse the drawing again.
       void queryClient.invalidateQueries({ queryKey: ['drawing-page'] })
-      void queryClient.invalidateQueries({ queryKey: ['drawing-set'] })
+      void queryClient.invalidateQueries({ queryKey: ['drawing-set', setId], predicate: (q) => q.queryKey[2] !== 'pdf' })
       void cache.refetch()
     },
   })
