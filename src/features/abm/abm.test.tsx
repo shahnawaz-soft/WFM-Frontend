@@ -362,3 +362,26 @@ describe('Tonnage', () => {
     expect(await within(card).findByText('0.43 US tons')).toBeInTheDocument()
   })
 })
+
+describe('Beam marks', () => {
+  it('lists beams known by a mark and gives a mark its section once', async () => {
+    mockDrawings.setBeamMarks([
+      { mark: '2J1', beams: 46, length_mm: '448056.0', length_display: "1470'-0\"", sections: [], pages: [4, 5] },
+      { mark: '2G1', beams: 4, length_mm: '35052.0', length_display: "115'-0\"", sections: [], pages: [4] },
+    ])
+    await openAbm()
+    await userEvent.click(screen.getByRole('button', { name: /Beam marks/ }))
+    const table = screen.getByRole('table', { name: 'Beam marks' })
+    const j1 = within(table).getByRole('row', { name: /2J1/ })
+    expect(j1).toHaveTextContent('46')
+    expect(j1).toHaveTextContent("1470'-0\"")
+    await userEvent.type(within(j1).getByLabelText('Section of mark 2J1'), 'w12x26')
+    await userEvent.click(within(j1).getByRole('button', { name: 'Apply' }))
+    expect(await within(j1).findByText(/46 beams updated/)).toBeInTheDocument()
+  })
+
+  it('has no Beam marks tab when no beam is known by a mark only', async () => {
+    await openAbm()
+    expect(screen.queryByRole('button', { name: /Beam marks/ })).not.toBeInTheDocument()
+  })
+})

@@ -242,7 +242,7 @@ function Member({ m }: { m: MemberRow }) {
   const extras = [m.length_display, m.quantity > 1 ? `×${m.quantity}` : '', m.studs_text ? `(${m.studs_text})` : '', m.camber_display ? `C=${m.camber_display}` : '']
   return (
     <span className="revision__member">
-      <strong>{m.designation || 'No size'}</strong> <span className="muted">{extras.filter(Boolean).join(' ')}</span>
+      <strong>{m.designation || 'No label'}</strong> <span className="muted">{extras.filter(Boolean).join(' ')}</span>
     </span>
   )
 }

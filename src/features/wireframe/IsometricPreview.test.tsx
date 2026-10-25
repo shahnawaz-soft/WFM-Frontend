@@ -1,5 +1,4 @@
 import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 
 import type { WireframeElement } from '../../api/types'
@@ -20,17 +19,12 @@ const frame = frameOf(placed)!
 const still = { zoom: 1, pan: [0, 0] as [number, number] }
 
 describe('Simple view without WebGL', () => {
-  it('is drawn on a canvas, with a Rotate / Move switch', async () => {
-    render(<IsometricPreview elements={[column, beam]} selectedId={null} />)
-    expect(screen.getByRole('img', { name: 'Wireframe view: 1 beams and 1 columns placed' })).toBeInTheDocument()
-    const move = screen.getByRole('button', { name: 'Move' })
-    await userEvent.click(move)
-    expect(move).toHaveAttribute('aria-pressed', 'true')
-  })
-
-  it('flat views drag to move; the 3D view drags to rotate', () => {
-    render(<IsometricPreview elements={[column, beam]} selectedId={null} view="top" />)
-    expect(screen.getByRole('button', { name: 'Move' })).toHaveAttribute('aria-pressed', 'true')
+  it('is drawn on a canvas, dragging as the switch above it says', () => {
+    const { rerender } = render(<IsometricPreview elements={[column, beam]} selectedId={null} />)
+    const view = screen.getByRole('img', { name: 'Wireframe view: 1 beams and 1 columns placed' })
+    expect(view).toHaveAttribute('data-mode', 'turn')
+    rerender(<IsometricPreview elements={[column, beam]} selectedId={null} dragMode="move" />)
+    expect(view).toHaveAttribute('data-mode', 'move')
   })
 
   it('the Top view looks straight down: a column is a point', () => {

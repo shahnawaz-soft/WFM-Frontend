@@ -1,9 +1,10 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 
 import { fetchOriginalPdf, getDrawingSet, getPage, listPages } from '../../api/drawings'
 import { toApiError } from '../../api/errors'
+import { findSimilarColumns, type FindSimilarResult } from '../../api/processing'
 import { listPageIssues, listPageMembers } from '../../api/members'
 import { getProject } from '../../api/projects'
 import { ErrorState, LoadingState } from '../../components/feedback/States'
@@ -58,6 +59,11 @@ export function PageViewerPage() {
   const [pickedReference, setPickedReference] = useState<[number, number] | null>(null)
   // The grid intersection the picked point snapped to (its label fills in the Level form).
   const [pickedLabel, setPickedLabel] = useState<string | null>(null)
+  // Find similar: a click on a column symbol Steelo missed; its likes become columns.
+  const [findingSimilar, setFindingSimilar] = useState(false)
+  const [similarFound, setSimilar] = useState<{ pageId: string; point: [number, number]; result: FindSimilarResult; scope: 'page' | 'set' } | null>(null)
+  const similar = similarFound?.pageId === pageId ? similarFound : null  // shown on its own page only
+  const queryClient = useQueryClient()
 
   const project = useQuery({ queryKey: ['project', projectId], queryFn: () => getProject(projectId) })
   const page = useQuery({
@@ -126,10 +132,27 @@ export function PageViewerPage() {
   const cancelPlace = useCallback(() => {
     setPlacing(false)
     setPickingReference(false)
+    setFindingSimilar(false)
   }, [])
+  const findSimilar = useMutation({
+    mutationFn: ({ point, scope }: { point: [number, number]; scope: 'page' | 'set' }) => findSimilarColumns(pageId, point, scope),
+    onSuccess: (result, { point, scope }) => {
+      setSimilar({ pageId, point, result, scope })
+      // The page's columns, its members (new ABM entries) and the set's pages all change.
+      void queryClient.invalidateQueries({ queryKey: ['drawing-page'] })
+      void queryClient.invalidateQueries({ queryKey: ['drawing-set'] })
+      void cache.refetch()
+    },
+  })
   const place = useCallback(
     (location: [number, number]) => {
       setPlacing(false)
+      if (findingSimilar) {
+        setFindingSimilar(false)
+        setSimilar(null)
+        findSimilar.mutate({ point: location, scope: 'page' })
+        return
+      }
       if (pickingReference) {
         setPickingReference(false)
         const snapped = nearestGridPoint(gridPoints, location)
@@ -143,7 +166,7 @@ export function PageViewerPage() {
       setTab('quantities')
       setPanelOpen(true)
     },
-    [pickingReference, gridPoints],
+    [pickingReference, gridPoints, findingSimilar, findSimilar],
   )
 
   // Selecting in the list zooms the drawing to the member; selecting on the drawing opens
@@ -223,6 +246,19 @@ export function PageViewerPage() {
           <h1 className="viewer__title">
             Page {current.page_number} <span className="muted">of {drawingSet.data.page_count}</span>{' '}
             <StatusBadge tone={status.tone} label={status.label} />
+            {current.current_run?.engine_outdated && (
+              <button
+                type="button"
+                className="status-badge status-badge--warning viewer__outdated"
+                title={`Read with Steelo ${current.current_run.engine_version}; now ${current.current_run.current_engine_version ?? 'newer'}. Run again to read it with the latest rules.`}
+                onClick={() => {
+                  setTab('page')
+                  setPanelOpen(true)
+                }}
+              >
+                Older version · run again
+              </button>
+            )}
           </h1>
         </div>
         <div className="workspace__nav" role="toolbar" aria-label="Page navigation">
@@ -368,7 +404,9 @@ export function PageViewerPage() {
           onHover={setHoveredId}
           placing={placing}
           placingHint={
-            pickingReference
+            findingSimilar
+              ? 'Click on a column symbol Steelo missed: every mark drawn like it becomes a column'
+              : pickingReference
               ? gridPoints?.length
                 ? 'Click near the reference grid intersection (it snaps to the nearest one)'
                 : 'Click the reference grid intersection'
@@ -405,6 +443,46 @@ export function PageViewerPage() {
                 <label className="checkbox">
                   <input type="checkbox" checked={showLabels} onChange={(e) => setShowLabels(e.target.checked)} /> Labels
                 </label>
+              )}
+              {canRun && current.current_run && (
+                <Button
+                  aria-pressed={findingSimilar}
+                  loading={findSimilar.isPending}
+                  title="Point at a column symbol Steelo missed: every mark drawn like it becomes a column"
+                  onClick={() => {
+                    if (findingSimilar) return cancelPlace()
+                    setAdding(null)
+                    setPickingReference(false)
+                    setFindingSimilar(true)
+                    setPlacing(true)
+                  }}
+                >
+                  Find similar
+                </Button>
+              )}
+              {findSimilar.error && (
+                <span className="field__error" role="alert">
+                  {toApiError(findSimilar.error).message}
+                </span>
+              )}
+              {similar && (
+                <span className="similar-result" role="status">
+                  {similar.result.added
+                    ? `${similar.result.added} column${similar.result.added === 1 ? '' : 's'} added${
+                        similar.scope === 'set' ? ` on ${similar.result.pages.length} page${similar.result.pages.length === 1 ? '' : 's'}` : ' on this page'
+                      }.`
+                    : similar.scope === 'set'
+                      ? 'No more found on the other plans.'
+                      : 'No new columns: those found are already columns.'}{' '}
+                  {similar.scope === 'page' && (
+                    <Button loading={findSimilar.isPending} onClick={() => findSimilar.mutate({ point: similar.point, scope: 'set' })}>
+                      Also on every plan of this set
+                    </Button>
+                  )}
+                  <Button aria-label="Dismiss" onClick={() => setSimilar(null)}>
+                    ×
+                  </Button>
+                </span>
               )}
               {Boolean(current.current_run?.grids?.length) && (
                 <label className="checkbox">

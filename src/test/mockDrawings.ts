@@ -16,6 +16,7 @@ interface StoredSet {
 }
 
 let sets: StoredSet[] = []
+let beamMarks: { mark: string; beams: number; length_mm: string; length_display: string; sections: string[]; pages: number[] }[] = []
 let connectionLines: Record<string, unknown>[] = []
 let connectionTemplates: { id: string; name: string; note: string; version: number; updated_at: string; lines: ReturnType<typeof templateLine>[] }[] = []
 /** Page numbers that will fail during the next ingestion (per filename). */
@@ -521,6 +522,11 @@ export const mockDrawings = {
     runOutcomes = {}
     sheetKinds = {}
     noProposedElevation = new Set()
+    beamMarks = []
+  },
+  /** Beams known by a mark only, as the ABM's Beam marks tab lists them. */
+  setBeamMarks(rows: typeof beamMarks) {
+    beamMarks = rows
   },
   sheetKind(pageId: string, kind: string) {
     sheetKinds[pageId] = kind
@@ -926,6 +932,8 @@ export const drawingHandlers = [
       status: 'active',
       engine_name: 'page-analysis',
       engine_version: '1.0',
+      engine_outdated: false,
+      current_engine_version: '1.0',
       page_kind: outcome === 'needs_review' ? 'raster' : 'vector',
       summary: { paths: outcome === 'needs_review' ? 3 : 36986, text_objects: 783, text_chars: outcome === 'needs_review' ? 0 : 5086, images: 1, image_coverage: 0.9, sheet_kind: outcome === 'needs_review' ? 'unknown' : 'plan' },
       review_reasons:
@@ -1318,6 +1326,14 @@ export const drawingHandlers = [
   http.get('*/api/v1/wireframes/:id/elements/', ({ params }) =>
     HttpResponse.json(wireframes.find((w) => w.id === params.id)?.elements.filter((e) => !e.removed) ?? []),
   ),
+  // Find similar: 3 columns like the one pointed at on the page; 5 more on the set's other plans.
+  http.post('*/api/v1/drawing-pages/:id/find-similar-columns/', async ({ params, request }) => {
+    const body = (await request.json()) as { point: [number, number]; scope: 'page' | 'set' }
+    const page = sets.flatMap((x) => x.pages).find((p) => p.id === params.id)
+    if (!page) return err(404, 'not_found', 'Page not found.')
+    const pages = body.scope === 'set' ? [{ page_id: page.id, page_number: 2, added: 5 }] : [{ page_id: page.id, page_number: page.page_number, added: 3 }]
+    return HttpResponse.json({ added: pages[0]!.added, pages, template: { width_pt: 6, height_pt: 3 } })
+  }),
   // Column Scheduler: tested on its own (ColumnScheduler.test.tsx); the page only needs a list.
   http.get('*/api/v1/wireframes/:id/columns/', () => HttpResponse.json({ levels: [], columns: [] })),
   http.get('*/api/v1/ops/metrics/', () =>
@@ -1425,6 +1441,14 @@ export const drawingHandlers = [
     const limit = Number(q.get('limit') ?? 50)
     const page = list.slice(0, limit)
     return HttpResponse.json({ results: page, next_before: list.length > limit ? page[page.length - 1]!.occurred_at : null })
+  }),
+  // Beams known by a mark only: none unless a test sets them (mockDrawings.beamMarks).
+  http.get('*/api/v1/projects/:id/abm/marks/', () => HttpResponse.json(beamMarks)),
+  http.post('*/api/v1/projects/:id/abm/marks/assign/', async ({ request }) => {
+    const body = (await request.json()) as { mark: string; designation: string }
+    const row = beamMarks.find((m) => m.mark === body.mark)
+    if (row) row.sections = [body.designation.toUpperCase()]
+    return HttpResponse.json({ mark: body.mark, updated: row?.beams ?? 0, locked: 0 })
   }),
   http.get('*/api/v1/projects/:id/abm/totals/', ({ params, request }) => {
     const entries = abmMembers(params.id as string, false, new URL(request.url).searchParams.get('draft') === 'true')

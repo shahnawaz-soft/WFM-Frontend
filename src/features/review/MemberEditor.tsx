@@ -139,7 +139,14 @@ export function MemberEditor({ member, index, canEdit, locked, onSaved, onStale,
     if (form.member_type !== member.member_type) changes.member_type = form.member_type
     if (form.length.trim() !== member.length_display) changes.length = form.length
     if (quantity !== member.quantity) changes.quantity = quantity
-    if (Object.keys(changes).length === 0) return setStatusNote('Nothing to save')
+    if (Object.keys(changes).length === 0) {
+      // A reason typed but nothing edited: the person most likely means to reject it.
+      return setStatusNote(
+        form.reason.trim()
+          ? 'Nothing changed in the fields above. To reject this member with your reason, choose Reject.'
+          : 'Nothing to save',
+      )
+    }
     save.mutate(changes)
   }
 

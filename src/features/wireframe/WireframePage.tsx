@@ -57,6 +57,9 @@ const COMPLETENESS: Record<string, { label: string; tone: StatusTone }> = {
   unsupported: { label: 'Not in 3D', tone: 'neutral' },
 }
 
+/** The same column drawn from another plan of its storey: kept for the record, not missing. */
+const isCopy = (e: WireframeElement) => e.issues.includes('same_column')
+
 const point = (p: string[] | null) => (p ? p.map(signedFeetInches).join(', ') : '—')
 
 /** Generate and inspect the project's 3D wireframe (PRD §4.5; OD-10). */
@@ -269,6 +272,7 @@ function RevisionSection({
   const queryClient = useQueryClient()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [onlyProblems, setOnlyProblems] = useState(false)
+  const [showCopies, setShowCopies] = useState(false)
   const [tab, setTab] = useState<'elements' | 'columns'>(openTab)
   const tabs = useRef<HTMLDivElement>(null)
   // Opened on the scheduler: bring it into view once the revision is shown.
@@ -278,6 +282,8 @@ function RevisionSection({
   // Columns picked in the schedule or in the view (Ctrl+click): one selection for both.
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const [allHeights, setAllHeights] = useState(false)
+  // What a left-drag does in the view, 3D or simple: one switch for both.
+  const [dragMode, setDragMode] = useState<'turn' | 'move'>('turn')
   // Bumped when a column's values change in its panel: the panel re-reads the element.
   const [panelNonce, setPanelNonce] = useState(0)
   const [view, setView] = useState<{ id: CameraView; nonce: number }>({ id: '3d', nonce: 0 })
@@ -335,10 +341,22 @@ function RevisionSection({
   }
 
   const all = elements.data ?? []
-  const shown = onlyProblems ? all.filter((e) => e.completeness !== 'ok') : all
+  const copies = all.filter(isCopy).length
+  const shown = all.filter(
+    (e) => (showCopies || !isCopy(e)) && (!onlyProblems || (e.completeness !== 'ok' && !isCopy(e))),
+  )
   const selected = all.find((e) => e.id === selectedId) ?? null
   const counts = current.counts as
-    | { elements: number; by_type: Record<string, number>; by_completeness: Record<string, number>; edited: number; added: number; removed: number; columns_without_size: number }
+    | {
+        elements: number
+        by_type: Record<string, number>
+        by_completeness: Record<string, number>
+        edited: number
+        added: number
+        removed: number
+        columns_without_size: number
+        same_column?: number
+      }
     | undefined
   const summary = current.summary as { levels?: { label: string; elevation_mm: string }[] }
   const remaining = current.remaining_work as { not_placed?: number; unsupported?: number; columns_without_size?: number }
@@ -387,7 +405,8 @@ function RevisionSection({
                 ['Columns', counts.by_type.column ?? 0],
                 ['Placed', counts.by_completeness.ok ?? 0],
                 ['Missing data', counts.by_completeness.missing_data ?? 0],
-                ['Not in 3D', counts.by_completeness.unsupported ?? 0],
+                ['Not in 3D', (counts.by_completeness.unsupported ?? 0) - (counts.same_column ?? 0)],
+                ...((counts.same_column ?? 0) > 0 ? [['Same column, other plan', counts.same_column ?? 0]] : []),
                 ['Edited', counts.edited],
                 ['Added', counts.added],
                 ['Removed', counts.removed],
@@ -443,10 +462,28 @@ function RevisionSection({
               {elements.data && elements.data.some((e) => e.start) && (
                 <div className="family-tabs wf3d__views" role="group" aria-label="View">
                   {VIEWS.map((v) => (
-                    <button key={v.id} type="button" aria-pressed={view.id === v.id} onClick={() => setView((s) => ({ id: v.id, nonce: s.nonce + 1 }))}>
+                    <button
+                      key={v.id}
+                      type="button"
+                      aria-pressed={view.id === v.id}
+                      onClick={() => {
+                        setView((s) => ({ id: v.id, nonce: s.nonce + 1 }))
+                        setDragMode(v.id === '3d' ? 'turn' : 'move') // a flat view is moved, not turned
+                      }}
+                    >
                       {v.label}
                     </button>
                   ))}
+                </div>
+              )}
+              {elements.data && elements.data.some((e) => e.start) && (
+                <div className="family-tabs wf3d__mode" role="group" aria-label="Drag to">
+                  <button type="button" aria-pressed={dragMode === 'turn'} onClick={() => setDragMode('turn')} title="Left-drag rotates the model (right-drag moves it)">
+                    Rotate
+                  </button>
+                  <button type="button" aria-pressed={dragMode === 'move'} onClick={() => setDragMode('move')} title="Left-drag moves the model (right-drag rotates it)">
+                    Move
+                  </button>
                 </div>
               )}
               {elements.data &&
@@ -460,6 +497,7 @@ function RevisionSection({
                       allHeights={allHeights}
                       view={view.id}
                       viewNonce={view.nonce}
+                      dragMode={dragMode}
                       onSelect={pick}
                     />
                   </Suspense>
@@ -472,6 +510,7 @@ function RevisionSection({
                     allHeights={allHeights}
                     view={view.id}
                     viewNonce={view.nonce}
+                    dragMode={dragMode}
                     onSelect={pick}
                   />
                 ))}
@@ -489,7 +528,7 @@ function RevisionSection({
                 </li>
               </ul>
               <p className="muted wf3d__help">
-                Drag to orbit · right-drag to pan · wheel to zoom · click an element to select it (Ctrl+click to pick several).
+                Drag to rotate or move (the switch above) · right-drag does the other · wheel to zoom · click an element to select it (Ctrl+click to pick several).
                 {!webgl && (
                   <>
                     {' '}
@@ -567,10 +606,18 @@ function RevisionSection({
             />
           ) : (
             <>
-              <label className="checkbox">
-                <input type="checkbox" checked={onlyProblems} onChange={(e) => setOnlyProblems(e.target.checked)} /> Only
-                elements that are not placed
-              </label>
+              <div className="button-row button-row--tight">
+                <label className="checkbox">
+                  <input type="checkbox" checked={onlyProblems} onChange={(e) => setOnlyProblems(e.target.checked)} /> Only
+                  elements that are not placed
+                </label>
+                {copies > 0 && (
+                  <label className="checkbox" title="A column shown on two plans of one storey (a foundation plan and the plan above) is drawn and counted once; its copies are kept here for the record">
+                    <input type="checkbox" checked={showCopies} onChange={(e) => setShowCopies(e.target.checked)} /> Show columns
+                    drawn on another plan ({copies})
+                  </label>
+                )}
+              </div>
               {elements.isPending && <LoadingState label="Loading elements…" />}
               {shown.length > 0 && <ElementTable projectId={projectId} elements={shown} selectedId={selectedId} onSelect={setSelectedId} />}
             </>
@@ -599,7 +646,7 @@ function ReviewDialog({
   onDone,
 }: {
   wireframe: Wireframe
-  counts: { by_completeness: Record<string, number>; columns_without_size: number }
+  counts: { by_completeness: Record<string, number>; columns_without_size: number; same_column?: number }
   onClose: () => void
   onDone: () => void
 }) {
@@ -614,7 +661,7 @@ function ReviewDialog({
       <p>The revision is frozen and becomes the one included when the project is finalised. Manual work still to do:</p>
       <ul className="finalize__list">
         <li>{counts.by_completeness.missing_data ?? 0} elements not placed</li>
-        <li>{counts.by_completeness.unsupported ?? 0} elements not in 3D</li>
+        <li>{(counts.by_completeness.unsupported ?? 0) - (counts.same_column ?? 0)} elements not in 3D</li>
         <li>{counts.columns_without_size} columns without a size</li>
       </ul>
       <TextField label="Note (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
@@ -669,7 +716,7 @@ function ElementTable({
               <td className="nowrap">{point(e.start)}</td>
               <td className="nowrap">{point(e.end)}</td>
               <td className="nowrap">
-                <StatusBadge {...(COMPLETENESS[e.completeness] ?? COMPLETENESS.ok!)} />
+                <StatusBadge {...(isCopy(e) ? { label: 'Other plan', tone: 'neutral' as StatusTone } : (COMPLETENESS[e.completeness] ?? COMPLETENESS.ok!))} />
               </td>
               <td className="wf-elements__notes">
                 {e.issue_messages.join(' ')}

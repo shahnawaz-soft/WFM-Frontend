@@ -109,7 +109,15 @@ export function ElementPanel({ projectId, element, editable, column, onChanged, 
       <p className="member-editor__meta">
         <StatusBadge
           tone={element.completeness === 'ok' ? 'success' : element.completeness === 'unsupported' ? 'neutral' : 'warning'}
-          label={element.completeness === 'ok' ? 'Placed' : element.completeness === 'unsupported' ? 'Not in 3D' : 'Missing data'}
+          label={
+            element.completeness === 'ok'
+              ? 'Placed'
+              : element.issues.includes('same_column')
+                ? 'Drawn from another plan'
+                : element.completeness === 'unsupported'
+                  ? 'Not in 3D'
+                  : 'Missing data'
+          }
         />
         <span className="muted">{PROVENANCE[element.provenance] ?? element.provenance}</span>
         {element.source_page && (

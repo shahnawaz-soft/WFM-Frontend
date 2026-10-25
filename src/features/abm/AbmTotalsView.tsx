@@ -151,10 +151,10 @@ export function AbmTotalsView({ totals, onShow }: AbmTotalsViewProps) {
                       <button
                         type="button"
                         className="link-button"
-                        aria-label={`${g.designation}: show its entries`}
+                        aria-label={`${g.designation || 'No label'}: show its entries`}
                         onClick={() => onShow({ designation: g.designation })}
                       >
-                        {g.designation}
+                        {g.designation || <span className="muted nowrap">No label</span>}
                       </button>
                     </th>
                     <td className="num">{g.entries}</td>

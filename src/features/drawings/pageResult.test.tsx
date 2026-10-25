@@ -51,3 +51,30 @@ describe('Review reasons on a page card', () => {
     expect(screen.getByRole('button', { name: 'Read more' })).toBeInTheDocument()
   })
 })
+
+describe('A page read by an older engine', () => {
+  const read = (outdated: boolean) =>
+    ({
+      page_number: 15,
+      latest_job: null,
+      current_run: {
+        page_kind: 'vector',
+        member_count: 8,
+        scale_text: '',
+        review_reasons: [],
+        engine_version: '1.0',
+        current_engine_version: '1.45',
+        engine_outdated: outdated,
+      },
+    }) as unknown as DrawingPage
+
+  it('says so and suggests running it again', () => {
+    render(<PageResult page={read(true)} />)
+    expect(screen.getByText(/Read with an older version of Steelo \(1\.0; now 1\.45\)/)).toBeInTheDocument()
+  })
+
+  it('says nothing when the page is read with the current engine', () => {
+    render(<PageResult page={read(false)} />)
+    expect(screen.queryByText(/older version/)).not.toBeInTheDocument()
+  })
+})

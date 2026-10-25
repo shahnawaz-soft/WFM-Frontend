@@ -99,3 +99,11 @@ export function countedElsewhere(member: { warnings?: readonly string[] | null }
 export function isColumnMember(member: { member_type?: string | null }): boolean {
   return (member.member_type ?? '').trim().toLowerCase().startsWith('col')
 }
+
+/** A member's section as lists show it: its name, or "no label" when the drawing names none
+ *  (a column found from its symbol, with no section written beside it). Its length is
+ *  separate: from the plan, or for a column from the levels. */
+export function sectionName(member: { designation: string; member_type?: string | null }): string {
+  if (member.designation) return member.designation
+  return member.member_type === 'column' ? 'Column, no label' : 'No label'
+}

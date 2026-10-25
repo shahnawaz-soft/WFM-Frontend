@@ -2,7 +2,7 @@ import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-quer
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 
-import { downloadDraftAbm, getAbmSummary, getAbmTotals, listAbm } from '../../api/abm'
+import { downloadDraftAbm, getAbmSummary, getAbmTotals, listAbm, listBeamMarks } from '../../api/abm'
 import { getPage } from '../../api/drawings'
 import { toApiError } from '../../api/errors'
 import { getMember } from '../../api/members'
@@ -20,6 +20,7 @@ import type { FocusRequest } from '../viewer/DrawingStage'
 import { AbmDrawing } from './AbmDrawing'
 import { AbmTable } from './AbmTable'
 import { AbmTotalsView } from './AbmTotalsView'
+import { BeamMarks } from './BeamMarks'
 import {
   activeCount,
   CONFIDENCE_OPTIONS,
@@ -45,7 +46,8 @@ export function AbmPage() {
   const [params, setParams] = useSearchParams()
   const filters = useMemo(() => fromSearch(params), [params])
   const selectedId = params.get('member')
-  const view = params.get('view') === 'totals' ? 'totals' : 'entries'
+  const viewParam = params.get('view')
+  const view = viewParam === 'totals' || viewParam === 'marks' ? viewParam : 'entries'
   // Draft: every page that has been run, without reviewing or adding each one (18 Oct 2026).
   const draft = params.get('draft') === '1'
   const [downloading, setDownloading] = useState(false)
@@ -57,6 +59,8 @@ export function AbmPage() {
   const project = useQuery({ queryKey: ['project', projectId], queryFn: () => getProject(projectId) })
   const summary = useQuery({ queryKey: ['abm', projectId, 'summary', draft], queryFn: () => getAbmSummary(projectId, draft) })
   const totals = useQuery({ queryKey: ['abm', projectId, 'totals', draft], queryFn: () => getAbmTotals(projectId, draft) })
+  // Beams the drawings name by a mark only: a tab of their own, when there are any.
+  const beamMarks = useQuery({ queryKey: ['beam-marks', projectId], queryFn: () => listBeamMarks(projectId) })
   const apiFilters = useMemo(() => ({ ...toApi(filters), draft }), [filters, draft])
   const entries = useQuery({
     queryKey: ['abm', projectId, 'entries', apiFilters],
@@ -137,11 +141,11 @@ export function AbmPage() {
     }
   }, [projectId, project.data?.name])
   const setView = useCallback(
-    (next: 'entries' | 'totals') =>
+    (next: 'entries' | 'totals' | 'marks') =>
       setParams(
         (p) => {
           const out = new URLSearchParams(p)
-          if (next === 'totals') out.set('view', 'totals')
+          if (next !== 'entries') out.set('view', next)
           else out.delete('view')
           return out
         },
@@ -243,8 +247,15 @@ export function AbmPage() {
               <button type="button" aria-pressed={view === 'totals'} onClick={() => setView('totals')}>
                 Totals by section
               </button>
+              {(beamMarks.data?.length ?? 0) > 0 && (
+                <button type="button" aria-pressed={view === 'marks'} onClick={() => setView('marks')}>
+                  Beam marks <span className="family-tabs__count">{beamMarks.data!.length}</span>
+                </button>
+              )}
             </div>
-            {view === 'totals' ? (
+            {view === 'marks' && beamMarks.data ? (
+              <BeamMarks projectId={projectId} marks={beamMarks.data} canEdit={canEdit} />
+            ) : view === 'totals' ? (
               totals.data ? (
                 <AbmTotalsView totals={totals.data} onShow={showEntries} />
               ) : totals.error ? (

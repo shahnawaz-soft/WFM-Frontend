@@ -193,6 +193,19 @@ describe('Adding a missed member', () => {
   })
 })
 
+describe('Find similar', () => {
+  it('adds the columns drawn like the one clicked, then on the whole set', async () => {
+    await openProcessedPage()
+    await screen.findByRole('table', { name: /Detected members/ })
+    await userEvent.click(screen.getByRole('button', { name: 'Find similar' }))
+    expect(screen.getByText(/Click on a column symbol Steelo missed/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('img', { name: /Drawing/ }))
+    expect(await screen.findByText(/3 columns added on this page/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Also on every plan of this set' }))
+    expect(await screen.findByText(/5 columns added on 1 page/)).toBeInTheDocument()
+  })
+})
+
 describe('Permissions', () => {
   it('viewers see members read-only', async () => {
     await openProcessedPage() // the owner processes the page
@@ -205,6 +218,7 @@ describe('Permissions', () => {
     expect(within(panel).queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument()
     expect(within(panel).getByLabelText('Section')).toBeDisabled()
     expect(screen.queryByRole('button', { name: '+ Add member' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Find similar' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Accept all remaining/ })).not.toBeInTheDocument()
   })
 })

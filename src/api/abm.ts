@@ -1,4 +1,5 @@
 import { apiClient } from './client'
+import type { components } from './schema'
 import type { AbmSummary, AbmTotals, DrawingPage, PaginatedAbmEntries } from './types'
 
 /** ABM filters, as sent to GET /projects/:id/abm/ (all optional; lists are comma-separated). */
@@ -66,5 +67,20 @@ export async function getAbmTotals(projectId: string, draft = false): Promise<Ab
   const { data } = await apiClient.get<AbmTotals>(`/api/v1/projects/${projectId}/abm/totals/`, {
     params: draft ? { draft: true } : undefined,
   })
+  return data
+}
+
+export type BeamMark = components['schemas']['Mark']
+export type AssignMarkResult = components['schemas']['AssignMarkResult']
+
+/** Beams known by a mark only (their sections in a schedule not in the set), per mark. */
+export async function listBeamMarks(projectId: string): Promise<BeamMark[]> {
+  const { data } = await apiClient.get<BeamMark[]>(`/api/v1/projects/${projectId}/abm/marks/`)
+  return data
+}
+
+/** Give every beam with ``mark`` the section ``designation`` (audited, per beam). */
+export async function assignMarkSection(projectId: string, mark: string, designation: string): Promise<AssignMarkResult> {
+  const { data } = await apiClient.post<AssignMarkResult>(`/api/v1/projects/${projectId}/abm/marks/assign/`, { mark, designation })
   return data
 }

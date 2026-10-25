@@ -178,6 +178,7 @@ a.button { text-decoration: none; justify-content: center; }
 .status-badge--success { color: var(--color-success); background: var(--color-success-bg); }
 .status-badge--error { color: var(--color-error); background: var(--color-error-bg); }
 .status-badge--warning { color: var(--color-warning); background: var(--color-warning-bg); }
+.viewer__outdated { margin-left: var(--space-1); border: 0; cursor: pointer; font: inherit; font-size: 0.75rem; }
 .status-badge--info { color: var(--color-info); background: var(--color-info-bg); }
 .status-badge--neutral { color: var(--color-neutral); background: var(--color-neutral-bg); }
 
@@ -492,6 +493,8 @@ a.button { text-decoration: none; justify-content: center; }
 .page-card__progress { display: flex; flex-direction: column; gap: var(--space-1); font-size: 0.8rem; }
 .page-card__outcome { display: flex; flex-direction: column; gap: var(--space-1); align-items: flex-start; }
 .page-card__result { font-size: 0.85rem; }
+.page-card__body .page-card__outdated,
+.page-card__outdated { margin: var(--space-1) 0 0; padding: var(--space-1) var(--space-2); border-radius: 6px; font-size: 0.8rem; color: var(--color-warning); background: var(--color-warning-bg); }
 .review-reasons { margin: var(--space-1) 0 0; padding-left: var(--space-4); font-size: 0.8rem; color: var(--color-warning); }
 .page-card[data-status='processing'] { border-color: var(--color-info); }
 
@@ -856,7 +859,7 @@ a.button { text-decoration: none; justify-content: center; }
 .iso-view .iso-preview { display: block; flex: 1 1 0; min-height: 0; width: 100%; height: auto; max-height: none; margin: 0; border: none; touch-action: none; user-select: none; cursor: grab; }
 .iso-view .iso-preview[data-mode='move'] { cursor: move; }
 .iso-view .iso-preview:active { cursor: grabbing; }
-.iso-view__mode { position: absolute; top: var(--space-2); left: 50%; transform: translateX(-50%); z-index: 1; }
+.wf3d__mode { position: absolute; top: var(--space-2); left: 50%; transform: translateX(-50%); z-index: 2; }
 .iso-preview__beam { stroke: #2563eb; }
 .iso-preview__column { stroke: #b45309; stroke-width: 2.5 !important; }
 .iso-preview line[data-selected] { stroke: #7c3aed; stroke-width: 4 !important; }
@@ -907,7 +910,7 @@ a.button { text-decoration: none; justify-content: center; }
 .wf3d__canvas { height: 520px !important; }
 .wf3d__views { position: absolute; top: var(--space-2); left: var(--space-2); z-index: 1; }
 /* Column Scheduler (wireframe page). */
-.wf3d__viewport { position: relative; }
+.wf3d__viewport { position: relative; display: flex; flex-direction: column; }
 .wf3d__tooltip { position: absolute; z-index: 3; display: flex; flex-direction: column; gap: 2px; max-width: 280px; padding: 6px 10px; font-size: 0.8rem; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius); box-shadow: 0 4px 14px rgb(0 0 0 / 0.12); pointer-events: none; }
 .wf3d__dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; vertical-align: middle; }
 .wf3d__dot--bottom { background: #15803d; }
@@ -916,11 +919,16 @@ a.button { text-decoration: none; justify-content: center; }
 .iso-preview__dim text { font-size: 10px; fill: #334155; paint-order: stroke; stroke: #fff; stroke-width: 3px; }
 .iso-preview__bottom { fill: #15803d; }
 .iso-preview__top { fill: #b91c1c; }
-.col-quick { margin: 0 0 var(--space-3); padding: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius); }
-.col-quick__facts { display: grid; grid-template-columns: auto 1fr; gap: 4px var(--space-2); margin: 0; }
-.col-quick__facts > div { display: contents; }
-.col-quick__facts dt { font-weight: 600; align-self: center; }
-.col-quick__facts dd { margin: 0; }
+.col-quick { margin: 0 0 var(--space-3); padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius); background: var(--color-surface); }
+.col-quick__header { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2); }
+.col-quick__chip { padding: 1px 8px; border-radius: 999px; background: var(--color-bg); border: 1px solid var(--color-border); font-size: 0.8rem; color: var(--color-text-muted); }
+.col-quick__fields { display: flex; flex-direction: column; gap: var(--space-2); margin: 0; padding: 0; border: 0; min-width: 0; }
+.col-quick__field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.col-quick__label { font-weight: 600; font-size: 0.85rem; }
+.col-quick__hint { font-size: 0.78rem; color: var(--color-text-muted); margin: 0; }
+.col-quick__pair { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); min-width: 0; }
+.col-quick__pair > * { min-width: 0; width: 100%; }
+.col-quick .field__control { width: 100%; min-width: 0; }
 .wf-tabs { margin: var(--space-3) 0 var(--space-2); }
 .col-sched__tools { align-items: center; flex-wrap: wrap; }
 .col-sched__hint { font-size: 0.8rem; }
@@ -964,3 +972,16 @@ a.button { text-decoration: none; justify-content: center; }
 .ops-grid .card { margin: 0; }
 .ops-audit__details { max-width: 32rem; font-size: 0.8rem; word-break: break-word; }
 .column-overlay circle { fill: rgb(234 88 12 / 12%); stroke: #c2410c; stroke-width: 2; vector-effect: non-scaling-stroke; }
+
+/* Find similar: what a click on a missed column symbol added. */
+.similar-result { display: inline-flex; align-items: center; gap: var(--space-2); font-size: 0.85rem; }
+
+/* Column height tags over the 3D view: small, sharp, the same size at any zoom. */
+.wf3d__tags { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.wf3d__tag { position: absolute; left: 0; top: 0; pointer-events: auto; cursor: pointer; padding: 2px 7px; border-radius: 999px; border: 1px solid #cbd5e1; background: rgb(255 255 255 / 0.94); color: #1e293b; font: 600 11px/1.3 system-ui, sans-serif; white-space: nowrap; box-shadow: 0 1px 3px rgb(15 23 42 / 0.12); }
+.wf3d__tag:hover { border-color: #7c3aed; color: #5b21b6; }
+.wf3d__tag[data-picked] { background: #7c3aed; border-color: #7c3aed; color: #fff; z-index: 1; }
+
+/* ABM: beams known by a mark, their section entered once. */
+.beam-marks__assign { display: flex; gap: var(--space-2); align-items: center; }
+.beam-marks__assign .field__control { width: 9rem; }

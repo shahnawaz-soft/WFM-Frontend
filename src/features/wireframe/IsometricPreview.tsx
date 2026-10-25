@@ -17,6 +17,7 @@ export function IsometricPreview({
   allHeights = false,
   view = '3d',
   viewNonce = 0,
+  dragMode = 'turn',
   onSelect,
 }: {
   elements: WireframeElement[]
@@ -26,6 +27,8 @@ export function IsometricPreview({
   allHeights?: boolean
   view?: CameraView
   viewNonce?: number
+  /** What a left-drag does (the switch above the view); a right-drag does the other. */
+  dragMode?: 'turn' | 'move'
   onSelect?: (id: string | null, additive?: boolean) => void
 }) {
   const canvas = useRef<HTMLCanvasElement>(null)
@@ -36,7 +39,6 @@ export function IsometricPreview({
   const drag = useRef<{ x: number; y: number; moved: number; mode: 'turn' | 'move' } | null>(null)
   const hoverId = useRef<string | null>(null)
   const frameRequest = useRef(0)
-  const [mode, setMode] = useState<'turn' | 'move'>(view === '3d' ? 'turn' : 'move')
   const [tip, setTip] = useState<{ id: string; x: number; y: number } | null>(null)
 
   const placed = useMemo<Placed[]>(
@@ -139,12 +141,7 @@ export function IsometricPreview({
     return () => cancelAnimationFrame(frameRequest.current)
   }, [redraw])
 
-  // A view button: look from there, the whole model in view; flat views drag to move.
-  const [shownView, setShownView] = useState(`${view}:${viewNonce}`)
-  if (shownView !== `${view}:${viewNonce}`) {
-    setShownView(`${view}:${viewNonce}`)
-    setMode(view === '3d' ? 'turn' : 'move')
-  }
+  // A view button: look from there, the whole model in view.
   useEffect(() => {
     cam.current = PRESETS[view]
     vp.current = { zoom: 1, pan: [0, 0] }
@@ -204,7 +201,8 @@ export function IsometricPreview({
     nearestElement(placed, projector(cam.current, frame, vp.current, size.current.width, size.current.height), x, y)
 
   const onPointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
-    const moving = mode === 'move' || event.button === 2 || event.button === 1 || event.shiftKey
+    const other = event.button === 2 || event.button === 1 || event.shiftKey  // the other way
+    const moving = (dragMode === 'move') !== other
     drag.current = { x: event.clientX, y: event.clientY, moved: 0, mode: moving ? 'move' : 'turn' }
     canvas.current?.setPointerCapture?.(event.pointerId)
     setTip(null)
@@ -249,20 +247,12 @@ export function IsometricPreview({
   const tipLabel = tip ? labels?.get(tip.id) : undefined
   return (
     <div className="iso-view">
-      <div className="family-tabs iso-view__mode" role="group" aria-label="Drag to">
-        <button type="button" aria-pressed={mode === 'turn'} onClick={() => setMode('turn')} title="Drag to rotate the model">
-          Rotate
-        </button>
-        <button type="button" aria-pressed={mode === 'move'} onClick={() => setMode('move')} title="Drag to move the model">
-          Move
-        </button>
-      </div>
       <canvas
         ref={canvas}
         className="iso-preview"
         role="img"
         aria-label={`Wireframe view: ${beams} beams and ${placed.length - beams} columns placed`}
-        data-mode={mode}
+        data-mode={dragMode}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}

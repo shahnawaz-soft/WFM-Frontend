@@ -183,6 +183,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/drawing-pages/{id}/find-similar-columns/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description A column symbol Steelo missed, pointed at: every mark drawn like it becomes a column,
+         *     on this page or every plan of its drawing set.
+         */
+        post: operations["drawing_pages_find_similar_columns_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/drawing-pages/{id}/issues/": {
         parameters: {
             query?: never;
@@ -701,6 +721,40 @@ export interface paths {
         get: operations["projects_abm_draft_export_retrieve"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/abm/marks/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Beams known by a mark only: each mark with its count and length (all run pages). */
+        get: operations["projects_abm_marks_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/abm/marks/assign/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Give every beam with a mark the section entered for it (audited, per beam). */
+        post: operations["projects_abm_marks_assign_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1474,7 +1528,7 @@ export interface components {
              *     * `project` - Every entry of its section in the project's ABM
              * @default entry
              */
-            scope: components["schemas"]["ScopeEnum"];
+            scope: components["schemas"]["AddConnectionMaterialScopeEnum"];
             lines?: components["schemas"]["ConnectionLineInputRequest"][];
             /**
              * Format: uuid
@@ -1482,6 +1536,13 @@ export interface components {
              */
             template?: string;
         };
+        /**
+         * @description * `entry` - This entry
+         *     * `page` - Every entry of its section on its page
+         *     * `project` - Every entry of its section in the project's ABM
+         * @enum {string}
+         */
+        AddConnectionMaterialScopeEnum: "entry" | "page" | "project";
         ApplyProposalsRequest: {
             pages: string[];
         };
@@ -1499,6 +1560,17 @@ export interface components {
         ApproveRequest: {
             /** @default true */
             make_default: boolean;
+        };
+        AssignMarkRequest: {
+            mark: string;
+            designation: string;
+        };
+        AssignMarkResult: {
+            mark: string;
+            /** @description Beams given the section */
+            updated: number;
+            /** @description On reviewed pages: not changed until reopened */
+            locked: number;
         };
         /** @enum {unknown} */
         BlankEnum: "";
@@ -1978,6 +2050,10 @@ export interface components {
             readonly status: components["schemas"]["RunStatusEnum"];
             readonly engine_name: string;
             readonly engine_version: string;
+            /** @description Read by an older engine: running the page again may read it differently */
+            readonly engine_outdated: boolean;
+            /** @description The engine version pages are read with now */
+            readonly current_engine_version: string | null;
             readonly page_kind: components["schemas"]["PageKindEnum"];
             summary: components["schemas"]["RunSummary"];
             review_reasons: components["schemas"]["ReviewReason"][];
@@ -2023,6 +2099,25 @@ export interface components {
             /** @default  */
             note: string;
         };
+        FindSimilarRequest: {
+            /** @description [x, y] in PDF points on the page: a column symbol Steelo missed */
+            point: number[];
+            /** @default page */
+            scope: components["schemas"]["FindSimilarScopeEnum"];
+        };
+        FindSimilarResult: {
+            /** @description Columns added */
+            added: number;
+            /** @description Pages columns were added to */
+            pages: components["schemas"]["_SimilarPage"][];
+            template: components["schemas"]["_SimilarTemplate"];
+        };
+        /**
+         * @description * `page` - page
+         *     * `set` - set
+         * @enum {string}
+         */
+        FindSimilarScopeEnum: "page" | "set";
         /**
          * @description * `symbol` - symbol
          *     * `label` - label
@@ -2228,6 +2323,16 @@ export interface components {
             location?: number[] | null;
             /** @default  */
             reason: string;
+        };
+        Mark: {
+            mark: string;
+            beams: number;
+            /** Format: decimal */
+            length_mm: string;
+            readonly length_display: string;
+            /** @description As entered */
+            sections: string[];
+            pages: number[];
         };
         MarkReviewedRequest: {
             /** @default  */
@@ -2777,13 +2882,6 @@ export interface components {
             /** @description Columns with no ABM entry yet (symbols only): Update adds them. Columns the column schedule sheet counts are not included */
             readonly not_in_bill: number;
         };
-        /**
-         * @description * `entry` - This entry
-         *     * `page` - Every entry of its section on its page
-         *     * `project` - Every entry of its section in the project's ABM
-         * @enum {string}
-         */
-        ScopeEnum: "entry" | "page" | "project";
         SectionDataset: {
             /** Format: uuid */
             readonly id: string;
@@ -3400,6 +3498,18 @@ export interface components {
          * @enum {string}
          */
         _SheetComparisonStatusEnum: "compared" | "not_run" | "new_sheet" | "removed_sheet";
+        _SimilarPage: {
+            /** Format: uuid */
+            page_id: string;
+            page_number: number;
+            added: number;
+        };
+        _SimilarTemplate: {
+            /** Format: double */
+            width_pt: number;
+            /** Format: double */
+            height_pt: number;
+        };
         _Summary: {
             added: number;
             removed: number;
@@ -3776,6 +3886,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DrawingPage"];
+                };
+            };
+        };
+    };
+    drawing_pages_find_similar_columns_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FindSimilarRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FindSimilarResult"];
                 };
             };
         };
@@ -4668,6 +4803,52 @@ export interface operations {
                 };
                 content: {
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
+                };
+            };
+        };
+    };
+    projects_abm_marks_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Mark"][];
+                };
+            };
+        };
+    };
+    projects_abm_marks_assign_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignMarkRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssignMarkResult"];
                 };
             };
         };

@@ -69,13 +69,21 @@ export function LevelProposalsCard({ projectId, canEdit }: { projectId: string; 
                       {p.elevation_display}
                       {p.elevation_source && <div className="muted">page {p.elevation_source.page_number}: {p.elevation_source.text}</div>}
                     </>
+                  ) : p.current.elevation_mm != null ? (
+                    // Nothing to propose from the drawings, but typed on this page: show what it has.
+                    <>
+                      {signedFeetInches(p.current.elevation_mm)}
+                      <div className="muted">typed on this page's Level tab</div>
+                    </>
                   ) : (
                     <span className="muted">—</span>
                   )}
                 </td>
                 <td>{p.reference_label || <span className="muted">—</span>}</td>
                 <td>
-                  {p.issues.map((i) => (
+                  {p.issues
+                    .filter((i) => !(i === 'no_elevation_marked' && p.current.elevation_mm != null))
+                    .map((i) => (
                     <div key={i} className="muted">
                       {PROPOSAL_ISSUES[i] ?? i}
                     </div>

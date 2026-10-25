@@ -49,6 +49,13 @@ export function PageResult({ page, showReasons = true }: { page: DrawingPage; sh
               {run.scale_text ? ` · ${run.scale_text}` : ' · scale not found'}
             </span>
           </p>
+          {run.engine_outdated && (
+            <p className="page-card__outdated">
+              Read with an older version of Steelo ({run.engine_version}
+              {run.current_engine_version ? `; now ${run.current_engine_version}` : ''}). Run again to read it with the
+              latest rules.
+            </p>
+          )}
           {showReasons && run.review_reasons.length > 0 && (
             <ReviewReasons reasons={run.review_reasons} pageNumber={page.page_number} />
           )}

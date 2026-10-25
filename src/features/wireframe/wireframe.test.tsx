@@ -282,6 +282,24 @@ describe('Wireframe', () => {
     expect(view).not.toHaveAttribute('data-expanded')
   })
 
+  it('has one Rotate / Move switch over the view; flat views move', async () => {
+    const { project, page } = await addedPage()
+    await call('PATCH', `/drawing-pages/${page.id}/level/`, {
+      level_label: 'Level 2',
+      elevation: "14'",
+      reference_point: [150, 95],
+      reference_label: 'A/1',
+    })
+    await call('POST', `/projects/${project.id}/wireframes/`)
+    renderApp(`/projects/${project.id}/wireframe`)
+    const drag = await screen.findByRole('group', { name: 'Drag to' })
+    expect(within(drag).getByRole('button', { name: 'Rotate' })).toHaveAttribute('aria-pressed', 'true')
+    await userEvent.click(screen.getByRole('button', { name: 'Top' }))
+    expect(within(drag).getByRole('button', { name: 'Move' })).toHaveAttribute('aria-pressed', 'true')
+    await userEvent.click(screen.getByRole('button', { name: '3D' }))
+    expect(within(drag).getByRole('button', { name: 'Rotate' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
   it('shows no out-of-date notice right after generating', async () => {
     const { project } = await addedPage()
     await call('POST', `/projects/${project.id}/wireframes/`)

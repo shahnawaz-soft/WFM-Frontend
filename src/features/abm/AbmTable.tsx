@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 
 import type { AbmEntry, AbmSource } from '../../api/types'
 import { REVIEW_STATUS } from '../review/reviewStatus'
-import { isColumnMember, lengthNote, matchNote, MEMBER_KINDS, memberKind, weightPerFoot } from '../viewer/memberAppearance'
+import { isColumnMember, lengthNote, matchNote, MEMBER_KINDS, memberKind, sectionName, weightPerFoot } from '../viewer/memberAppearance'
 import { SOURCE_LABELS } from './filters'
 import { lbValue } from './format'
 
@@ -122,10 +122,14 @@ export function AbmTable({ entries, firstNumber, selectedId, hoveredId, ordering
                   type="button"
                   className="link-button"
                   aria-pressed={selected}
-                  aria-label={`${entry.designation}, entry ${number}, page ${entry.page_number}. Show on drawing`}
+                  aria-label={`${sectionName(entry)}, entry ${number}, page ${entry.page_number}. Show on drawing`}
                   onClick={() => onSelect(entry)}
                 >
-                  {entry.designation}
+                  {entry.designation || (
+                    <span className="muted nowrap" title="No section label on the drawing for this member (its length is known). Enter the section, or add the sheet that lists it">
+                      {sectionName(entry)}
+                    </span>
+                  )}
                 </button>
               </td>
               <td className="nowrap">

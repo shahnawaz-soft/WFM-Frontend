@@ -426,6 +426,7 @@ function TextCommit({
   placeholder,
   list,
   onType,
+  className = 'col-sched__input',
 }: {
   value: string
   label: string
@@ -433,6 +434,7 @@ function TextCommit({
   placeholder?: string
   list?: string
   onType?: (v: string) => void
+  className?: string
 }) {
   const [text, setText] = useState(value)
   const [shown, setShown] = useState(value)
@@ -445,7 +447,7 @@ function TextCommit({
   }
   return (
     <input
-      className="col-sched__input"
+      className={className}
       aria-label={label}
       value={text}
       list={list}
@@ -640,58 +642,91 @@ export function ColumnQuickEdit({
     },
   })
   const id = row.id.slice(0, 8)
+  const control = 'field__control field__control--compact'
+  const end = (which: 'bottom' | 'top') => {
+    const display = which === 'bottom' ? row.bottom_display : row.top_display
+    const level = which === 'bottom' ? row.bottom_level : row.top_level
+    const placed = (which === 'bottom' ? row.bottom_mm : row.top_mm) !== null
+    const name = which === 'bottom' ? 'Bottom' : 'Top'
+    return (
+      <div className="col-quick__field">
+        <span className="col-quick__label">{name}</span>
+        <div className="col-quick__pair">
+          <TextCommit
+            className={control}
+            value={display}
+            label={`${name} elevation of ${id}`}
+            onCommit={(v) => save.mutate(which === 'bottom' ? { bottom_mm: v } : { top_mm: v })}
+          />
+          <select
+            className={control}
+            aria-label={`${name} level of ${id}`}
+            value={level}
+            disabled={!placed}
+            onChange={(e) => e.target.value && save.mutate(which === 'bottom' ? { bottom_level: e.target.value } : { top_level: e.target.value })}
+          >
+            <option value="">{level ? '' : 'Level…'}</option>
+            {levels.map((l) => (
+              <option key={l.label} value={l.label} title={`${l.label} at ${l.elevation_display}`}>
+                {l.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+    )
+  }
   return (
-    <fieldset className="col-quick" disabled={!editable || save.isPending}>
-      <legend>Column {row.mark && <span className="muted">· mark {row.mark}</span>}</legend>
-      <dl className="col-quick__facts">
-        <div>
-          <dt>Height</dt>
-          <dd>
-            {editable && row.bottom_mm !== null ? (
-              <TextCommit value={row.height_display} label={`Height of ${id}`} onCommit={(v) => save.mutate({ height_mm: v })} />
-            ) : (
-              row.height_display || '—'
-            )}
-          </dd>
+    <section className="col-quick" aria-label="Column">
+      <header className="col-quick__header">
+        <strong>Column</strong>
+        {row.mark && <span className="col-quick__chip">Mark {row.mark}</span>}
+        {row.grid && <span className="col-quick__chip">Grid {row.grid}</span>}
+      </header>
+      <fieldset className="col-quick__fields" disabled={!editable || save.isPending || row.bottom_mm === null}>
+        <legend className="visually-hidden">Column values</legend>
+        <div className="col-quick__field">
+          <span className="col-quick__label">Height</span>
+          <TextCommit className={control} value={row.height_display} label={`Height of ${id}`} onCommit={(v) => save.mutate({ height_mm: v })} />
+          <span className="col-quick__hint">Changing the height moves the top.</span>
         </div>
-        <div>
-          <dt>Top</dt>
-          <dd>
-            <EndCell row={row} which="top" levels={levels} editable={editable && row.top_mm !== null} onCommit={(c) => save.mutate(c)} />
-          </dd>
-        </div>
-        <div>
-          <dt>Bottom</dt>
-          <dd>
-            <EndCell row={row} which="bottom" levels={levels} editable={editable && row.bottom_mm !== null} onCommit={(c) => save.mutate(c)} />
-          </dd>
-        </div>
-        <div>
-          <dt>Rotation</dt>
-          <dd>
-            <select aria-label={`Rotation of ${id}`} value={row.rotation} onChange={(e) => save.mutate({ rotation: e.target.value as SchedulerRow['rotation'] })}>
+        {end('top')}
+        {end('bottom')}
+        <div className="col-quick__pair">
+          <div className="col-quick__field">
+            <span className="col-quick__label">Rotation</span>
+            <select
+              className={control}
+              aria-label={`Rotation of ${id}`}
+              value={row.rotation}
+              onChange={(e) => save.mutate({ rotation: e.target.value as SchedulerRow['rotation'] })}
+            >
               {ROTATIONS.map((r) => (
                 <option key={r.value} value={r.value}>
                   {r.label}
                 </option>
               ))}
             </select>
-          </dd>
-        </div>
-        <div>
-          <dt>Type</dt>
-          <dd>
-            <select aria-label={`Type of ${id}`} value={row.column_type} onChange={(e) => save.mutate({ column_type: e.target.value as SchedulerRow['column_type'] })}>
+          </div>
+          <div className="col-quick__field">
+            <span className="col-quick__label">Type</span>
+            <select
+              className={control}
+              aria-label={`Type of ${id}`}
+              value={row.column_type}
+              onChange={(e) => save.mutate({ column_type: e.target.value as SchedulerRow['column_type'] })}
+            >
               {TYPES.map((t) => (
                 <option key={t.value} value={t.value}>
                   {t.label}
                 </option>
               ))}
             </select>
-          </dd>
+          </div>
         </div>
-      </dl>
+      </fieldset>
+      {row.bottom_mm === null && <p className="muted col-quick__hint">Not placed yet: its height and ends can be set once its levels are.</p>}
       {save.error && <p className="field__error">{toApiError(save.error).message}</p>}
-    </fieldset>
+    </section>
   )
 }

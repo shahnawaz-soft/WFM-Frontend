@@ -4,7 +4,7 @@ import type { ExtractedMember } from '../../../api/types'
 import { Button } from '../../../components/ui/Button'
 import { TextField } from '../../../components/ui/Field'
 import { REVIEW_STATUS } from '../../review/reviewStatus'
-import { countedElsewhere, isColumnMember, lengthNote, matchNote, memberKind, MEMBER_KINDS, weightPerFoot } from '../memberAppearance'
+import { countedElsewhere, isColumnMember, lengthNote, matchNote, memberKind, MEMBER_KINDS, sectionName, weightPerFoot } from '../memberAppearance'
 
 interface QuantitiesPanelProps {
   members: ExtractedMember[]
@@ -112,7 +112,7 @@ export function QuantitiesPanel({ members, loading, selectedId, hoveredId, onSel
                         setGrouped(false)
                       }}
                     >
-                      {g.designation}
+                      {g.designation || <span className="muted nowrap">No label</span>}
                     </button>
                   </td>
                   <td className="num">{g.count}</td>
@@ -162,10 +162,14 @@ export function QuantitiesPanel({ members, loading, selectedId, hoveredId, onSel
                         type="button"
                         className="link-button"
                         aria-pressed={selected}
-                        aria-label={`${m.designation}, member ${number.get(m.id)}. Show on drawing`}
+                        aria-label={`${sectionName(m)}, member ${number.get(m.id)}. Show on drawing`}
                         onClick={() => onSelect(m.id)}
                       >
-                        {m.designation}
+                        {m.designation || (
+                          <span className="muted nowrap" title="No section label on the drawing for this member (its length is known). Enter the section, or add the sheet that lists it">
+                            {sectionName(m)}
+                          </span>
+                        )}
                       </button>
                     </td>
                     <td className="muted nowrap">

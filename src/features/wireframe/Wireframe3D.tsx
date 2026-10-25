@@ -1,9 +1,10 @@
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
-import { useEffect, useLayoutEffect, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 
 import type { WireframeElement } from '../../api/types'
+import { signedFeetInches } from '../abm/format'
 import { elementPoints } from './elementPoints'
 
 export type CameraView = '3d' | 'top' | 'front' | 'side'
@@ -27,6 +28,8 @@ interface Wireframe3DProps {
   allHeights?: boolean
   view: CameraView
   viewNonce: number
+  /** What a left-drag does (the switch above the view); a right-drag does the other. */
+  dragMode?: 'turn' | 'move'
   /** ``additive``: Ctrl/⌘+click adds to (or takes from) the picked columns. */
   onSelect: (id: string | null, additive?: boolean) => void
 }
@@ -90,7 +93,7 @@ function aimFlat(camera: THREE.OrthographicCamera, controls: OrbitControls, box:
 
 /** The 3D view in perspective; Top, Front and Side are orthographic: true proportions, and
  *  columns stay points (top) or upright (front, side) instead of leaning with perspective. */
-function CameraRig({ box, view, nonce }: { box: THREE.Box3; view: CameraView; nonce: number }) {
+function CameraRig({ box, view, nonce, dragMode }: { box: THREE.Box3; view: CameraView; nonce: number; dragMode: 'turn' | 'move' }) {
   const { gl, size, set } = useThree()
   const perspective = useMemo(() => {
     const camera = new THREE.PerspectiveCamera(45, 1, 1, 1e7)
@@ -120,6 +123,11 @@ function CameraRig({ box, view, nonce }: { box: THREE.Box3; view: CameraView; no
     return c
   }, [camera, gl])
   useEffect(() => () => controls.dispose(), [controls])
+  // The switch above the view: what a left-drag does; a right-drag does the other.
+  useEffect(() => {
+    const [turn, move] = [THREE.MOUSE.ROTATE, THREE.MOUSE.PAN]
+    controls.mouseButtons = { LEFT: dragMode === 'move' ? move : turn, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: dragMode === 'move' ? turn : move }
+  }, [controls, dragMode])
   useFrame(() => controls.update()) // damping needs an update each frame
 
   useEffect(() => {
@@ -205,32 +213,10 @@ function Selected3D({ p, color = COLORS.selected }: { p: Placed; color?: string 
   return <primitive object={line} />
 }
 
-/** A text label drawn on a canvas, always facing the camera and the same size on screen. */
-function textSprite(text: string): THREE.Sprite {
-  const canvas = document.createElement('canvas')
-  canvas.width = 256
-  canvas.height = 64
-  const ctx = canvas.getContext('2d')
-  if (ctx) {
-    ctx.fillStyle = 'rgba(255,255,255,0.9)'
-    ctx.fillRect(0, 8, 256, 48)
-    ctx.fillStyle = END_COLORS.dimension
-    ctx.font = 'bold 30px system-ui, sans-serif'
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText(text, 128, 33)
-  }
-  const material = new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), depthTest: false, sizeAttenuation: false })
-  const sprite = new THREE.Sprite(material)
-  sprite.scale.set(0.16, 0.04, 1)
-  sprite.renderOrder = 3
-  return sprite
-}
-
 /** Each column's height as a drawing shows it: a dimension line beside the column with ticks
- *  and extension lines at its ends, the height written at its middle, and the bottom (green)
- *  and top (red) of the column marked. */
-function ColumnDimensions({ items, labels, reach }: { items: Placed[]; labels?: Map<string, ColumnLabel>; reach: number }) {
+ *  and extension lines at its ends, and the bottom (green) and top (red) of the column marked.
+ *  The height itself is a tag over the view (``HeightTags``). */
+function ColumnDimensions({ items, reach }: { items: Placed[]; reach: number }) {
   const group = useMemo(() => {
     const g = new THREE.Group()
     const offset = new THREE.Vector3(Math.max(reach / 60, 300), 0, 0)
@@ -252,10 +238,6 @@ function ColumnDimensions({ items, labels, reach }: { items: Placed[]; labels?: 
       push(d1.clone().sub(tick), d1.clone().add(tick))
       ends.push(low.x, low.y, low.z, high.x, high.y, high.z)
       endColours.push(bottom.r, bottom.g, bottom.b, top.r, top.g, top.b)
-      const label = labels?.get(p.e.id)?.height_display || `${Math.round(high.z - low.z)} mm`
-      const sprite = textSprite(label)
-      sprite.position.copy(d0.clone().add(d1).multiplyScalar(0.5).add(offset.clone().multiplyScalar(0.9)))
-      g.add(sprite)
     }
     const lineGeometry = new THREE.BufferGeometry()
     lineGeometry.setAttribute('position', new THREE.Float32BufferAttribute(lines, 3))
@@ -265,18 +247,15 @@ function ColumnDimensions({ items, labels, reach }: { items: Placed[]; labels?: 
     const endGeometry = new THREE.BufferGeometry()
     endGeometry.setAttribute('position', new THREE.Float32BufferAttribute(ends, 3))
     endGeometry.setAttribute('color', new THREE.Float32BufferAttribute(endColours, 3))
-    const points = new THREE.Points(endGeometry, new THREE.PointsMaterial({ size: 9, sizeAttenuation: false, vertexColors: true, depthTest: false }))
+    const points = new THREE.Points(endGeometry, new THREE.PointsMaterial({ size: 6, sizeAttenuation: false, vertexColors: true, depthTest: false }))
     points.renderOrder = 2
     g.add(points)
     return g
-  }, [items, labels, reach])
+  }, [items, reach])
   useEffect(
     () => () => {
       group.traverse((o) => {
-        if (o instanceof THREE.Sprite) {
-          o.material.map?.dispose()
-          o.material.dispose()
-        } else if (o instanceof THREE.LineSegments || o instanceof THREE.Points) o.geometry.dispose()
+        if (o instanceof THREE.LineSegments || o instanceof THREE.Points) o.geometry.dispose()
       })
     },
     [group],
@@ -284,9 +263,59 @@ function ColumnDimensions({ items, labels, reach }: { items: Placed[]; labels?: 
   return <primitive object={group} />
 }
 
+/** Where each column's height tag goes on screen, every frame: beside the middle of its
+ *  dimension line. Tags that would cover one already placed (nearer columns first) are hidden,
+ *  so they stay readable; zooming in shows more. Moved directly in the page (no re-render). */
+function HeightTags({ items, reach, overlay }: { items: Placed[]; reach: number; overlay: React.RefObject<HTMLDivElement | null> }) {
+  const point = useMemo(() => new THREE.Vector3(), [])
+  const offset = Math.max(reach / 60, 300) * 1.6
+  useFrame(({ camera, size }) => {
+    const tags = overlay.current?.children
+    if (!tags) return
+    const placed: { el: HTMLElement; x: number; y: number; depth: number }[] = []
+    items.forEach((p, i) => {
+      const el = tags[i] as HTMLElement | undefined
+      if (!el) return
+      point.copy(p.a).add(p.b).multiplyScalar(0.5)
+      point.x += offset
+      point.project(camera)
+      const behind = point.z > 1 || point.z < -1
+      placed.push({ el, x: ((point.x + 1) / 2) * size.width, y: ((1 - point.y) / 2) * size.height, depth: behind ? Infinity : point.z })
+    })
+    placed.sort((a, b) => a.depth - b.depth)
+    const taken: [number, number, number, number][] = []
+    for (const t of placed) {
+      const w = t.el.offsetWidth || 60
+      const h = t.el.offsetHeight || 18
+      const box: [number, number, number, number] = [t.x - 2, t.y - h / 2 - 2, t.x + w + 2, t.y + h / 2 + 2]
+      const picked = t.el.dataset.picked !== undefined
+      const clash = taken.some((r) => box[0] < r[2] && r[0] < box[2] && box[1] < r[3] && r[1] < box[3])
+      const off = t.depth === Infinity || t.x < 0 || t.y < 0 || t.x > size.width || t.y > size.height
+      if (off || (clash && !picked)) {
+        t.el.style.visibility = 'hidden'
+        continue
+      }
+      taken.push(box)
+      t.el.style.visibility = 'visible'
+      t.el.style.transform = `translate(${Math.round(t.x)}px, ${Math.round(t.y - h / 2)}px)`
+    }
+  })
+  return null
+}
+
 /** Interactive 3D view of the wireframe: orbit (drag), zoom (wheel), pick (click; Ctrl+click
  *  to pick several), hover a column for its mark, section, height and levels. */
-export default function Wireframe3D({ elements, selectedId, marked, columns, allHeights = false, view, viewNonce, onSelect }: Wireframe3DProps) {
+export default function Wireframe3D({
+  elements,
+  selectedId,
+  marked,
+  columns,
+  allHeights = false,
+  view,
+  viewNonce,
+  dragMode = 'turn',
+  onSelect,
+}: Wireframe3DProps) {
   const items = useMemo(() => placed(elements), [elements])
   const [hover, setHover] = useState<{ id: string; x: number; y: number } | null>(null)
   const box = useMemo(() => {
@@ -307,6 +336,12 @@ export default function Wireframe3D({ elements, selectedId, marked, columns, all
     return shown
   }, [items, allHeights, selectedId, marked, hover?.id])
   const hoverLabel = hovered && hovered.e.element_type === 'column' ? columns?.get(hovered.e.id) : undefined
+  const overlay = useRef<HTMLDivElement>(null)
+  const tagText = (p: Placed) => {
+    const label = columns?.get(p.e.id)
+    const height = label?.height_display || signedFeetInches(String(Math.abs(p.b.z - p.a.z))) || ''
+    return label?.mark ? `${label.mark} · ${height}` : height
+  }
 
   return (
     <div className="wf3d__viewport">
@@ -318,7 +353,7 @@ export default function Wireframe3D({ elements, selectedId, marked, columns, all
         onPointerMissed={() => onSelect(null)}
       >
         <color attach="background" args={['#f8fafc']} />
-        <CameraRig box={box} view={view} nonce={viewNonce} />
+        <CameraRig box={box} view={view} nonce={viewNonce} dragMode={dragMode} />
         <gridHelper
           args={[grid, 20, '#cbd5e1', '#e2e8f0']}
           position={[centre.x, centre.y, box.min.z]}
@@ -329,8 +364,24 @@ export default function Wireframe3D({ elements, selectedId, marked, columns, all
           <Selected3D key={p.e.id} p={p} />
         ))}
         {hovered && !picked.includes(hovered) && <Selected3D p={hovered} color={COLORS.hover} />}
-        {dimensioned.length > 0 && <ColumnDimensions items={dimensioned} labels={columns} reach={size.length()} />}
+        {dimensioned.length > 0 && <ColumnDimensions items={dimensioned} reach={size.length()} />}
+        <HeightTags items={dimensioned} reach={size.length()} overlay={overlay} />
       </Canvas>
+      <div className="wf3d__tags" ref={overlay}>
+        {dimensioned.map((p) => (
+          <button
+            key={p.e.id}
+            type="button"
+            className="wf3d__tag"
+            data-picked={p.e.id === selectedId || marked?.has(p.e.id) || undefined}
+            style={{ visibility: 'hidden' }}
+            title={`${columns?.get(p.e.id)?.designation || 'Column'}: ${columns?.get(p.e.id)?.bottom_level || '?'} → ${columns?.get(p.e.id)?.top_level || '?'}. Click to select (Ctrl+click: add to the selection).`}
+            onClick={(event) => onSelect(p.e.id, event.ctrlKey || event.metaKey)}
+          >
+            {tagText(p)}
+          </button>
+        ))}
+      </div>
       {hovered && (
         <div className="wf3d__tooltip" role="tooltip" style={{ left: hover!.x + 14, top: hover!.y + 14 }}>
           {hoverLabel ? (

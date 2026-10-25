@@ -334,6 +334,8 @@ h2 { letter-spacing: -0.01em; }
 }
 .wf3d[data-expanded] .wf3d__stage { height: 100%; }
 .wf3d[data-expanded] .wf3d__stage > :is(.wf3d__canvas, .iso-preview, .iso-view, .wf3d__viewport) { flex: 1; min-height: 0; height: auto !important; max-height: none; }
+/* The 3D canvas sits in its viewport (with the hover tooltip): it fills that too. */
+.wf3d[data-expanded] .wf3d__viewport > .wf3d__canvas { flex: 1; min-height: 0; height: auto !important; }
 .wf3d[data-expanded] .wf3d__panel { max-height: 100%; }
 
 /* ABM: a preliminary piece mark proposed by Steelo (a typed mark shows upright). */
