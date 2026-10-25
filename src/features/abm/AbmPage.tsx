@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 
 import { downloadDraftAbm, getAbmSummary, getAbmTotals, listAbm, listBeamMarks } from '../../api/abm'
@@ -17,7 +17,6 @@ import { AddMemberForm } from '../review/AddMemberForm'
 import { ConnectionJump, ConnectionPanel } from '../connections/ConnectionPanel'
 import { MemberEditor } from '../review/MemberEditor'
 import type { FocusRequest } from '../viewer/DrawingStage'
-import { AbmDrawing } from './AbmDrawing'
 import { AbmTable } from './AbmTable'
 import { AbmTotalsView } from './AbmTotalsView'
 import { BeamMarks } from './BeamMarks'
@@ -37,6 +36,9 @@ import {
 import { formatTonnes, formatTons, type Amounts } from './format'
 
 const SEARCH_DELAY_MS = 300
+
+// Lazy: the drawing pane needs PDF.js; the table and filters render without waiting for it.
+const AbmDrawing = lazy(() => import('./AbmDrawing').then((m) => ({ default: m.AbmDrawing })))
 
 /** The project's interactive ABM (PRD §4.3): every entry of the pages added to
  *  the project, searchable and filterable, linked both ways with its source drawing. */
@@ -365,19 +367,21 @@ export function AbmPage() {
             )}
             <div className="abm__drawing">
               {drawingPageId && (
-                <AbmDrawing
-                  projectId={projectId}
-                  pageId={drawingPageId}
-                  fileName={fileName}
-                  selectedId={selectedId}
-                  hoveredId={hoveredId}
-                  focus={focus}
-                  onSelect={(id) => !adding && select(id)}
-                  onHover={setHoveredId}
-                  placing={placing}
-                  onPlace={place}
-                  onCancelPlace={cancelPlace}
-                />
+                <Suspense fallback={<LoadingState label="Opening drawing…" />}>
+                  <AbmDrawing
+                    projectId={projectId}
+                    pageId={drawingPageId}
+                    fileName={fileName}
+                    selectedId={selectedId}
+                    hoveredId={hoveredId}
+                    focus={focus}
+                    onSelect={(id) => !adding && select(id)}
+                    onHover={setHoveredId}
+                    placing={placing}
+                    onPlace={place}
+                    onCancelPlace={cancelPlace}
+                  />
+                </Suspense>
               )}
             </div>
           </aside>
