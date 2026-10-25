@@ -1,9 +1,11 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 
 import { mockBackend } from '../../test/mockBackend'
-import { renderApp } from '../../test/renderApp'
+import { preloadRoutes, renderApp } from '../../test/renderApp'
+
+beforeAll(() => preloadRoutes('/ops'))
 
 describe('Operations', () => {
   it('shows health, recent jobs and failures to administrators', async () => {

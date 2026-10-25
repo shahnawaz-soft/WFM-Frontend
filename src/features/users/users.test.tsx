@@ -1,10 +1,11 @@
 import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { mockBackend } from '../../test/mockBackend'
-import { renderApp } from '../../test/renderApp'
+import { preloadRoutes, renderApp } from '../../test/renderApp'
 
+beforeAll(() => preloadRoutes('/admin/users'))
 beforeEach(() => mockBackend.startSession('admin@steelo.test'))
 
 async function openUsers() {

@@ -43,6 +43,9 @@ function sheetName(sheet: SheetRow['original']): string {
   return `${sheet.sheet_number || sheet.title || 'Sheet'} · p.${sheet.page_number}`
 }
 
+/** Error codes for a PDF the backend cannot open (409). */
+const UNREADABLE_PDF = new Set(['pdf_unreadable', 'pdf_password_protected'])
+
 /** What changed between a revised drawing set and the set it revises: per sheet, every added,
  *  removed and changed member, with the weight it adds or takes off. */
 export function RevisionPage() {
@@ -52,8 +55,19 @@ export function RevisionPage() {
   const [onlyChanged, setOnlyChanged] = useState(true)
 
   const error = project.error ?? report.error
+  const apiError = error ? toApiError(error) : null
+  if (apiError && apiError.status === 409 && UNREADABLE_PDF.has(apiError.code)) {
+    // One of the two drawing sets can't be opened: say why and how to fix it, not a fault report.
+    return (
+      <div className="state state--empty">
+        <h1 className="state__title">The drawings could not be compared</h1>
+        <p>{apiError.message}</p>
+        <Link to={`/projects/${projectId}`}>Back to the project</Link>
+      </div>
+    )
+  }
   if (error) {
-    return toApiError(error).status === 404 ? (
+    return apiError?.status === 404 ? (
       <div className="state state--empty">
         <h1 className="state__title">No comparison</h1>
         <p>This drawing set doesn't revise another one, or it is not in a project you can see.</p>

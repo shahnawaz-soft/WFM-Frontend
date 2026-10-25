@@ -1,12 +1,14 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 
 import { mockBackend } from '../../test/mockBackend'
 import { mockProjects } from '../../test/mockProjects'
-import { renderApp } from '../../test/renderApp'
+import { preloadRoutes, renderApp } from '../../test/renderApp'
 import { server } from '../../test/server'
+
+beforeAll(() => preloadRoutes('/projects/p/revisions/r'))
 
 const OWNER = 'estimator@steelo.test'
 
@@ -89,5 +91,25 @@ describe('Revision', () => {
 
     await userEvent.selectOptions(within(card).getByLabelText('Revises sheet'), '')
     await waitFor(() => expect(paired).toEqual({ revised_page: 'rev-12', original_page: null }))
+  })
+
+  it.each([
+    ['pdf_unreadable', 'This file could not be read as a PDF. It may be damaged or incomplete.'],
+    ['pdf_password_protected', 'This PDF is password-protected. Remove the password and upload it again.'],
+  ])('explains a drawing that cannot be read (%s) instead of failing', async (code, message) => {
+    const project = mockProjects.create('Structures', OWNER)
+    mockBackend.startSession(OWNER)
+    server.use(
+      http.get('*/api/v1/drawing-sets/rev/revision/', () =>
+        HttpResponse.json({ error: { code, message, details: {}, request_id: 'req-1' } }, { status: 409 }),
+      ),
+    )
+    renderApp(`/projects/${project.id}/revisions/rev`)
+
+    expect(await screen.findByRole('heading', { name: 'The drawings could not be compared' })).toBeInTheDocument()
+    expect(screen.getByText(message)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Back to the project' })).toHaveAttribute('href', `/projects/${project.id}`)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument() // the file, not a fault: no error report
+    expect(screen.queryByText(/Reference/)).not.toBeInTheDocument()
   })
 })

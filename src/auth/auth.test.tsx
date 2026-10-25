@@ -1,11 +1,13 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 
 import { fetchCurrentUser } from '../api/auth'
 import { tokenStore } from './tokenStore'
 import { mockBackend, PASSWORD } from '../test/mockBackend'
-import { renderApp } from '../test/renderApp'
+import { preloadRoutes, renderApp } from '../test/renderApp'
+
+beforeAll(() => preloadRoutes('/admin/users'))
 
 async function signIn(email: string, password = PASSWORD) {
   await userEvent.type(await screen.findByLabelText('Email or username'), email)

@@ -1,12 +1,8 @@
-import { createBrowserRouter, type RouteObject } from 'react-router'
+import { createBrowserRouter, Outlet, type RouteObject } from 'react-router'
 
 import { RequireAuth, RequireCapability } from '../auth/guards'
-import { TemplatesPage } from '../features/connections/TemplatesPage'
 import { ProjectDetailPage } from '../features/projects/ProjectDetailPage'
 import { ProjectsPage } from '../features/projects/ProjectsPage'
-import { OpsPage } from '../features/ops/OpsPage'
-import { SectionDataPage } from '../features/sections/SectionDataPage'
-import { UsersPage } from '../features/users/UsersPage'
 import { HomePage } from '../pages/HomePage'
 import { LoginPage } from '../pages/LoginPage'
 import { NotFoundPage } from '../pages/NotFoundPage'
@@ -53,31 +49,36 @@ export const routes: RouteObject[] = [
             path: 'projects/:projectId/wireframe',
             lazy: async () => ({ Component: (await import('../features/wireframe/WireframePage')).WireframePage }),
           },
-          { path: 'connection-templates', element: <TemplatesPage /> },
+          {
+            path: 'connection-templates',
+            lazy: async () => ({ Component: (await import('../features/connections/TemplatesPage')).TemplatesPage }),
+          },
           { path: 'profile', element: <ProfilePage /> },
           {
-            path: 'admin/users',
+            // Admin pages: few people open them, so they stay out of the main bundle.
             element: (
               <RequireCapability capability="users.manage">
-                <UsersPage />
+                <Outlet />
               </RequireCapability>
             ),
+            children: [
+              {
+                path: 'admin/users',
+                lazy: async () => ({ Component: (await import('../features/users/UsersPage')).UsersPage }),
+              },
+              {
+                path: 'admin/sections',
+                lazy: async () => ({ Component: (await import('../features/sections/SectionDataPage')).SectionDataPage }),
+              },
+            ],
           },
           {
-            path: 'admin/sections',
-            element: (
-              <RequireCapability capability="users.manage">
-                <SectionDataPage />
-              </RequireCapability>
-            ),
-          },
-          {
-            path: 'ops',
             element: (
               <RequireCapability capability="ops.view">
-                <OpsPage />
+                <Outlet />
               </RequireCapability>
             ),
+            children: [{ path: 'ops', lazy: async () => ({ Component: (await import('../features/ops/OpsPage')).OpsPage }) }],
           },
           { path: 'unauthorized', element: <UnauthorizedPage /> },
           { path: '*', element: <NotFoundPage /> },

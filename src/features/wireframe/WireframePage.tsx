@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, memo, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 
 import { toApiError } from '../../api/errors'
@@ -340,10 +340,12 @@ function RevisionSection({
     if (match) setSelectedId(match.id)
   }
 
-  const all = elements.data ?? []
-  const copies = all.filter(isCopy).length
-  const shown = all.filter(
-    (e) => (showCopies || !isCopy(e)) && (!onlyProblems || (e.completeness !== 'ok' && !isCopy(e))),
+  const all = useMemo(() => elements.data ?? [], [elements.data])
+  const copies = useMemo(() => all.filter(isCopy).length, [all])
+  // Kept between renders, so the element table re-renders only when its list does.
+  const shown = useMemo(
+    () => all.filter((e) => (showCopies || !isCopy(e)) && (!onlyProblems || (e.completeness !== 'ok' && !isCopy(e)))),
+    [all, showCopies, onlyProblems],
   )
   const selected = all.find((e) => e.id === selectedId) ?? null
   const counts = current.counts as
@@ -677,7 +679,9 @@ function ReviewDialog({
   )
 }
 
-function ElementTable({
+/** Every element of the revision. Memoized, as are its rows: picking an element (here or in
+ *  the view) re-renders the two rows whose selection changed, not the whole list. */
+const ElementTable = memo(function ElementTable({
   projectId,
   elements,
   selectedId,
@@ -707,37 +711,53 @@ function ElementTable({
         </thead>
         <tbody>
           {elements.map((e) => (
-            <tr key={e.id} data-selected={e.id === selectedId || undefined} onClick={() => onSelect(e.id)}>
-              <td>{e.element_type === 'column' ? 'Column' : 'Beam'}</td>
-              <td>
-                {e.designation || (e.details.source === 'symbol' ? <span className="muted">Size not on plan</span> : '—')}
-              </td>
-              <td>{e.level_label || <span className="muted">—</span>}</td>
-              <td className="nowrap">{e.length_display || '—'}</td>
-              <td className="nowrap">{point(e.start)}</td>
-              <td className="nowrap">{point(e.end)}</td>
-              <td className="nowrap">
-                <StatusBadge {...(isCopy(e) ? { label: 'Other plan', tone: 'neutral' as StatusTone } : (COMPLETENESS[e.completeness] ?? COMPLETENESS.ok!))} />
-              </td>
-              <td className="wf-elements__notes">
-                {e.issue_messages.join(' ')}
-                {e.details.source === 'symbol' &&
-                  ` ${describeColumn({ shape: (e.details.shape as string) ?? 'wide_flange', depth_in: Number(e.details.depth_in), flange_in: Number(e.details.flange_in) })}.`}
-              </td>
-              <td className="nowrap">
-                {e.source_page && (
-                  <Link to={`/projects/${projectId}/pages/${e.source_page}${e.source_member ? `?member=${e.source_member}` : ''}`}>
-                    p.{e.page_number}
-                  </Link>
-                )}
-              </td>
-            </tr>
+            <ElementRow key={e.id} projectId={projectId} e={e} selected={e.id === selectedId} onSelect={onSelect} />
           ))}
         </tbody>
       </table>
     </div>
   )
-}
+})
+
+const ElementRow = memo(function ElementRow({
+  projectId,
+  e,
+  selected,
+  onSelect,
+}: {
+  projectId: string
+  e: WireframeElement
+  selected: boolean
+  onSelect: (id: string) => void
+}) {
+  return (
+    <tr data-selected={selected || undefined} onClick={() => onSelect(e.id)}>
+      <td>{e.element_type === 'column' ? 'Column' : 'Beam'}</td>
+      <td>
+        {e.designation || (e.details.source === 'symbol' ? <span className="muted">Size not on plan</span> : '—')}
+      </td>
+      <td>{e.level_label || <span className="muted">—</span>}</td>
+      <td className="nowrap">{e.length_display || '—'}</td>
+      <td className="nowrap">{point(e.start)}</td>
+      <td className="nowrap">{point(e.end)}</td>
+      <td className="nowrap">
+        <StatusBadge {...(isCopy(e) ? { label: 'Other plan', tone: 'neutral' as StatusTone } : (COMPLETENESS[e.completeness] ?? COMPLETENESS.ok!))} />
+      </td>
+      <td className="wf-elements__notes">
+        {e.issue_messages.join(' ')}
+        {e.details.source === 'symbol' &&
+          ` ${describeColumn({ shape: (e.details.shape as string) ?? 'wide_flange', depth_in: Number(e.details.depth_in), flange_in: Number(e.details.flange_in) })}.`}
+      </td>
+      <td className="nowrap">
+        {e.source_page && (
+          <Link to={`/projects/${projectId}/pages/${e.source_page}${e.source_member ? `?member=${e.source_member}` : ''}`}>
+            p.{e.page_number}
+          </Link>
+        )}
+      </td>
+    </tr>
+  )
+})
 
 type ChangesSince = NonNullable<Wireframe['changes_since']>
 

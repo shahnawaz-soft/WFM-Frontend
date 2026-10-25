@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useId, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
+import { memo, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 
 import { toApiError } from '../../api/errors'
 import { searchProfiles } from '../../api/sections'
@@ -94,14 +94,14 @@ export function ColumnScheduler({
   const [applying, setApplying] = useState(false)
   const [applied, setApplied] = useState<string | null>(null)
   const rows = useMemo(() => schedule.data?.columns ?? [], [schedule.data])
-  const levels = schedule.data?.levels ?? []
+  const levels = useMemo(() => schedule.data?.levels ?? [], [schedule.data])
 
   const edit = useMutation({
     mutationFn: async ({ groups }: { groups: { ids: string[]; changes: ColumnChanges }[]; label: string; record: 'new' | 'undo' | 'redo' }) => {
       let data: SchedulerColumns | undefined
       for (const group of groups) {
-        const current = (data ?? queryClient.getQueryData<SchedulerColumns>(key))?.columns ?? rows
-        const items = group.ids.map((id) => ({ id, version: current.find((r) => r.id === id)!.version }))
+        const current = new Map(((data ?? queryClient.getQueryData<SchedulerColumns>(key))?.columns ?? rows).map((r) => [r.id, r]))
+        const items = group.ids.map((id) => ({ id, version: current.get(id)!.version }))
         data = await bulkEditColumns(wireframeId, items, group.changes)
       }
       return data!
@@ -109,10 +109,11 @@ export function ColumnScheduler({
     onMutate: () => setError(null),
     onSuccess: (data, { groups, label, record }) => {
       const before = new Map(rows.map((r) => [r.id, valuesOf(r)]))
+      const after = new Map(data.columns.map((r) => [r.id, r]))
       const ids = groups.flatMap((g) => g.ids)
       const step: Step = {
         label,
-        rows: ids.map((id) => ({ id, before: before.get(id)!, after: valuesOf(data.columns.find((r) => r.id === id)!) })),
+        rows: ids.map((id) => ({ id, before: before.get(id)!, after: valuesOf(after.get(id)!) })),
       }
       setHistory((h) =>
         record === 'new'
@@ -220,6 +221,21 @@ export function ColumnScheduler({
     },
   })
 
+  // The rows are memoized: give them handlers that keep one identity and reach the latest
+  // selection and rows through a ref, so a row re-renders only when its own props change.
+  const latest = useRef({ onRowClick, toggle, change, targets })
+  useLayoutEffect(() => {
+    latest.current = { onRowClick, toggle, change, targets }
+  })
+  const actions = useMemo<RowActions>(
+    () => ({
+      click: (e, index) => latest.current.onRowClick(e, index),
+      toggle: (id, index) => latest.current.toggle(id, index),
+      change: (row, changes) => latest.current.change(latest.current.targets(row), changes),
+    }),
+    [],
+  )
+
   if (schedule.isPending) return <LoadingState label="Loading columns…" />
   if (schedule.error) return <p className="field__error">{toApiError(schedule.error).message}</p>
 
@@ -300,102 +316,17 @@ export function ColumnScheduler({
             </thead>
             <tbody>
               {rows.map((row, index) => (
-                <tr
+                <ScheduleRow
                   key={row.id}
-                  aria-selected={selection.has(row.id)}
-                  data-selected={selection.has(row.id) || row.id === selectedId || undefined}
-                  onClick={(e) => onRowClick(e, index)}
-                >
-                  <td>
-                    <input
-                      type="checkbox"
-                      aria-label={`Select column ${row.mark || row.id.slice(0, 8)}`}
-                      checked={selection.has(row.id)}
-                      onChange={() => toggle(row.id, index)}
-                    />
-                  </td>
-                  <td className="nowrap">{row.grid || <span className="muted">—</span>}</td>
-                  <td className="nowrap">{row.mark || <span className="muted">—</span>}</td>
-                  <td className="nowrap col-sched__id" title={row.id}>
-                    {row.id.slice(0, 8)}
-                  </td>
-                  <td>
-                    {editable ? (
-                      <ProfileInput
-                        value={row.designation}
-                        datasetId={datasetId}
-                        label={`Profile of ${row.id.slice(0, 8)}`}
-                        onCommit={(v) => change(targets(row), { designation: v })}
-                      />
-                    ) : (
-                      row.designation || <span className="muted">Size not given</span>
-                    )}
-                  </td>
-                  <td>
-                    {editable ? (
-                      <select
-                        aria-label={`Type of ${row.id.slice(0, 8)}`}
-                        value={row.column_type}
-                        onChange={(e) => change(targets(row), { column_type: e.target.value as SchedulerRow['column_type'] })}
-                      >
-                        {TYPES.map((t) => (
-                          <option key={t.value} value={t.value}>
-                            {t.label}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      TYPES.find((t) => t.value === row.column_type)?.label
-                    )}
-                  </td>
-                  <td className="nowrap">
-                    {editable && row.bottom_mm !== null ? (
-                      <TextCommit
-                        value={row.height_display}
-                        label={`Height of ${row.id.slice(0, 8)}`}
-                        onCommit={(v) => change(targets(row), { height_mm: v })}
-                      />
-                    ) : (
-                      row.height_display || <span className="muted">Not placed</span>
-                    )}
-                  </td>
-                  <td className="nowrap">
-                    <EndCell
-                      row={row}
-                      which="bottom"
-                      levels={levels}
-                      editable={editable && row.bottom_mm !== null}
-                      onCommit={(changes) => change(targets(row), changes)}
-                    />
-                  </td>
-                  <td className="nowrap">
-                    <EndCell
-                      row={row}
-                      which="top"
-                      levels={levels}
-                      editable={editable && row.top_mm !== null}
-                      onCommit={(changes) => change(targets(row), changes)}
-                    />
-                  </td>
-                  <td>
-                    {editable ? (
-                      <select
-                        aria-label={`Rotation of ${row.id.slice(0, 8)}`}
-                        value={row.rotation}
-                        onChange={(e) => change(targets(row), { rotation: e.target.value as SchedulerRow['rotation'] })}
-                      >
-                        {ROTATIONS.map((r) => (
-                          <option key={r.value} value={r.value}>
-                            {r.label}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      ROTATIONS.find((r) => r.value === row.rotation)?.label
-                    )}
-                  </td>
-                  <td className="nowrap">{row.page_number ? `p.${row.page_number}` : <span className="muted">Added</span>}</td>
-                </tr>
+                  row={row}
+                  index={index}
+                  selected={selection.has(row.id)}
+                  current={row.id === selectedId}
+                  editable={editable}
+                  datasetId={datasetId}
+                  levels={levels}
+                  actions={actions}
+                />
               ))}
             </tbody>
           </table>
@@ -421,6 +352,133 @@ export function ColumnScheduler({
 }
 
 /** A text cell saved on Enter or when it loses focus (Escape puts the value back). */
+
+interface RowActions {
+  click: (e: MouseEvent, index: number) => void
+  toggle: (id: string, index: number) => void
+  /** Applies to the row, or to every selected row when it is one of several selected. */
+  change: (row: SchedulerRow, changes: ColumnChanges) => void
+}
+
+const ScheduleRow = memo(function ScheduleRow({
+  row,
+  index,
+  selected,
+  current,
+  editable,
+  datasetId,
+  levels,
+  actions,
+}: {
+  row: SchedulerRow
+  index: number
+  selected: boolean
+  /** The column shown in the element panel. */
+  current: boolean
+  editable: boolean
+  datasetId: string | null
+  levels: SchedulerLevel[]
+  actions: RowActions
+}) {
+  return (
+    <tr
+      aria-selected={selected}
+      data-selected={selected || current || undefined}
+      onClick={(e) => actions.click(e, index)}
+    >
+      <td>
+        <input
+          type="checkbox"
+          aria-label={`Select column ${row.mark || row.id.slice(0, 8)}`}
+          checked={selected}
+          onChange={() => actions.toggle(row.id, index)}
+        />
+      </td>
+      <td className="nowrap">{row.grid || <span className="muted">—</span>}</td>
+      <td className="nowrap">{row.mark || <span className="muted">—</span>}</td>
+      <td className="nowrap col-sched__id" title={row.id}>
+        {row.id.slice(0, 8)}
+      </td>
+      <td>
+        {editable ? (
+          <ProfileInput
+            value={row.designation}
+            datasetId={datasetId}
+            label={`Profile of ${row.id.slice(0, 8)}`}
+            onCommit={(v) => actions.change(row, { designation: v })}
+          />
+        ) : (
+          row.designation || <span className="muted">Size not given</span>
+        )}
+      </td>
+      <td>
+        {editable ? (
+          <select
+            aria-label={`Type of ${row.id.slice(0, 8)}`}
+            value={row.column_type}
+            onChange={(e) => actions.change(row, { column_type: e.target.value as SchedulerRow['column_type'] })}
+          >
+            {TYPES.map((t) => (
+              <option key={t.value} value={t.value}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+        ) : (
+          TYPES.find((t) => t.value === row.column_type)?.label
+        )}
+      </td>
+      <td className="nowrap">
+        {editable && row.bottom_mm !== null ? (
+          <TextCommit
+            value={row.height_display}
+            label={`Height of ${row.id.slice(0, 8)}`}
+            onCommit={(v) => actions.change(row, { height_mm: v })}
+          />
+        ) : (
+          row.height_display || <span className="muted">Not placed</span>
+        )}
+      </td>
+      <td className="nowrap">
+        <EndCell
+          row={row}
+          which="bottom"
+          levels={levels}
+          editable={editable && row.bottom_mm !== null}
+          onCommit={(changes) => actions.change(row, changes)}
+        />
+      </td>
+      <td className="nowrap">
+        <EndCell
+          row={row}
+          which="top"
+          levels={levels}
+          editable={editable && row.top_mm !== null}
+          onCommit={(changes) => actions.change(row, changes)}
+        />
+      </td>
+      <td>
+        {editable ? (
+          <select
+            aria-label={`Rotation of ${row.id.slice(0, 8)}`}
+            value={row.rotation}
+            onChange={(e) => actions.change(row, { rotation: e.target.value as SchedulerRow['rotation'] })}
+          >
+            {ROTATIONS.map((r) => (
+              <option key={r.value} value={r.value}>
+                {r.label}
+              </option>
+            ))}
+          </select>
+        ) : (
+          ROTATIONS.find((r) => r.value === row.rotation)?.label
+        )}
+      </td>
+      <td className="nowrap">{row.page_number ? `p.${row.page_number}` : <span className="muted">Added</span>}</td>
+    </tr>
+  )
+})
+
 function TextCommit({
   value,
   label,
