@@ -2,7 +2,7 @@ import { useId, useState } from 'react'
 
 import type { DrawingPage, ReviewReason } from '../../api/types'
 import { StatusBadge } from '../../components/ui/StatusBadge'
-import { isActiveJob, JOB_STATUS, PAGE_KIND_LABELS } from './status'
+import { isActiveJob, JOB_STATUS, jobStatus, PAGE_KIND_LABELS } from './status'
 
 /** Job progress / outcome and the current analysis result for one page. */
 /** ``showReasons`` is off where the full issue list is shown instead (page viewer). */
@@ -34,7 +34,7 @@ export function PageResult({ page, showReasons = true }: { page: DrawingPage; sh
 
       {job && !active && (
         <div className="page-card__outcome">
-          <StatusBadge tone={JOB_STATUS[job.status].tone} label={JOB_STATUS[job.status].label} />
+          <StatusBadge {...jobStatus(job)} />
           {job.status === 'failed' && <p className="page-card__error">{job.error_message}</p>}
         </div>
       )}

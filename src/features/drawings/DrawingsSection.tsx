@@ -71,11 +71,13 @@ function DrawingSetCard({
   const [open, setOpen] = useState(initiallyOpen)
   const [confirmRemove, setConfirmRemove] = useState(false)
   const status = drawingSetStatus(drawingSet)
+  // Preparing the pages ran out of time: nothing failed, the rest is still to prepare.
+  const timedOut = drawingSet.status === 'failed' && drawingSet.error_code === 'ingest_timed_out'
   const pagesId = `pages-${drawingSet.id}`
 
   const retry = useMutation({
     mutationFn: () => retryDrawingSet(drawingSet.id),
-    meta: { successMessage: 'Retrying the pages that failed' },
+    meta: { successMessage: timedOut ? 'Preparing the rest of the pages' : 'Retrying the pages that failed' },
     onSettled: () =>
       Promise.all([
         queryClient.invalidateQueries({ queryKey: ['project', drawingSet.project, 'drawing-sets'] }),
@@ -123,7 +125,7 @@ function DrawingSetCard({
         <div className="button-row button-row--tight">
           {canEdit && drawingSet.can_retry && (
             <Button variant="primary" loading={retry.isPending} onClick={() => retry.mutate()}>
-              Retry failed pages
+              {timedOut ? 'Retry' : 'Retry failed pages'}
             </Button>
           )}
           {canEdit && drawingSet.status === 'ready' && (

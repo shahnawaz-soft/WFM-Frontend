@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { cleanup, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -107,6 +107,29 @@ describe('Drawing upload', () => {
     await waitFor(() => expect(within(set).queryByText('Failed')).not.toBeInTheDocument())
     expect(within(set).queryByRole('button', { name: 'Retry failed pages' })).not.toBeInTheDocument()
     expect(mockDrawings.sets[0]!.pages).toHaveLength(3) // no duplicate pages
+  })
+
+  it('says preparing the pages timed out and prepares the rest on Retry', async () => {
+    const { container } = await openProject()
+    await chooseFile(container, pdfFile('Big.pdf', 3))
+    await screen.findByRole('article', { name: 'Big.pdf' })
+    const stored = mockDrawings.sets[0]!
+    Object.assign(stored.set, {
+      status: 'failed',
+      error_code: 'ingest_timed_out',
+      error_message: 'Preparing the pages took too long and stopped before the end. The pages already prepared are kept. Retry to prepare the rest.',
+    })
+    stored.pages.slice(1).forEach((p) => Object.assign(p, { thumbnail_status: 'pending' }))
+    cleanup()
+    renderApp(`/projects/${mockProjects.all[0]!.id}`)
+
+    const set = await screen.findByRole('article', { name: 'Big.pdf' })
+    expect(within(set).getByText('Timed out')).toBeInTheDocument()
+    expect(within(set).getByText(/took too long.*Retry to prepare the rest/)).toBeInTheDocument()
+    await userEvent.click(within(set).getByRole('button', { name: 'Retry' }))
+    expect(await within(set).findByText('Ready')).toBeInTheDocument()
+    expect(within(set).queryByText(/took too long/)).not.toBeInTheDocument()
+    expect(within(set).queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument()
   })
 
   it('toggles the page list accessibly', async () => {

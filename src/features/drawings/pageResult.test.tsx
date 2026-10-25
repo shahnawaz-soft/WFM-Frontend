@@ -78,3 +78,23 @@ describe('A page read by an older engine', () => {
     expect(screen.queryByText(/older version/)).not.toBeInTheDocument()
   })
 })
+
+describe('A job that ran out of time', () => {
+  it('says it timed out, with what to do', () => {
+    const message = 'Processing this page took too long and was stopped. Nothing was lost. Run Plan again to retry.'
+    render(
+      <PageResult
+        page={
+          {
+            page_number: 4,
+            latest_job: { id: 'j1', status: 'failed', error_code: 'timed_out', error_message: message, progress: 100, stage: '' },
+            current_run: null,
+          } as unknown as DrawingPage
+        }
+      />,
+    )
+    expect(screen.getByText('Timed out')).toBeInTheDocument()
+    expect(screen.queryByText('Failed')).not.toBeInTheDocument()
+    expect(screen.getByText(message)).toBeInTheDocument()
+  })
+})

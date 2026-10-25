@@ -1,4 +1,4 @@
-import type { DrawingSet, PageStatus, UploadLimits } from '../../api/types'
+import type { DrawingSet, PageStatus, ProcessingJob, UploadLimits } from '../../api/types'
 import type { StatusTone } from '../../components/ui/StatusIcon'
 
 export const PAGE_STATUS: Record<PageStatus, { label: string; tone: StatusTone }> = {
@@ -12,7 +12,7 @@ export const PAGE_STATUS: Record<PageStatus, { label: string; tone: StatusTone }
 
 export function drawingSetStatus(set: DrawingSet): { label: string; tone: StatusTone } {
   if (set.status === 'processing') return { label: `Preparing pages (${set.pages_ready}/${set.page_count})`, tone: 'info' }
-  if (set.status === 'failed') return { label: 'Failed', tone: 'error' }
+  if (set.status === 'failed') return { label: set.error_code === 'ingest_timed_out' ? 'Timed out' : 'Failed', tone: 'error' }
   if (set.pages_failed > 0) {
     return { label: `Ready — ${set.pages_failed} ${set.pages_failed === 1 ? 'page' : 'pages'} failed`, tone: 'warning' }
   }
@@ -44,6 +44,12 @@ export const JOB_STATUS: Record<import('../../api/types').JobStatus, { label: st
   completed: { label: 'Completed', tone: 'success' },
   needs_review: { label: 'Needs review', tone: 'warning' },
   failed: { label: 'Failed', tone: 'error' },
+}
+
+/** A job's status; a failed job that ran out of time (error code ``timed_out``) says so. */
+export function jobStatus(job: Pick<ProcessingJob, 'status' | 'error_code'>): { label: string; tone: StatusTone } {
+  if (job.status === 'failed' && job.error_code === 'timed_out') return { label: 'Timed out', tone: 'error' }
+  return JOB_STATUS[job.status]
 }
 
 export const PAGE_KIND_LABELS: Record<import('../../api/types').PageKind, string> = {

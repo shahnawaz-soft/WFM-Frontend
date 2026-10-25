@@ -503,7 +503,7 @@ function ingest(s: StoredSet) {
       Object.assign(page, { status: 'pending', thumbnail_status: 'ready', error_code: '', error_message: '' })
     }
   }
-  s.set.status = 'ready'
+  Object.assign(s.set, { status: 'ready', error_code: '', error_message: '' })
 }
 
 /** Sheet kinds the engine read, by page id (default: plan). */
