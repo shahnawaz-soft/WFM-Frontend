@@ -1,9 +1,12 @@
 import type { ExtractionRun } from '../../../api/types'
+import { LoadingState } from '../../../components/feedback/States'
 import { StatusBadge } from '../../../components/ui/StatusBadge'
 import { feetInches } from '../../abm/format'
 
-export function ScalePanel({ run }: { run: ExtractionRun | null }) {
-  const scales = run?.summary.scales_found ?? []
+/** ``run``: from the page detail only (Step B); null = no run, undefined = the detail is loading. */
+export function ScalePanel({ run }: { run: ExtractionRun | null | undefined }) {
+  // Summary keys are optional: older runs may lack some.
+  const scales = run?.summary?.scales_found ?? []
   const check = run?.scale_check ?? null
   const spacings = run?.grid_spacings ?? []
   // The engine read "not to scale" on the sheet (``review_reasons``): say so, not just "not found".
@@ -14,7 +17,8 @@ export function ScalePanel({ run }: { run: ExtractionRun | null }) {
         <h2>Scale</h2>
         <p className="muted">Read from the scale statements printed on the sheet, and checked against its printed dimensions.</p>
       </div>
-      {!run && <p className="muted">Run Plan on this page to read its scale.</p>}
+      {run === undefined && <LoadingState label="Loading the scale…" />}
+      {run === null && <p className="muted">Run Plan on this page to read its scale.</p>}
       {run && (
         <>
           <p className="scale-value">

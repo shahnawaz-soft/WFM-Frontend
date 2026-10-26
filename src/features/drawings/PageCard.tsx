@@ -1,7 +1,7 @@
 import { Link } from 'react-router'
 
 import { toApiError } from '../../api/errors'
-import type { DrawingPage } from '../../api/types'
+import type { DrawingPageListItem } from '../../api/types'
 import { Button } from '../../components/ui/Button'
 import { StatusBadge } from '../../components/ui/StatusBadge'
 import { PageResult } from './PageResult'
@@ -10,7 +10,7 @@ import { Thumbnail } from './Thumbnail'
 import { usePageRun } from './usePageRun'
 
 interface PageCardProps {
-  page: DrawingPage
+  page: DrawingPageListItem
   projectId: string
   setName: string
   canRun: boolean

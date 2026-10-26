@@ -51,6 +51,13 @@ const STATUS: Record<string, { label: string; tone: StatusTone }> = {
   failed: { label: 'Failed', tone: 'error' },
 }
 
+/** A revision's status; a failed one that ran out of time (error code ``timed_out``) says so,
+ *  as a Run Plan job does. Its error message says what to do. */
+function wireframeStatus(w: Pick<Wireframe, 'status' | 'error_code'>): { label: string; tone: StatusTone } {
+  if (w.status === 'failed' && w.error_code === 'timed_out') return { label: 'Timed out', tone: 'error' }
+  return STATUS[w.status] ?? STATUS.draft!
+}
+
 const COMPLETENESS: Record<string, { label: string; tone: StatusTone }> = {
   ok: { label: 'Placed', tone: 'success' },
   missing_data: { label: 'Missing data', tone: 'warning' },
@@ -367,7 +374,7 @@ function RevisionSection({
     <section className="card" aria-labelledby="wf-revision">
       <div className="card__header">
         <h2 id="wf-revision">
-          Revision {current.revision_no} <StatusBadge {...(STATUS[current.status] ?? STATUS.draft!)} />{' '}
+          Revision {current.revision_no} <StatusBadge {...wireframeStatus(current)} />{' '}
           {isDraftBuild(current) && <StatusBadge tone="warning" label="Draft — all run pages" />}
         </h2>
         {revisions.length > 1 && (
@@ -377,7 +384,7 @@ function RevisionSection({
             onChange={(e) => onChoose(e.target.value)}
             options={revisions.map((w) => ({
               value: w.id,
-              label: `Revision ${w.revision_no} · ${STATUS[w.status]?.label ?? w.status}${isDraftBuild(w) ? ' · all run pages' : ''} · ${new Date(w.created_at).toLocaleString()}`,
+              label: `Revision ${w.revision_no} · ${wireframeStatus(w).label}${isDraftBuild(w) ? ' · all run pages' : ''} · ${new Date(w.created_at).toLocaleString()}`,
             }))}
           />
         )}

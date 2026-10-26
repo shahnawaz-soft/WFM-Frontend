@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link } from 'react-router'
 
-import { downloadOriginal, listDrawingSets, listPages, removeDrawingSet, retryDrawingSet } from '../../api/drawings'
+import { downloadOriginal, listPages, removeDrawingSet, retryDrawingSet } from '../../api/drawings'
 import { toApiError } from '../../api/errors'
 import { runAllPages, type SetRunResult } from '../../api/processing'
 import { setRevises } from '../../api/revisions'
@@ -16,18 +16,14 @@ import { StatusBadge } from '../../components/ui/StatusBadge'
 import { projectCan } from '../projects/useProjectPermissions'
 import { PageCard } from './PageCard'
 import { drawingSetStatus, formatBytes, isActiveJob } from './status'
+import { drawingSetsQuery } from './queries'
 import { UploadPanel } from './UploadPanel'
 
 const POLL_MS = 2000
 
 export function DrawingsSection({ project }: { project: Project }) {
   const canEdit = projectCan(project, 'project.edit')
-  const query = useQuery({
-    queryKey: ['project', project.id, 'drawing-sets'],
-    queryFn: () => listDrawingSets(project.id),
-    // Keep checking while pages are being prepared in the background.
-    refetchInterval: (q) => (q.state.data?.some((s) => s.status === 'processing') ? POLL_MS : false),
-  })
+  const query = useQuery(drawingSetsQuery(project.id))
 
   return (
     <section className="card" aria-labelledby="drawings-heading">

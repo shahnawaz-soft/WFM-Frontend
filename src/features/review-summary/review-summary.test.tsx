@@ -1,11 +1,13 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { http } from 'msw'
+import { describe, expect, it, onTestFinished } from 'vitest'
 
 import { mockBackend } from '../../test/mockBackend'
 import { acceptUpload, mockDrawings } from '../../test/mockDrawings'
 import { mockProjects } from '../../test/mockProjects'
 import { renderApp } from '../../test/renderApp'
+import { server } from '../../test/server'
 
 const OWNER = 'estimator@steelo.test'
 
@@ -45,6 +47,44 @@ async function openCard(projectId: string) {
 }
 
 describe('Project review summary', () => {
+  it('asks for the summary once when the project page opens', async () => {
+    const { project } = await setup()
+    let requests = 0
+    server.events.on('request:start', ({ request }) => {
+      if (new URL(request.url).pathname.endsWith(`/projects/${project.id}/summary/`)) requests++
+    })
+    onTestFinished(() => server.events.removeAllListeners())
+    // The drawing sets answer after the summary (a larger response), as they often do.
+    server.use(
+      http.get(`*/api/v1/projects/${project.id}/drawing-sets/`, async () => {
+        await waitFor(() => expect(requests).toBe(1))
+        await new Promise((resolve) => setTimeout(resolve, 50)) // then falls through to the default handler
+      }),
+    )
+    await openCard(project.id)
+    await screen.findByRole('list', { name: 'Pages of GA.pdf' }) // the drawing sets have loaded too
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    expect(requests).toBe(1)
+  })
+
+  it('refreshes the summary when the drawing sets change', async () => {
+    const { project } = await setup()
+    let requests = 0
+    server.events.on('request:start', ({ request }) => {
+      if (new URL(request.url).pathname.endsWith(`/projects/${project.id}/summary/`)) requests++
+    })
+    onTestFinished(() => server.events.removeAllListeners())
+    const { queryClient } = renderApp(`/projects/${project.id}`)
+    await screen.findByRole('list', { name: 'Pages of GA.pdf' })
+    await waitFor(() => expect(requests).toBeGreaterThan(0))
+    const before = requests
+    // Another set uploaded: the upload panel refreshes the project's drawing sets, as here.
+    await acceptUpload(project.id, new File(['%PDF-1.7 pages:3'], 'More.pdf'))
+    await queryClient.invalidateQueries({ queryKey: ['project', project.id, 'drawing-sets'] })
+    await screen.findByRole('article', { name: 'More.pdf' })
+    await waitFor(() => expect(requests).toBe(before + 1))
+  })
+
   it('shows a new project as not started', async () => {
     const { project } = await setup()
     const card = await openCard(project.id)

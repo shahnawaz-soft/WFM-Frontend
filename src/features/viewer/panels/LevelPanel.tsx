@@ -2,8 +2,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
 
-import type { DrawingPage, GridPoint } from '../../../api/types'
+import type { DrawingPage, DrawingPageListItem, GridPoint } from '../../../api/types'
 import { getWireframeSetup, setPageLevel } from '../../../api/wireframe'
+import { LoadingState } from '../../../components/feedback/States'
 import { Button } from '../../../components/ui/Button'
 import { FormAlert, SelectField, TextField } from '../../../components/ui/Field'
 import { StatusBadge } from '../../../components/ui/StatusBadge'
@@ -18,7 +19,7 @@ const STILL_NEEDED: Record<string, string> = {
 
 interface LevelPanelProps {
   projectId: string
-  page: DrawingPage
+  page: DrawingPageListItem
   canEdit: boolean
   /** A point just picked on the drawing (not saved yet). */
   picked: [number, number] | null
@@ -26,6 +27,8 @@ interface LevelPanelProps {
   pickedLabel?: string | null
   /** Grid intersections found on the plan, to choose from instead of clicking. */
   gridPoints?: GridPoint[] | null
+  /** The page detail (where grid points come from) is still loading. */
+  gridPointsLoading?: boolean
   onPick: () => void
   onChoose?: (point: GridPoint) => void
   onPickedSaved: () => void
@@ -33,7 +36,7 @@ interface LevelPanelProps {
 
 /** Which level this plan shows, its elevation, and the reference grid point every plan is
  *  aligned on in 3D (OD-10). */
-export function LevelPanel({ projectId, page, canEdit, picked, pickedLabel, gridPoints, onPick, onChoose, onPickedSaved }: LevelPanelProps) {
+export function LevelPanel({ projectId, page, canEdit, picked, pickedLabel, gridPoints, gridPointsLoading = false, onPick, onChoose, onPickedSaved }: LevelPanelProps) {
   const queryClient = useQueryClient()
   const [form, setForm] = useState({
     level_label: page.level_label,
@@ -184,7 +187,8 @@ export function LevelPanel({ projectId, page, canEdit, picked, pickedLabel, grid
                 )}
               </div>
               {errors.fields.reference_point && <p className="field__error">{errors.fields.reference_point.join(' ')}</p>}
-              {choices.length > 0 && onChoose && (
+              {gridPointsLoading && onChoose && <LoadingState label="Loading the grid intersections…" />}
+              {!gridPointsLoading && choices.length > 0 && onChoose && (
                 <SelectField
                   label="Or choose a grid intersection"
                   value={picked && pickedLabel ? pickedLabel : ''}

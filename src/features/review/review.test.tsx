@@ -1,12 +1,14 @@
 import { cleanup, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeAll, describe, expect, it, onTestFinished, vi } from 'vitest'
+import { http, HttpResponse } from 'msw'
+import { beforeAll, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 
 import { mockBackend } from '../../test/mockBackend'
 import { acceptUpload, mockDrawings } from '../../test/mockDrawings'
 import { mockProjects } from '../../test/mockProjects'
 import { preloadRoutes, renderApp } from '../../test/renderApp'
 import { server } from '../../test/server'
+import { similarSearchPolling } from '../viewer/useSetSimilarSearch'
 
 vi.mock('../viewer/pdf', () => ({ loadPdf: async () => ({ numPages: 3 }) }))
 vi.mock('../viewer/PdfPageCanvas', async () => {
@@ -197,34 +199,150 @@ describe('Adding a missed member', () => {
 })
 
 describe('Find similar', () => {
-  it('adds the columns drawn like the one clicked, then on the whole set', async () => {
+  beforeEach(() => {
+    similarSearchPolling.intervalMs = 20 // the job is polled every 2 s in the app
+  })
+
+  /** Counts requests by path while the test runs. */
+  function countRequests() {
+    const seen: string[] = []
+    server.events.on('request:start', ({ request }) => seen.push(`${request.method} ${new URL(request.url).pathname}`))
+    onTestFinished(() => server.events.removeAllListeners())
+    return (pattern: RegExp) => seen.filter((r) => pattern.test(r)).length
+  }
+
+  async function findOnPage() {
     await openProcessedPage()
     await screen.findByRole('table', { name: /Detected members/ })
     await userEvent.click(screen.getByRole('button', { name: 'Find similar' }))
     expect(screen.getByText(/Click on a column symbol Steelo missed/)).toBeInTheDocument()
     await userEvent.click(screen.getByRole('img', { name: /Drawing/ }))
     expect(await screen.findByText(/3 columns added on this page/)).toBeInTheDocument()
+  }
+
+  it('adds the columns drawn like the one clicked, then searches the whole set as a job', async () => {
+    const count = countRequests()
+    await findOnPage()
     await userEvent.click(screen.getByRole('button', { name: 'Also on every plan of this set' }))
-    expect(await screen.findByText(/5 columns added on 1 page/)).toBeInTheDocument()
+    expect(await screen.findByText(/Searching every plan of this set/)).toBeInTheDocument()
+    expect(await screen.findByText(/5 columns added on 1 page\./)).toBeInTheDocument()
+    expect(count(/^POST .*\/find-similar-columns\/jobs\/$/)).toBe(1)
+    expect(count(/^POST .*\/find-similar-columns\/$/)).toBe(1) // the page search only: no synchronous set search
+    expect(count(/^GET .*\/similar-columns-jobs\/[^/]+\/$/)).toBeGreaterThanOrEqual(2) // polled until done
+    // Polling stops once the job has ended.
+    const polls = count(/^GET .*\/similar-columns-jobs\//)
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    expect(count(/^GET .*\/similar-columns-jobs\//)).toBe(polls)
   })
 
-  it('refreshes the pages without downloading the drawing again', async () => {
-    let downloads = 0
-    server.events.on('request:start', ({ request }) => {
-      if (/\/drawing-sets\/[^/]+\/file\/$/.test(new URL(request.url).pathname)) downloads++
-    })
-    onTestFinished(() => server.events.removeAllListeners())
-    await openProcessedPage()
+  it('refreshes the pages when the job ends, without downloading the drawing again', async () => {
+    const count = countRequests()
+    await findOnPage()
+    await waitFor(() => expect(count(/\/drawing-sets\/[^/]+\/file\/$/)).toBe(1))
+    const listsBefore = count(/^GET .*\/drawing-sets\/[^/]+\/pages\/$/)
+    await userEvent.click(screen.getByRole('button', { name: 'Also on every plan of this set' }))
+    expect(await screen.findByText(/5 columns added on 1 page\./)).toBeInTheDocument()
+    await waitFor(() => expect(count(/^GET .*\/drawing-sets\/[^/]+\/pages\/$/)).toBeGreaterThan(listsBefore))
+    expect(count(/\/drawing-sets\/[^/]+\/file\/$/)).toBe(1)
+  })
+
+  it('follows the search already running on the set instead of failing', async () => {
+    let polls = 0
+    server.use(
+      http.post('*/api/v1/drawing-pages/:id/find-similar-columns/jobs/', () =>
+        HttpResponse.json(
+          { error: { code: 'similar_search_running', message: 'A search of this drawing set is already running.', details: { job_id: 'theirs' }, request_id: 'r' } },
+          { status: 409 },
+        ),
+      ),
+      http.get('*/api/v1/similar-columns-jobs/theirs/', () => {
+        polls += 1
+        const done = polls >= 3
+        return HttpResponse.json({
+          ...JOB,
+          id: 'theirs',
+          status: done ? 'completed' : 'processing',
+          progress: done ? 100 : 50,
+          stage: 'Searching',
+          pages_total: 4,
+          pages_done: done ? 4 : 2,
+          result: done ? { added: 7, pages: [{ page_id: 'p2', page_number: 2, added: 4 }, { page_id: 'p3', page_number: 3, added: 3 }], template: { width_pt: 6, height_pt: 3 } } : null,
+        })
+      }),
+    )
+    await findOnPage()
+    await userEvent.click(screen.getByRole('button', { name: 'Also on every plan of this set' }))
+    expect(await screen.findByText(/Searching every plan of this set: 2 of 4 plans/)).toBeInTheDocument()
+    expect(await screen.findByText(/7 columns added on 2 pages\./)).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('says why a search stopped part-way, with what it added before', async () => {
+    const message = 'The set was too large to search in one go: the plans searched so far are kept. Search again to finish it.'
+    server.use(
+      http.get('*/api/v1/similar-columns-jobs/:id/', ({ params }) =>
+        HttpResponse.json({
+          ...JOB,
+          id: params.id,
+          status: 'failed',
+          error_code: 'timed_out',
+          error_message: message,
+          pages_total: 12,
+          pages_done: 5,
+          result: { added: 2, pages: [{ page_id: 'p2', page_number: 2, added: 2 }], template: { width_pt: 6, height_pt: 3 } },
+        }),
+      ),
+    )
+    const count = countRequests()
+    await findOnPage()
+    const listsBefore = count(/^GET .*\/drawing-sets\/[^/]+\/pages\/$/)
+    await userEvent.click(screen.getByRole('button', { name: 'Also on every plan of this set' }))
+    expect(await screen.findByText(`${message} 2 columns added on 1 page before it stopped.`)).toBeInTheDocument()
+    // Columns were added before it stopped: the pages are refreshed.
+    await waitFor(() => expect(count(/^GET .*\/drawing-sets\/[^/]+\/pages\/$/)).toBeGreaterThan(listsBefore))
+  })
+
+  it('shows the search again when the person leaves the page and comes back', async () => {
+    const view = await openProcessedPage()
     await screen.findByRole('table', { name: /Detected members/ })
-    await waitFor(() => expect(downloads).toBe(1))
     await userEvent.click(screen.getByRole('button', { name: 'Find similar' }))
     await userEvent.click(screen.getByRole('img', { name: /Drawing/ }))
-    expect(await screen.findByText(/3 columns added on this page/)).toBeInTheDocument()
+    await userEvent.click(await screen.findByRole('button', { name: 'Also on every plan of this set' }))
+    expect(await screen.findByText(/Searching every plan of this set/)).toBeInTheDocument()
+
+    await view.router.navigate(`/projects/${mockProjects.all[0]!.id}`)
+    await screen.findByRole('heading', { level: 1, name: 'Warehouse' })
+    await view.router.navigate(`/projects/${mockProjects.all[0]!.id}/pages/${view.page.id}`)
+    expect(await screen.findByText(/5 columns added on 1 page\./)).toBeInTheDocument()
+  })
+
+  it("shows the backend's message when there is nothing to match", async () => {
+    server.use(
+      http.post('*/api/v1/drawing-pages/:id/find-similar-columns/jobs/', () =>
+        HttpResponse.json({ error: { code: 'no_symbol', message: 'Nothing is drawn there to match.', details: {}, request_id: 'r' } }, { status: 409 }),
+      ),
+    )
+    await findOnPage()
     await userEvent.click(screen.getByRole('button', { name: 'Also on every plan of this set' }))
-    expect(await screen.findByText(/5 columns added on 1 page/)).toBeInTheDocument()
-    expect(downloads).toBe(1)
+    expect(await screen.findByRole('alert')).toHaveTextContent('Nothing is drawn there to match.')
+    expect(screen.queryByText(/Searching every plan/)).not.toBeInTheDocument()
   })
 })
+
+const JOB = {
+  page: 'p1',
+  drawing_set: 's1',
+  point: [500, 500],
+  progress: 0,
+  stage: '',
+  result: null,
+  error_code: '',
+  error_message: '',
+  requested_by: null,
+  created_at: '2026-10-26T09:00:00Z',
+  started_at: null,
+  finished_at: null,
+}
 
 describe('Permissions', () => {
   it('viewers see members read-only', async () => {

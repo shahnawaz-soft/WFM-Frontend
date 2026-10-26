@@ -1,12 +1,12 @@
 import { useId, useState } from 'react'
 
-import type { DrawingPage, ReviewReason } from '../../api/types'
+import type { DrawingPageListItem, ReviewReason } from '../../api/types'
 import { StatusBadge } from '../../components/ui/StatusBadge'
 import { isActiveJob, JOB_STATUS, jobStatus, PAGE_KIND_LABELS } from './status'
 
 /** Job progress / outcome and the current analysis result for one page. */
 /** ``showReasons`` is off where the full issue list is shown instead (page viewer). */
-export function PageResult({ page, showReasons = true }: { page: DrawingPage; showReasons?: boolean }) {
+export function PageResult({ page, showReasons = true }: { page: DrawingPageListItem; showReasons?: boolean }) {
   const job = page.latest_job
   const run = page.current_run
   const active = isActiveJob(job)

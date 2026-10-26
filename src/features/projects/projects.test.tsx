@@ -1,10 +1,12 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { http } from 'msw'
+import { beforeEach, describe, expect, it, onTestFinished } from 'vitest'
 
 import { mockBackend } from '../../test/mockBackend'
 import { mockProjects } from '../../test/mockProjects'
 import { renderApp } from '../../test/renderApp'
+import { server } from '../../test/server'
 
 const OWNER = 'estimator@steelo.test' // Esha Estimator (member)
 
@@ -122,6 +124,33 @@ describe('Project details', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Restore project' }))
     expect(await screen.findByRole('button', { name: 'Rename' })).toBeInTheDocument()
+  })
+})
+
+describe('Project page requests', () => {
+  it('loads the drawing sets in parallel with the project, not after it', async () => {
+    const project = mockProjects.create('Warehouse', OWNER)
+    mockBackend.startSession(OWNER)
+    let setsRequested = false
+    let releaseProject = () => {}
+    const projectHeld = new Promise<void>((resolve) => (releaseProject = resolve))
+    server.events.on('request:start', ({ request }) => {
+      if (new URL(request.url).pathname.endsWith(`/projects/${project.id}/drawing-sets/`)) setsRequested = true
+    })
+    onTestFinished(() => {
+      releaseProject()
+      server.events.removeAllListeners()
+    })
+    server.use(
+      http.get(`*/api/v1/projects/${project.id}/`, async () => {
+        await projectHeld // then falls through to the default handler
+      }),
+    )
+    renderApp(`/projects/${project.id}`)
+    await waitFor(() => expect(setsRequested).toBe(true)) // while the project is still loading
+    expect(screen.getByText('Loading project…')).toBeInTheDocument()
+    releaseProject()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Warehouse' })).toBeInTheDocument()
   })
 })
 

@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { http } from 'msw'
+import { http, HttpResponse } from 'msw'
 import { beforeAll, describe, expect, it, onTestFinished, vi } from 'vitest'
 
 import { mockBackend } from '../../test/mockBackend'
@@ -264,5 +264,85 @@ describe('Page workspace', () => {
     mockBackend.startSession(OWNER)
     renderApp(`/projects/${project.id}/pages/00000000-0000-0000-0000-000000000000`)
     expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeInTheDocument()
+  })
+})
+
+/** Backend Step B: the page list's runs will be RunListItem (no overlay data, no summary). */
+const RUN_LIST_ITEM_FIELDS = [
+  'id',
+  'status',
+  'engine_name',
+  'engine_version',
+  'engine_outdated',
+  'current_engine_version',
+  'page_kind',
+  'review_reasons',
+  'scale_text',
+  'scale_ratio',
+  'scale_confidence',
+  'member_count',
+  'created_at',
+]
+
+describe('Slim page list (Step B)', () => {
+  /** Pages 1 and 2 processed; the list sends slim runs. Opens page 1, then switches to page 2
+   *  while its detail is held: meanwhile the viewer has only page 2's list item (and page 1's
+   *  detail, kept as placeholder data). */
+  async function switchWithSlimList() {
+    const project = mockProjects.create('Warehouse', OWNER)
+    mockBackend.startSession(OWNER)
+    await acceptUpload(project.id, new File(['%PDF-1.7 pages:3'], 'GA.pdf'))
+    const [page1, page2] = mockDrawings.sets[0]!.pages
+    for (const p of [page1!, page2!]) {
+      await fetch(`http://localhost/api/v1/drawing-pages/${p.id}/run-plan/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+    }
+    // Page 2's detail differs from page 1's, so stale overlays would show.
+    Object.assign(mockDrawings.sets[0]!.pages[1]!.current_run!, { columns: [], grids: [], summary: { ...page2!.current_run!.summary, paths: 1234 } })
+
+    let releaseDetail = () => {}
+    const detailHeld = new Promise<void>((resolve) => (releaseDetail = resolve))
+    onTestFinished(() => releaseDetail())
+    server.use(
+      http.get('*/api/v1/drawing-sets/:id/pages/', () =>
+        HttpResponse.json(
+          mockDrawings.sets[0]!.pages.map((p) => ({
+            ...p,
+            current_run: p.current_run && Object.fromEntries(Object.entries(p.current_run).filter(([k]) => RUN_LIST_ITEM_FIELDS.includes(k))),
+          })),
+        ),
+      ),
+      http.get(`*/api/v1/drawing-pages/${page2!.id}/`, async () => {
+        await detailHeld // then falls through to the default handler
+      }),
+    )
+    renderApp(`/projects/${project.id}/pages/${page1!.id}`)
+    await screen.findByRole('heading', { level: 1, name: /^Page 1 of 3/ })
+    expect(await screen.findByText('Column (3)')).toBeInTheDocument() // page 1's own overlays
+    await userEvent.click(screen.getByRole('button', { name: 'Next →' }))
+    await screen.findByRole('heading', { level: 1, name: /^Page 2 of 3/ })
+    return { releaseDetail }
+  }
+
+  it('shows loading for overlays and run panels until the page detail arrives, then its data', async () => {
+    const { releaseDetail } = await switchWithSlimList()
+
+    // Page 2 from its list item: no overlays or counts (not page 1's either), and no crash.
+    expect(screen.getByText('Loading the drawing overlays…')).toBeInTheDocument()
+    expect(screen.queryByText(/^Column \(/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('checkbox', { name: /Grids/ })).not.toBeInTheDocument()
+    await userEvent.click(tab('Page'))
+    expect(within(screen.getByRole('tabpanel')).getByText('Loading the page analysis…')).toBeInTheDocument()
+    await userEvent.click(tab('Scale'))
+    expect(within(screen.getByRole('tabpanel')).getByText('Loading the scale…')).toBeInTheDocument()
+    await userEvent.click(tab('Level'))
+    expect(within(screen.getByRole('tabpanel')).getByText('Loading the grid intersections…')).toBeInTheDocument()
+
+    releaseDetail()
+    await waitFor(() => expect(screen.queryByText('Loading the drawing overlays…')).not.toBeInTheDocument())
+    expect(screen.queryByText(/^Column \(/)).not.toBeInTheDocument() // page 2 has none
+    await userEvent.click(tab('Scale'))
+    expect(within(screen.getByRole('tabpanel')).getByText(/^1\/8" = 1'-0"/)).toBeInTheDocument()
+    await userEvent.click(tab('Page'))
+    expect(within(screen.getByRole('tabpanel')).getByText('1,234')).toBeInTheDocument() // page 2's vector lines
   })
 })

@@ -1,10 +1,10 @@
-import type { DrawingPage } from '../../api/types'
+import type { DrawingPageListItem } from '../../api/types'
 import { StatusBadge } from '../../components/ui/StatusBadge'
 import { Thumbnail } from '../drawings/Thumbnail'
 import { PAGE_STATUS } from '../drawings/status'
 
 interface PageStripProps {
-  pages: DrawingPage[]
+  pages: DrawingPageListItem[]
   currentId: string
   setName: string
   onOpen: (id: string) => void

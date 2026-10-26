@@ -52,4 +52,17 @@ describe('Scale panel', () => {
     expect(screen.getByText('Not found')).toBeInTheDocument()
     expect(screen.getByText('No scale was found to check the 15 printed dimensions against.')).toBeInTheDocument()
   })
+
+  it('renders without a summary (older runs, or keys missing)', () => {
+    const noSummary = { ...run({}), summary: undefined } as unknown as ExtractionRun
+    render(<ScalePanel run={noSummary} />)
+    expect(screen.getByText('Confirmed by dimensions')).toBeInTheDocument()
+    expect(screen.queryByText(/states several scales/)).toBeNull()
+  })
+
+  it('shows a loading state while the page detail is loading', () => {
+    render(<ScalePanel run={undefined} />)
+    expect(screen.getByText('Loading the scale…')).toBeInTheDocument()
+    expect(screen.queryByText(/Run Plan on this page/)).toBeNull()
+  })
 })

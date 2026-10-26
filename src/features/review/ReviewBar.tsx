@@ -6,7 +6,7 @@ import { addPageToProject, removePageFromProject } from '../../api/abm'
 
 import { toApiError } from '../../api/errors'
 import { acceptAllOpen, markPageReviewed, reopenPageReview } from '../../api/members'
-import type { DrawingPage, ExtractedMember } from '../../api/types'
+import type { DrawingPageListItem, ExtractedMember } from '../../api/types'
 import { notify } from '../../components/feedback/toastStore'
 import { Button } from '../../components/ui/Button'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
@@ -14,7 +14,7 @@ import { OPEN_STATUSES } from './reviewStatus'
 
 interface ReviewBarProps {
   projectId: string
-  page: DrawingPage
+  page: DrawingPageListItem
   members: ExtractedMember[]
   canEdit: boolean
   onChanged: () => void
