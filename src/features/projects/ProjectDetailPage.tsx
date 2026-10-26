@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, usePrefetchQuery, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router'
 
@@ -16,6 +16,7 @@ import { ProjectAbmCard } from '../abm/ProjectAbmCard'
 import { ProjectOutputsCard } from '../finalize/ProjectOutputsCard'
 import { ProjectReviewCard } from '../review-summary/ProjectReviewCard'
 import { DrawingsSection } from '../drawings/DrawingsSection'
+import { drawingSetsQuery } from '../drawings/queries'
 import { ProjectSectionData } from '../sections/ProjectSectionData'
 import { MembersSection } from './MembersSection'
 import { projectCan } from './useProjectPermissions'
@@ -23,6 +24,8 @@ import { projectCan } from './useProjectPermissions'
 export function ProjectDetailPage() {
   const { projectId = '' } = useParams()
   const query = useQuery({ queryKey: ['project', projectId], queryFn: () => getProject(projectId) })
+  // Started with the project rather than once it has loaded and the Drawings section renders.
+  usePrefetchQuery(drawingSetsQuery(projectId))
   const heading = useRef<HTMLHeadingElement>(null)
   const loadedId = query.data?.id
   // Move focus to the page title once per project, so screen readers announce the page.
