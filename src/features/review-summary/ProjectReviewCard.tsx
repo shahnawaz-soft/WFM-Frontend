@@ -1,8 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 
-import { listDrawingSets } from '../../api/drawings'
 import { getProjectSummary } from '../../api/review'
 import type { Project, ProjectSummary } from '../../api/types'
 import { ErrorState } from '../../components/feedback/States'
@@ -10,6 +9,7 @@ import { Button } from '../../components/ui/Button'
 import { StatusBadge } from '../../components/ui/StatusBadge'
 import type { StatusTone } from '../../components/ui/StatusIcon'
 import { formatTonnes, formatTons } from '../abm/format'
+import { drawingSetsQuery } from '../drawings/queries'
 import { FinalizeDialog, ReopenDialog } from '../finalize/FinalizeDialog'
 import { projectCan } from '../projects/useProjectPermissions'
 
@@ -86,12 +86,16 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
  *  do next, the headline numbers, and what still needs a person. */
 export function ProjectReviewCard({ project }: { project: Project }) {
   const summary = useQuery({ queryKey: ['abm', project.id, 'review-summary'], queryFn: () => getProjectSummary(project.id), staleTime: 0 })
-  // Same cache as the Drawings card: an upload, or a set finishing its preparation, refreshes the summary.
-  const sets = useQuery({ queryKey: ['project', project.id, 'drawing-sets'], queryFn: () => listDrawingSets(project.id) })
-  const setsSignature = (sets.data ?? []).map((d) => `${d.id}:${d.status}:${d.page_count}`).join('|')
+  // Same cache as the Drawings card: an upload, or a set finishing its preparation, refreshes the
+  // summary. Not the sets' first arrival: the summary is being fetched for this view already.
+  const sets = useQuery(drawingSetsQuery(project.id))
+  const setsSignature = sets.data?.map((d) => `${d.id}:${d.status}:${d.page_count}`).join('|')
+  const seenSets = useRef<string | undefined>(undefined)
   const refetchSummary = summary.refetch
   useEffect(() => {
-    if (setsSignature) void refetchSummary()
+    if (setsSignature === undefined) return
+    if (seenSets.current !== undefined && seenSets.current !== setsSignature) void refetchSummary()
+    seenSets.current = setsSignature
   }, [setsSignature, refetchSummary])
   const [allPages, setAllPages] = useState(false)
   const [dialog, setDialog] = useState<'finalize' | 'reopen' | null>(null)
