@@ -69,6 +69,27 @@ export type UploadLimits = Schemas['UploadLimits']
 
 export type ProcessingJob = Schemas['ProcessingJob']
 export type ExtractionRun = Schemas['ExtractionRun']
+/** A run as a drawing set's page list gives it (backend Step B, "RunListItem"): no overlay data
+ *  (columns, grids, grid points, grid spacings, scale check) and no summary. Those come from the
+ *  page detail only. A full ExtractionRun satisfies it, so this works with either list. */
+export type RunListItem = Pick<
+  ExtractionRun,
+  | 'id'
+  | 'status'
+  | 'engine_name'
+  | 'engine_version'
+  | 'engine_outdated'
+  | 'current_engine_version'
+  | 'page_kind'
+  | 'review_reasons'
+  | 'scale_text'
+  | 'scale_ratio'
+  | 'scale_confidence'
+  | 'member_count'
+  | 'created_at'
+>
+/** A page as a drawing set's page list gives it (backend Step B, "DrawingPageListItem"). */
+export type DrawingPageListItem = Omit<DrawingPage, 'current_run'> & { current_run: RunListItem | null }
 export type ColumnSymbol = Schemas['ColumnSymbol']
 export type GridLine = Schemas['GridLine']
 export type GridPoint = Schemas['GridPoint']

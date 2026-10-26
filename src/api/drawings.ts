@@ -1,5 +1,5 @@
 import { apiClient } from './client'
-import type { DrawingPage, DrawingSet, UploadLimits } from './types'
+import type { DrawingPage, DrawingPageListItem, DrawingSet, UploadLimits } from './types'
 
 export async function getUploadLimits(): Promise<UploadLimits> {
   const { data } = await apiClient.get<UploadLimits>('/api/v1/drawing-sets/limits/')
@@ -11,8 +11,8 @@ export async function listDrawingSets(projectId: string): Promise<DrawingSet[]> 
   return data
 }
 
-export async function listPages(drawingSetId: string): Promise<DrawingPage[]> {
-  const { data } = await apiClient.get<DrawingPage[]>(`/api/v1/drawing-sets/${drawingSetId}/pages/`)
+export async function listPages(drawingSetId: string): Promise<DrawingPageListItem[]> {
+  const { data } = await apiClient.get<DrawingPageListItem[]>(`/api/v1/drawing-sets/${drawingSetId}/pages/`)
   return data
 }
 

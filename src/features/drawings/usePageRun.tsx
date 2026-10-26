@@ -3,7 +3,7 @@ import { useState } from 'react'
 
 import { toApiError } from '../../api/errors'
 import { runPlan } from '../../api/processing'
-import type { DrawingPage } from '../../api/types'
+import type { DrawingPageListItem } from '../../api/types'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { isActiveJob } from './status'
 
@@ -13,7 +13,7 @@ export interface PageRunAction {
 }
 
 /** The single source of truth for which processing action a page offers (grid + viewer). */
-export function usePageRun(page: DrawingPage, canRun: boolean) {
+export function usePageRun(page: DrawingPageListItem, canRun: boolean) {
   const queryClient = useQueryClient()
   const [confirmRerun, setConfirmRerun] = useState(false)
   // Set when the server says people have already reviewed this page (OD-18).

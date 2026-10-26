@@ -1,5 +1,6 @@
 import { toApiError } from '../../../api/errors'
-import type { DrawingPage } from '../../../api/types'
+import type { DrawingPageListItem, ExtractionRun } from '../../../api/types'
+import { LoadingState } from '../../../components/feedback/States'
 import { Button } from '../../../components/ui/Button'
 import { StatusBadge } from '../../../components/ui/StatusBadge'
 import { PageResult } from '../../drawings/PageResult'
@@ -15,10 +16,13 @@ const SHEET_KIND_LABELS: Record<string, string> = {
   notes: 'Notes',
 }
 
-export function PagePanel({ page, canRun }: { page: DrawingPage; canRun: boolean }) {
+/** ``page`` may be the page list's item (status, latest job, slim run); ``run`` is the page
+ *  detail's run (Step B): null = no run, undefined = the detail is loading. */
+export function PagePanel({ page, run, canRun }: { page: DrawingPageListItem; run: ExtractionRun | null | undefined; canRun: boolean }) {
   const { action, mutation, confirmDialog } = usePageRun(page, canRun)
   const status = PAGE_STATUS[page.status]
-  const run = page.current_run
+  // Summary keys are optional: older runs may lack some.
+  const sheetKind = run?.summary?.sheet_kind
   return (
     <div className="panel">
       <div className="panel__header">
@@ -35,23 +39,24 @@ export function PagePanel({ page, canRun }: { page: DrawingPage; canRun: boolean
       )}
       {page.error_message && <p className="page-card__error">{page.error_message}</p>}
       <PageResult page={page} showReasons={false} />
+      {page.current_run && run === undefined && <LoadingState label="Loading the page analysis…" />}
       {run && (
         <dl className="facts">
           <dt>Content</dt>
           <dd>{PAGE_KIND_LABELS[run.page_kind]}</dd>
-          {run.summary.sheet_kind && run.summary.sheet_kind !== 'unknown' && (
+          {sheetKind && sheetKind !== 'unknown' && (
             <>
               <dt>Sheet</dt>
               <dd>
-                {SHEET_KIND_LABELS[run.summary.sheet_kind]}
-                {!['plan', 'notes'].includes(run.summary.sheet_kind) && <span className="muted"> · members taken from plans only</span>}
+                {SHEET_KIND_LABELS[sheetKind]}
+                {!['plan', 'notes'].includes(sheetKind) && <span className="muted"> · members taken from plans only</span>}
               </dd>
             </>
           )}
           <dt>Vector lines</dt>
-          <dd>{run.summary.paths.toLocaleString()}</dd>
+          <dd>{run.summary?.paths?.toLocaleString() ?? '—'}</dd>
           <dt>Text characters</dt>
-          <dd>{run.summary.text_chars.toLocaleString()}</dd>
+          <dd>{run.summary?.text_chars?.toLocaleString() ?? '—'}</dd>
           <dt>Engine</dt>
           <dd>
             {run.engine_name} {run.engine_version}

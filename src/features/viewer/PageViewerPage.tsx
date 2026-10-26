@@ -7,6 +7,7 @@ import { toApiError } from '../../api/errors'
 import { findSimilarColumns, type FindSimilarResult } from '../../api/processing'
 import { listPageIssues, listPageMembers } from '../../api/members'
 import { getProject } from '../../api/projects'
+import type { DrawingPageListItem } from '../../api/types'
 import { ErrorState, LoadingState } from '../../components/feedback/States'
 import { Button } from '../../components/ui/Button'
 import { StatusBadge } from '../../components/ui/StatusBadge'
@@ -99,8 +100,14 @@ export function PageViewerPage() {
     retry: false,
   })
 
-  const current =
-    page.data?.id === pageId && !page.isPlaceholderData ? page.data : siblings.data?.find((p) => p.id === pageId)
+  // This page's own detail: not the previous page's, kept as placeholder while switching. The
+  // only source of overlay and panel data (columns, grids, grid points, summary, scale check,
+  // grid spacings): the page list's runs will not carry them (backend Step B).
+  const detail = page.data?.id === pageId && !page.isPlaceholderData ? page.data : undefined
+  const current: DrawingPageListItem | undefined = detail ?? siblings.data?.find((p) => p.id === pageId)
+  /** The run with its overlay and panel data: null = no run, undefined = the detail is loading. */
+  const detailRun = detail ? detail.current_run : undefined
+  const runLoading = !detail && Boolean(current?.current_run)
   const runId = current?.current_run?.id
   const members = useQuery({
     queryKey: ['drawing-page', pageId, 'members', runId],
@@ -126,7 +133,7 @@ export function PageViewerPage() {
   )
   const kindsPresent = useMemo(() => [...new Set(shown.map(memberKind))] as MemberKind[], [shown])
   const lowCount = useMemo(() => shown.filter((m) => memberKind(m) === 'low').length, [shown])
-  const gridPoints = current?.current_run?.grid_points
+  const gridPoints = detailRun?.grid_points
   const cache = useMemberCache(pageId, runId)
   const selected = allMembers.find((m) => m.id === selectedId) ?? null
   const cancelPlace = useCallback(() => {
@@ -353,7 +360,7 @@ export function PageViewerPage() {
               onShowMember={showMember}
             />
           )}
-          {tab === 'scale' && <ScalePanel run={current.current_run} />}
+          {tab === 'scale' && <ScalePanel run={current.current_run ? detailRun : null} />}
           {tab === 'level' && (
             <LevelPanel
               key={current.id}
@@ -363,6 +370,7 @@ export function PageViewerPage() {
               picked={pickedReference}
               pickedLabel={pickedLabel}
               gridPoints={gridPoints}
+              gridPointsLoading={runLoading}
               onPick={() => {
                 setAdding(null)
                 setPickingReference(true)
@@ -381,7 +389,7 @@ export function PageViewerPage() {
           {tab === 'page' && (
             <>
               {finalised && project.data && <ProjectLockedNotice project={project.data} />}
-              <PagePanel key={current.id} page={current} canRun={canRun} />
+              <PagePanel key={current.id} page={current} run={current.current_run ? detailRun : null} canRun={canRun} />
             </>
           )}
         </aside>
@@ -413,8 +421,8 @@ export function PageViewerPage() {
                 : 'Click the reference grid intersection'
               : undefined
           }
-          columns={current.current_run?.columns}
-          grids={current.current_run?.grids}
+          columns={detailRun?.columns ?? undefined}
+          grids={detailRun?.grids ?? undefined}
           showGrids={showGrids}
           onPlace={place}
           onCancelPlace={cancelPlace}
@@ -485,22 +493,25 @@ export function PageViewerPage() {
                   </Button>
                 </span>
               )}
-              {Boolean(current.current_run?.grids?.length) && (
+              {runLoading && (
+                <span className="muted" role="status">
+                  Loading the drawing overlays…
+                </span>
+              )}
+              {Boolean(detailRun?.grids?.length) && (
                 <label className="checkbox">
                   <input type="checkbox" checked={showGrids} onChange={(e) => setShowGrids(e.target.checked)} /> Grids (
-                  {current.current_run!.grids!.filter((g) => !g.secondary).length})
+                  {detailRun!.grids!.filter((g) => !g.secondary).length})
                 </label>
               )}
-              {showLabels && (kindsPresent.length > 0 || Boolean(current.current_run?.columns?.length)) && (
+              {showLabels && (kindsPresent.length > 0 || Boolean(detailRun?.columns?.length)) && (
                 <ul className="legend" aria-label="Legend">
-                  {Boolean(current.current_run?.columns?.length) && (
+                  {Boolean(detailRun?.columns?.length) && (
                     <li>
                       <svg width="22" height="12" aria-hidden="true">
                         <rect x="6" y="1" width="10" height="10" className="column-overlay__key" />
                       </svg>
-                      <span title={columnBreakdown(current.current_run!.columns!)}>
-                        Column ({current.current_run!.columns!.length})
-                      </span>
+                      <span title={columnBreakdown(detailRun!.columns!)}>Column ({detailRun!.columns!.length})</span>
                     </li>
                   )}
                   {kindsPresent.map((kind) => (
