@@ -192,7 +192,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description With scope=set the whole drawing set is searched in the request, which a large set can make time out: use POST /drawing-pages/{id}/find-similar-columns/jobs/ instead (kept here until the frontend has moved). */
+        /** @description Searches this page only. scope=set (the whole drawing set, in the request) was removed on 27 Oct 2026 and answers 400 set_scope_moved: use POST /drawing-pages/{id}/find-similar-columns/jobs/. */
         post: operations["drawing_pages_find_similar_columns_create"];
         delete?: never;
         options?: never;
@@ -1960,6 +1960,36 @@ export interface components {
             readonly reference_point: number[] | null;
             readonly reference_label: string;
         };
+        /**
+         * @description A page as a drawing set's page list gives it: its run without overlay data or summary
+         *     (Step B, 27 Oct 2026). The page detail (``DrawingPageSerializer``) keeps everything.
+         */
+        DrawingPageListItem: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly drawing_set: string;
+            readonly page_number: number;
+            readonly status: components["schemas"]["PageStatusEnum"];
+            readonly thumbnail_status: components["schemas"]["ThumbnailStatusEnum"];
+            /** Format: double */
+            readonly width_pt: number | null;
+            /** Format: double */
+            readonly height_pt: number | null;
+            readonly rotation: number;
+            readonly error_code: string;
+            readonly error_message: string;
+            readonly latest_job: components["schemas"]["PageJob"] | null;
+            readonly current_run: components["schemas"]["RunListItem"] | null;
+            readonly level_label: string;
+            /** Format: decimal */
+            readonly elevation_mm: string | null;
+            /** @description Elevation in feet-inches */
+            readonly elevation_display: string;
+            /** @description Reference grid point [x, y] in PDF points (OD-10) */
+            readonly reference_point: number[] | null;
+            readonly reference_label: string;
+        };
         DrawingSet: {
             /** Format: uuid */
             readonly id: string;
@@ -2077,6 +2107,11 @@ export interface components {
             /** Format: uuid */
             readonly run: string;
         };
+        /**
+         * @description A run as a drawing set's page list gives it (Step B, 27 Oct 2026): no overlay data and
+         *     no summary, which the viewer takes from the page detail only
+         *     (docs/briefs/frontend-step-b-slim-pages.md).
+         */
         ExtractionRun: {
             /** Format: uuid */
             readonly id: string;
@@ -2139,7 +2174,12 @@ export interface components {
         FindSimilarRequest: {
             /** @description [x, y] in PDF points on the page: a column symbol Steelo missed */
             point: number[];
-            /** @default page */
+            /**
+             * @description This page only. Every plan of the drawing set is searched by a job: POST /drawing-pages/{id}/find-similar-columns/jobs/ (scope=set: 400 set_scope_moved)
+             *
+             *     * `page` - page
+             * @default page
+             */
             scope: components["schemas"]["FindSimilarScopeEnum"];
         };
         FindSimilarResult: {
@@ -2151,10 +2191,9 @@ export interface components {
         };
         /**
          * @description * `page` - page
-         *     * `set` - set
          * @enum {string}
          */
-        FindSimilarScopeEnum: "page" | "set";
+        FindSimilarScopeEnum: "page";
         /**
          * @description * `symbol` - symbol
          *     * `label` - label
@@ -2877,6 +2916,32 @@ export interface components {
          * @enum {string}
          */
         RotationEnum: "F" | "T" | "B" | "BL";
+        /**
+         * @description A run as a drawing set's page list gives it (Step B, 27 Oct 2026): no overlay data and
+         *     no summary, which the viewer takes from the page detail only
+         *     (docs/briefs/frontend-step-b-slim-pages.md).
+         */
+        RunListItem: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly status: components["schemas"]["RunStatusEnum"];
+            readonly engine_name: string;
+            readonly engine_version: string;
+            /** @description Read by an older engine: running the page again may read it differently */
+            readonly engine_outdated: boolean;
+            /** @description The engine version pages are read with now */
+            readonly current_engine_version: string | null;
+            readonly page_kind: components["schemas"]["PageKindEnum"];
+            review_reasons: components["schemas"]["ReviewReason"][];
+            readonly scale_text: string;
+            /** Format: double */
+            readonly scale_ratio: number | null;
+            /** Format: double */
+            readonly scale_confidence: number | null;
+            readonly member_count: number;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
         RunPlanRequest: {
             /**
              * @description Confirm re-running a page whose members have already been reviewed/corrected.
@@ -4354,7 +4419,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DrawingPage"][];
+                    "application/json": components["schemas"]["DrawingPageListItem"][];
                 };
             };
         };
