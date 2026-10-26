@@ -192,6 +192,7 @@ interface MockWireframe {
   created_by: string
   created_at: string
   finished_at: string
+  error_code: string
   error_message: string
   summary: object
   elements: Record<string, unknown>[]
@@ -375,6 +376,7 @@ function generateMock(projectId: string, user: string): MockWireframe {
     created_by: user,
     created_at: new Date().toISOString(),
     finished_at: new Date().toISOString(),
+    error_code: '',
     error_message: '',
     summary: {
       elements: elements.length,

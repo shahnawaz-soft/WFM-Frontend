@@ -1,11 +1,13 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { http, HttpResponse } from 'msw'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { mockBackend } from '../../test/mockBackend'
 import { acceptUpload, mockDrawings } from '../../test/mockDrawings'
 import { mockProjects } from '../../test/mockProjects'
 import { preloadRoutes, renderApp } from '../../test/renderApp'
+import { server } from '../../test/server'
 
 vi.mock('../viewer/pdf', () => ({ loadPdf: async () => ({ numPages: 1 }) }))
 vi.mock('../viewer/PdfPageCanvas', async () => {
@@ -318,6 +320,23 @@ describe('Wireframe', () => {
     const notice = await screen.findByRole('note', { name: 'Wireframe out of date' })
     expect(notice).toHaveTextContent('level set-up changed on 1 page (page 1 · GA.pdf)')
     expect(notice).toHaveTextContent('Choose Generate again')
+  })
+
+  it.each([
+    ['timed_out', 'Timed out', 'Generating the wireframe took too long and was stopped. Nothing was lost. Generate it again.'],
+    ['generation_error', 'Failed', 'Generating the wireframe failed unexpectedly. Nothing was lost. Generate it again.'],
+  ])('says why a generation failed (%s)', async (code, badge, message) => {
+    const { project } = await addedPage()
+    const generated = await call('POST', `/projects/${project.id}/wireframes/`)
+    server.use(
+      http.get('*/api/v1/projects/:id/wireframes/', () =>
+        HttpResponse.json([{ ...generated, status: 'failed', error_code: code, error_message: message }]),
+      ),
+    )
+    renderApp(`/projects/${project.id}/wireframe`)
+    const revision = await screen.findByRole('region', { name: /Revision 1/ })
+    expect(within(revision).getByRole('heading', { name: new RegExp(`Revision 1 ${badge}`) })).toBeInTheDocument()
+    expect(within(revision).getByText(message)).toBeInTheDocument()
   })
 
   it('needs pages in the project first', async () => {
