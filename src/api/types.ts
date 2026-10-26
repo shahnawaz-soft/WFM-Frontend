@@ -69,6 +69,7 @@ export type UploadLimits = Schemas['UploadLimits']
 
 export type ProcessingJob = Schemas['ProcessingJob']
 export type ExtractionRun = Schemas['ExtractionRun']
+export type SimilarColumnsJob = Schemas['SimilarColumnsJob']
 /** A run as a drawing set's page list gives it (backend Step B, "RunListItem"): no overlay data
  *  (columns, grids, grid points, grid spacings, scale check) and no summary. Those come from the
  *  page detail only. A full ExtractionRun satisfies it, so this works with either list. */

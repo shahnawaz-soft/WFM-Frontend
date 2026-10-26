@@ -1,6 +1,6 @@
 import { apiClient } from './client'
 import type { components } from './schema'
-import type { ProcessingJob } from './types'
+import type { ProcessingJob, SimilarColumnsJob } from './types'
 
 type Schemas = components['schemas']
 
@@ -32,9 +32,22 @@ export async function listPageJobs(pageId: string): Promise<ProcessingJob[]> {
 
 export type FindSimilarResult = Schemas['FindSimilarResult']
 
-/** A column symbol Steelo missed (PDF points on the page): every mark drawn like it becomes a
- *  column, on this page or (``set``) every plan of its drawing set. */
-export async function findSimilarColumns(pageId: string, point: [number, number], scope: 'page' | 'set' = 'page'): Promise<FindSimilarResult> {
-  const { data } = await apiClient.post<FindSimilarResult>(`/api/v1/drawing-pages/${pageId}/find-similar-columns/`, { point, scope })
+/** A column symbol Steelo missed (PDF points on the page): every mark drawn like it on this page
+ *  becomes a column. (Every plan of the set: ``startSimilarColumnsJob``.) */
+export async function findSimilarColumns(pageId: string, point: [number, number]): Promise<FindSimilarResult> {
+  const { data } = await apiClient.post<FindSimilarResult>(`/api/v1/drawing-pages/${pageId}/find-similar-columns/`, { point, scope: 'page' })
+  return data
+}
+
+/** The same on every plan of the page's drawing set, as a job a worker runs: poll it with
+ *  ``getSimilarColumnsJob``. One search per drawing set at a time: a second start answers 409
+ *  ``similar_search_running`` with the running job's id in ``details.job_id``. */
+export async function startSimilarColumnsJob(pageId: string, point: [number, number]): Promise<SimilarColumnsJob> {
+  const { data } = await apiClient.post<SimilarColumnsJob>(`/api/v1/drawing-pages/${pageId}/find-similar-columns/jobs/`, { point })
+  return data
+}
+
+export async function getSimilarColumnsJob(jobId: string): Promise<SimilarColumnsJob> {
+  const { data } = await apiClient.get<SimilarColumnsJob>(`/api/v1/similar-columns-jobs/${jobId}/`)
   return data
 }

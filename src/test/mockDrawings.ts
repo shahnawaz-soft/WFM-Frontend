@@ -16,6 +16,8 @@ interface StoredSet {
 }
 
 let sets: StoredSet[] = []
+/** Set-wide find-similar jobs, by id. */
+let similarJobs: Record<string, Record<string, unknown>> = {}
 let beamMarks: { mark: string; beams: number; length_mm: string; length_display: string; sections: string[]; pages: number[] }[] = []
 let connectionLines: Record<string, unknown>[] = []
 let connectionTemplates: { id: string; name: string; note: string; version: number; updated_at: string; lines: ReturnType<typeof templateLine>[] }[] = []
@@ -514,6 +516,7 @@ let noProposedElevation = new Set<string>()
 export const mockDrawings = {
   reset() {
     sets = []
+    similarJobs = {}
     connectionLines = []
     connectionTemplates = []
     wireframes = []
@@ -1337,6 +1340,59 @@ export const drawingHandlers = [
     if (!page) return err(404, 'not_found', 'Page not found.')
     const pages = body.scope === 'set' ? [{ page_id: page.id, page_number: 2, added: 5 }] : [{ page_id: page.id, page_number: page.page_number, added: 3 }]
     return HttpResponse.json({ added: pages[0]!.added, pages, template: { width_pt: 6, height_pt: 3 } })
+  }),
+  // Find similar on every plan of the set, as a job. Each poll moves it on by one plan: queued,
+  // then one plan searched per poll, then completed (5 columns on page 2, as the sync search).
+  http.post('*/api/v1/drawing-pages/:id/find-similar-columns/jobs/', async ({ params, request }) => {
+    const body = (await request.json()) as { point: [number, number] }
+    const owner = sets.find((x) => x.pages.some((p) => p.id === params.id))
+    const page = owner?.pages.find((p) => p.id === params.id)
+    if (!owner || !page) return err(404, 'not_found', 'Page not found.')
+    if (!page.current_run) return err(409, 'page_not_run', 'Run this page first.')
+    const running = Object.values(similarJobs).find((j) => j.drawing_set === owner.set.id && ['queued', 'processing'].includes(j.status as string))
+    if (running) {
+      return HttpResponse.json(
+        { error: { code: 'similar_search_running', message: 'A search of this drawing set is already running.', details: { job_id: running.id }, request_id: 'r' } },
+        { status: 409 },
+      )
+    }
+    const job = {
+      id: crypto.randomUUID(),
+      page: page.id,
+      drawing_set: owner.set.id,
+      point: body.point,
+      status: 'queued',
+      progress: 0,
+      stage: 'Queued',
+      pages_total: owner.pages.length,
+      pages_done: 0,
+      result: null,
+      error_code: '',
+      error_message: '',
+      requested_by: null,
+      created_at: new Date().toISOString(),
+      started_at: null,
+      finished_at: null,
+    }
+    similarJobs[job.id] = job
+    return HttpResponse.json(job, { status: 202 })
+  }),
+  http.get('*/api/v1/similar-columns-jobs/:id/', ({ params }) => {
+    const job = similarJobs[params.id as string]
+    if (!job) return err(404, 'not_found', 'Not found.')
+    const total = job.pages_total as number
+    if (['queued', 'processing'].includes(job.status as string)) {
+      const done = job.status === 'queued' ? 0 : (job.pages_done as number) + 1
+      const page2 = sets.find((x) => x.set.id === job.drawing_set)?.pages[1]
+      const result = { added: 5, pages: [{ page_id: page2?.id ?? job.page, page_number: 2, added: 5 }], template: { width_pt: 6, height_pt: 3 } }
+      Object.assign(
+        job,
+        done >= total
+          ? { status: 'completed', progress: 100, stage: 'Done', pages_done: total, result, finished_at: new Date().toISOString() }
+          : { status: 'processing', progress: Math.round((done / total) * 100), stage: `Searched ${done} of ${total} plans`, pages_done: done, result: done >= 2 ? result : null },
+      )
+    }
+    return HttpResponse.json(job)
   }),
   // Column Scheduler: tested on its own (ColumnScheduler.test.tsx); the page only needs a list.
   http.get('*/api/v1/wireframes/:id/columns/', () => HttpResponse.json({ levels: [], columns: [] })),

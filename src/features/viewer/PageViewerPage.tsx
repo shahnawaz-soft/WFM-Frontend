@@ -28,6 +28,8 @@ import { LevelPanel } from './panels/LevelPanel'
 import { PagePanel } from './panels/PagePanel'
 import { QuantitiesPanel } from './panels/QuantitiesPanel'
 import { ScalePanel } from './panels/ScalePanel'
+import { SetSimilarSearchStatus } from './SetSimilarSearchStatus'
+import { useSetSimilarSearch } from './useSetSimilarSearch'
 import { loadPdf } from './pdf'
 import { ViewerRail, type ViewerTab } from './ViewerRail'
 
@@ -62,7 +64,7 @@ export function PageViewerPage() {
   const [pickedLabel, setPickedLabel] = useState<string | null>(null)
   // Find similar: a click on a column symbol Steelo missed; its likes become columns.
   const [findingSimilar, setFindingSimilar] = useState(false)
-  const [similarFound, setSimilar] = useState<{ pageId: string; point: [number, number]; result: FindSimilarResult; scope: 'page' | 'set' } | null>(null)
+  const [similarFound, setSimilar] = useState<{ pageId: string; point: [number, number]; result: FindSimilarResult } | null>(null)
   const similar = similarFound?.pageId === pageId ? similarFound : null  // shown on its own page only
   const queryClient = useQueryClient()
 
@@ -141,24 +143,32 @@ export function PageViewerPage() {
     setPickingReference(false)
     setFindingSimilar(false)
   }, [])
+  // After Find similar added columns: the pages' columns, their members (new ABM entries) and
+  // the set's pages change. The set's PDF does not: invalidating it would download and parse
+  // the drawing again.
+  const { refetch: refetchMembers } = cache
+  const refreshAfterSimilar = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: ['drawing-page'] })
+    void queryClient.invalidateQueries({ queryKey: ['drawing-set', setId], predicate: (q) => q.queryKey[2] !== 'pdf' })
+    void refetchMembers()
+  }, [queryClient, setId, refetchMembers])
+  // This page only: one request.
   const findSimilar = useMutation({
-    mutationFn: ({ point, scope }: { point: [number, number]; scope: 'page' | 'set' }) => findSimilarColumns(pageId, point, scope),
-    onSuccess: (result, { point, scope }) => {
-      setSimilar({ pageId, point, result, scope })
-      // The page's columns, its members (new ABM entries) and the set's pages all change.
-      // The set's PDF does not: invalidating it would download and parse the drawing again.
-      void queryClient.invalidateQueries({ queryKey: ['drawing-page'] })
-      void queryClient.invalidateQueries({ queryKey: ['drawing-set', setId], predicate: (q) => q.queryKey[2] !== 'pdf' })
-      void cache.refetch()
+    mutationFn: (point: [number, number]) => findSimilarColumns(pageId, point),
+    onSuccess: (result, point) => {
+      setSimilar({ pageId, point, result })
+      refreshAfterSimilar()
     },
   })
+  // Every plan of the set: a job the viewer follows (and finds again when the person comes back).
+  const setSearch = useSetSimilarSearch(pageId, setId, refreshAfterSimilar)
   const place = useCallback(
     (location: [number, number]) => {
       setPlacing(false)
       if (findingSimilar) {
         setFindingSimilar(false)
         setSimilar(null)
-        findSimilar.mutate({ point: location, scope: 'page' })
+        findSimilar.mutate(location)
         return
       }
       if (pickingReference) {
@@ -474,24 +484,37 @@ export function PageViewerPage() {
                   {toApiError(findSimilar.error).message}
                 </span>
               )}
-              {similar && (
+              {similar && !setSearch.job && (
                 <span className="similar-result" role="status">
                   {similar.result.added
-                    ? `${similar.result.added} column${similar.result.added === 1 ? '' : 's'} added${
-                        similar.scope === 'set' ? ` on ${similar.result.pages.length} page${similar.result.pages.length === 1 ? '' : 's'}` : ' on this page'
-                      }.`
-                    : similar.scope === 'set'
-                      ? 'No more found on the other plans.'
-                      : 'No new columns: those found are already columns.'}{' '}
-                  {similar.scope === 'page' && (
-                    <Button loading={findSimilar.isPending} onClick={() => findSimilar.mutate({ point: similar.point, scope: 'set' })}>
-                      Also on every plan of this set
-                    </Button>
-                  )}
+                    ? `${similar.result.added} column${similar.result.added === 1 ? '' : 's'} added on this page.`
+                    : 'No new columns: those found are already columns.'}{' '}
+                  <Button
+                    loading={setSearch.starting}
+                    onClick={() => {
+                      setSearch.start(similar.point)
+                    }}
+                  >
+                    Also on every plan of this set
+                  </Button>
                   <Button aria-label="Dismiss" onClick={() => setSimilar(null)}>
                     ×
                   </Button>
                 </span>
+              )}
+              {setSearch.startError && (
+                <span className="field__error" role="alert">
+                  {setSearch.startError.message}
+                </span>
+              )}
+              {setSearch.job && (
+                <SetSimilarSearchStatus
+                  job={setSearch.job}
+                  onDismiss={() => {
+                    setSearch.dismiss()
+                    setSimilar(null)
+                  }}
+                />
               )}
               {runLoading && (
                 <span className="muted" role="status">
