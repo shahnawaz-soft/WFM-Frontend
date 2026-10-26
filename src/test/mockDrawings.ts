@@ -1335,16 +1335,14 @@ export const drawingHandlers = [
   http.get('*/api/v1/wireframes/:id/elements/', ({ params }) =>
     HttpResponse.json(wireframes.find((w) => w.id === params.id)?.elements.filter((e) => !e.removed) ?? []),
   ),
-  // Find similar: 3 columns like the one pointed at on the page; 5 more on the set's other plans.
-  http.post('*/api/v1/drawing-pages/:id/find-similar-columns/', async ({ params, request }) => {
-    const body = (await request.json()) as { point: [number, number]; scope: 'page' | 'set' }
+  // Find similar on the page: 3 columns like the one pointed at.
+  http.post('*/api/v1/drawing-pages/:id/find-similar-columns/', ({ params }) => {
     const page = sets.flatMap((x) => x.pages).find((p) => p.id === params.id)
     if (!page) return err(404, 'not_found', 'Page not found.')
-    const pages = body.scope === 'set' ? [{ page_id: page.id, page_number: 2, added: 5 }] : [{ page_id: page.id, page_number: page.page_number, added: 3 }]
-    return HttpResponse.json({ added: pages[0]!.added, pages, template: { width_pt: 6, height_pt: 3 } })
+    return HttpResponse.json({ added: 3, pages: [{ page_id: page.id, page_number: page.page_number, added: 3 }], template: { width_pt: 6, height_pt: 3 } })
   }),
   // Find similar on every plan of the set, as a job. Each poll moves it on by one plan: queued,
-  // then one plan searched per poll, then completed (5 columns on page 2, as the sync search).
+  // then one plan searched per poll, then completed (5 more columns, on page 2).
   http.post('*/api/v1/drawing-pages/:id/find-similar-columns/jobs/', async ({ params, request }) => {
     const body = (await request.json()) as { point: [number, number] }
     const owner = sets.find((x) => x.pages.some((p) => p.id === params.id))
