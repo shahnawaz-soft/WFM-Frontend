@@ -33,9 +33,18 @@ export async function listPageJobs(pageId: string): Promise<ProcessingJob[]> {
 export type FindSimilarResult = Schemas['FindSimilarResult']
 
 /** A column symbol Steelo missed (PDF points on the page): every mark drawn like it on this page
- *  becomes a column. (Every plan of the set: ``startSimilarColumnsJob``.) */
-export async function findSimilarColumns(pageId: string, point: [number, number]): Promise<FindSimilarResult> {
-  const { data } = await apiClient.post<FindSimilarResult>(`/api/v1/drawing-pages/${pageId}/find-similar-columns/`, { point, scope: 'page' })
+ *  becomes a column. ``box`` ([left, bottom, right, top], PDF points): a box drawn around the
+ *  symbol, which says exactly what to match. (Every plan of the set: ``startSimilarColumnsJob``.) */
+export async function findSimilarColumns(
+  pageId: string,
+  point: [number, number],
+  box?: [number, number, number, number],
+): Promise<FindSimilarResult> {
+  const { data } = await apiClient.post<FindSimilarResult>(`/api/v1/drawing-pages/${pageId}/find-similar-columns/`, {
+    point,
+    scope: 'page',
+    ...(box ? { box } : {}),
+  })
   return data
 }
 

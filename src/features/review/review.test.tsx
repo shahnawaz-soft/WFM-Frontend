@@ -215,7 +215,7 @@ describe('Find similar', () => {
     await openProcessedPage()
     await screen.findByRole('table', { name: /Detected members/ })
     await userEvent.click(screen.getByRole('button', { name: 'Find similar' }))
-    expect(screen.getByText(/Click on a column symbol Steelo missed/)).toBeInTheDocument()
+    expect(screen.getByText(/around a column symbol Steelo missed/)).toBeInTheDocument()
     await userEvent.click(screen.getByRole('img', { name: /Drawing/ }))
     expect(await screen.findByText(/3 columns added on this page/)).toBeInTheDocument()
   }

@@ -42,6 +42,10 @@ interface DrawingStageProps {
   /** When true, the next click on the drawing reports its PDF-space point instead of selecting. */
   placing?: boolean
   onPlace?: (point: [number, number]) => void
+  /** While placing: a drag draws a box instead of panning, reported in PDF points
+   *  ([left, bottom, right, top]); a plain click still reports a point (``onPlace``). */
+  boxing?: boolean
+  onBox?: (box: [number, number, number, number]) => void
   onCancelPlace?: () => void
   /** A labelled point to mark on the drawing (PDF points), e.g. the reference grid point. */
   marker?: { point: [number, number]; label: string } | null
@@ -73,6 +77,11 @@ export function DrawingStage(props: DrawingStageProps) {
   const viewport = pageViewport?.page === pageNumber ? pageViewport.viewport : null
   const onViewport = useCallback((vp: PageViewport) => setPageViewport({ page: pageNumber, viewport: vp }), [pageNumber])
   const drag = useRef<{ x: number; y: number; left: number; top: number; moved: boolean } | null>(null)
+  // A box being drawn (layer pixels from its corner where the press started), and whether the
+  // last press drew one (then its click is not a placement).
+  const boxStart = useRef<{ x: number; y: number } | null>(null)
+  const boxed = useRef(false)
+  const [band, setBand] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
   const handledFocus = useRef<number | null>(null)
 
   const [displayW, displayH] = rotation === 90 || rotation === 270 ? [heightPt, widthPt] : [widthPt, heightPt]
@@ -166,9 +175,24 @@ export function DrawingStage(props: DrawingStageProps) {
 
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (event.pointerType !== 'mouse' || event.button !== 0 || !scrollRef.current) return
+    if (placing && props.boxing && layerRef.current) {
+      const at = layerRef.current.getBoundingClientRect()
+      boxStart.current = { x: event.clientX - at.left, y: event.clientY - at.top }
+      setBand(null)
+      return
+    }
     drag.current = { x: event.clientX, y: event.clientY, left: scrollRef.current.scrollLeft, top: scrollRef.current.scrollTop, moved: false }
   }
   const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    const start = boxStart.current
+    if (start && layerRef.current) {
+      const at = layerRef.current.getBoundingClientRect()
+      const x = event.clientX - at.left
+      const y = event.clientY - at.top
+      if (Math.hypot(x - start.x, y - start.y) < DRAG_THRESHOLD) return
+      setBand({ left: Math.min(x, start.x), top: Math.min(y, start.y), width: Math.abs(x - start.x), height: Math.abs(y - start.y) })
+      return
+    }
     const d = drag.current
     if (!d || !scrollRef.current) return
     const dx = event.clientX - d.x
@@ -178,8 +202,25 @@ export function DrawingStage(props: DrawingStageProps) {
     scrollRef.current.scrollLeft = d.left - dx
     scrollRef.current.scrollTop = d.top - dy
   }
+  const onPointerUp = () => {
+    const start = boxStart.current
+    boxStart.current = null
+    if (!start || !band || !viewport) return
+    const [x1, y1] = viewport.convertToPdfPoint(band.left, band.top) as [number, number]
+    const [x2, y2] = viewport.convertToPdfPoint(band.left + band.width, band.top + band.height) as [number, number]
+    const r = (v: number) => Math.round(v * 10) / 10
+    boxed.current = true
+    setBand(null)
+    props.onBox?.([r(Math.min(x1, x2)), r(Math.min(y1, y2)), r(Math.max(x1, x2)), r(Math.max(y1, y2))])
+  }
   // A drag must not count as a click on a member (or as a click clearing the selection).
   const onClickCapture = (event: React.MouseEvent) => {
+    if (boxed.current) {
+      boxed.current = false
+      event.stopPropagation()
+      event.preventDefault()
+      return
+    }
     if (drag.current?.moved) {
       event.stopPropagation()
       event.preventDefault()
@@ -226,6 +267,7 @@ export function DrawingStage(props: DrawingStageProps) {
         onWheel={onWheel}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
         onClickCapture={(event) => {
           onClickCapture(event)
           if (placing && !event.defaultPrevented) {
@@ -274,6 +316,7 @@ export function DrawingStage(props: DrawingStageProps) {
             {props.marker && viewport && Math.abs(viewport.scale - zoom) < 0.001 && (
               <PointMarker viewport={viewport} {...props.marker} />
             )}
+            {band && <div className="stage__band" style={band} aria-hidden="true" />}
           </div>
         )}
       </div>

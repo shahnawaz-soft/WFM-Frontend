@@ -693,6 +693,7 @@ a.button { text-decoration: none; justify-content: center; }
 .member-editor .button { min-height: 34px; padding: var(--space-1) var(--space-3); font-size: 0.9rem; }
 .history { margin: 0; padding-left: var(--space-4); font-size: 0.85rem; display: flex; flex-direction: column; gap: var(--space-2); }
 .stage__scroll[data-placing] { cursor: crosshair; }
+.stage__band { position: absolute; z-index: 3; border: 2px dashed var(--color-primary); background: rgb(37 99 235 / 0.08); pointer-events: none; }
 .stage__placing { position: sticky; top: 0; left: 0; z-index: 2; margin: 0 0 var(--space-2); padding: var(--space-2) var(--space-3); background: var(--color-primary); color: var(--color-on-primary); border-radius: var(--radius); font-weight: 600; width: fit-content; }
 
 .member-span line { stroke: #7c3aed; stroke-width: 2.5; stroke-dasharray: 8 4; }

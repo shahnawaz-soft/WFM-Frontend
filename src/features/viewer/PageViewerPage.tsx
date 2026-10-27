@@ -154,8 +154,9 @@ export function PageViewerPage() {
   }, [queryClient, setId, refetchMembers])
   // This page only: one request.
   const findSimilar = useMutation({
-    mutationFn: (point: [number, number]) => findSimilarColumns(pageId, point),
-    onSuccess: (result, point) => {
+    mutationFn: ({ point, box }: { point: [number, number]; box?: [number, number, number, number] }) =>
+      findSimilarColumns(pageId, point, box),
+    onSuccess: (result, { point }) => {
       setSimilar({ pageId, point, result })
       refreshAfterSimilar()
     },
@@ -168,7 +169,7 @@ export function PageViewerPage() {
       if (findingSimilar) {
         setFindingSimilar(false)
         setSimilar(null)
-        findSimilar.mutate(location)
+        findSimilar.mutate({ point: location })
         return
       }
       if (pickingReference) {
@@ -424,7 +425,7 @@ export function PageViewerPage() {
           placing={placing}
           placingHint={
             findingSimilar
-              ? 'Click on a column symbol Steelo missed: every mark drawn like it becomes a column'
+              ? 'Drag a box around a column symbol Steelo missed (or click on it): every mark drawn like it becomes a column'
               : pickingReference
               ? gridPoints?.length
                 ? 'Click near the reference grid intersection (it snaps to the nearest one)'
@@ -435,6 +436,13 @@ export function PageViewerPage() {
           grids={detailRun?.grids ?? undefined}
           showGrids={showGrids}
           onPlace={place}
+          boxing={findingSimilar}
+          onBox={(box) => {
+            setPlacing(false)
+            setFindingSimilar(false)
+            setSimilar(null)
+            findSimilar.mutate({ point: [(box[0] + box[2]) / 2, (box[1] + box[3]) / 2], box })
+          }}
           onCancelPlace={cancelPlace}
           marker={
             pickedReference || current.reference_point
