@@ -71,4 +71,5 @@ src/
 ## Deployment
 
 DigitalOcean App Platform static site — spec in `.do/app.staging.yaml`.
-`VITE_API_BASE_URL` is inlined at build time, so each deployment uses its configured API URL.
+`VITE_API_BASE_URL` is inlined at build time. Production builds default to the staging API
+(`https://steelo-api.staging.steel.study`) if it is unset; set the variable to use another API.
