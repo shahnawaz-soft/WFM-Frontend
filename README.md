@@ -6,7 +6,7 @@ React 19 + TypeScript + Vite single-page app for Steelo. The backend is a separa
 
 ## Local development
 
-Requirements: Node ≥ 20.19, and the backend running on `http://localhost:8000`.
+Requirements: Node ≥ 20.19. The local backend runs on `http://localhost:8000` by default.
 
 ```bash
 npm install
@@ -14,8 +14,10 @@ cp .env.example .env.local
 npm run dev            # http://localhost:5173 — /api and /health are proxied to Django
 ```
 
-If Django must run on a different port (e.g. 8000 is taken by another project), set
-`VITE_DEV_API_PROXY=http://localhost:<port>` in `.env.local` and restart `npm run dev`.
+Choose the backend in your git-ignored `.env.local` file: leave `VITE_API_BASE_URL=` empty
+to use the local Vite proxy, or set it to `https://steelo-api.staging.steel.study` for staging.
+Restart `npm run dev` after changing the value. For a different local Django port, set
+`VITE_DEV_API_PROXY=http://localhost:<port>` in `.env.local` and restart the dev server.
 
 ## Scripts
 
@@ -69,4 +71,4 @@ src/
 ## Deployment
 
 DigitalOcean App Platform static site — spec in `.do/app.staging.yaml`.
-`VITE_API_BASE_URL` is inlined at build time, so each environment is its own build.
+`VITE_API_BASE_URL` is inlined at build time, so each deployment uses its configured API URL.

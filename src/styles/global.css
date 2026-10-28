@@ -761,7 +761,7 @@ a.button { text-decoration: none; justify-content: center; }
 }
 
 /* --- Tonnage (Phase 11) ----------------------------------------------------------------- */
-.abm__views { align-self: flex-start; }
+.abm__views { align-self: flex-start; flex-shrink: 0; }
 .abm-stats__tonnage { border-color: var(--color-primary) !important; background: var(--color-info-bg) !important; }
 .abm-stats__flag { font-weight: 400; color: var(--color-warning); }
 .abm-filters__chip { margin: 0; display: inline-flex; gap: var(--space-2); align-items: center; font-size: 0.9rem; }
@@ -984,5 +984,6 @@ a.button { text-decoration: none; justify-content: center; }
 .wf3d__tag[data-picked] { background: #7c3aed; border-color: #7c3aed; color: #fff; z-index: 1; }
 
 /* ABM: beams known by a mark, their section entered once. */
+.beam-marks { flex: 1; min-height: 0; overflow-y: auto; }
 .beam-marks__assign { display: flex; gap: var(--space-2); align-items: center; }
 .beam-marks__assign .field__control { width: 9rem; }
