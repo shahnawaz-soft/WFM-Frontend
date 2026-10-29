@@ -140,7 +140,14 @@ function DrawingSetCard({
             {open ? 'Hide pages' : 'Show pages'}
           </Button>
           {canEdit && (
-            <Button onClick={() => setConfirmRemove(true)} aria-label={`Remove ${drawingSet.original_filename}`}>
+            <Button
+            onClick={() => {
+              setConfirmRemove(true)
+              // Pages may have been added to the ABM since the list loaded: warn with fresh counts.
+              void queryClient.invalidateQueries({ queryKey: ['project', drawingSet.project, 'drawing-sets'] })
+            }}
+            aria-label={`Remove ${drawingSet.original_filename}`}
+          >
               Remove
             </Button>
           )}
@@ -168,6 +175,12 @@ function DrawingSetCard({
           longer appear in this project. The original file is kept for the project history, and the removal is
           recorded.
         </p>
+        {drawingSet.pages_in_abm > 0 && (
+          <p className="notice notice--warning" role="note">
+            {drawingSet.pages_in_abm} {drawingSet.pages_in_abm === 1 ? 'page is' : 'pages are'} in the ABM. Their members
+            will leave the ABM and the tonnage. Finalised versions keep what they recorded.
+          </p>
+        )}
       </ConfirmDialog>
     </article>
   )

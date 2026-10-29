@@ -2038,6 +2038,8 @@ export interface components {
             readonly ingested_at: string | null;
             readonly pages_ready: number;
             readonly pages_failed: number;
+            /** @description Pages whose members are in the ABM */
+            readonly pages_in_abm: number;
             readonly can_retry: boolean;
             /** Format: uuid */
             readonly revises: string | null;

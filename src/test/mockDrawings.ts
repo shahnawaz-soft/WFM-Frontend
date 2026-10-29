@@ -489,7 +489,8 @@ const LIMITS = {
 function counts(s: StoredSet): DrawingSet {
   const ready = s.pages.filter((p) => p.thumbnail_status === 'ready').length
   const failed = s.pages.filter((p) => p.thumbnail_status === 'failed').length
-  return { ...s.set, pages_ready: ready, pages_failed: failed, can_retry: failed > 0 || s.set.status === 'failed' }
+  const inAbm = s.pages.filter((p) => p.status === 'added').length
+  return { ...s.set, pages_ready: ready, pages_failed: failed, pages_in_abm: inAbm, can_retry: failed > 0 || s.set.status === 'failed' }
 }
 
 function ingest(s: StoredSet) {
@@ -598,6 +599,7 @@ export async function acceptUpload(
       ingested_at: null,
       pages_ready: 0,
       pages_failed: 0,
+      pages_in_abm: 0,
       can_retry: false,
     } as DrawingSet,
     pages: Array.from({ length: pageCount }, (_, i) => ({
@@ -856,9 +858,9 @@ export const drawingHandlers = [
 
   http.delete('*/api/v1/drawing-sets/:id/', ({ params }) => {
     const s = sets.find((x) => x.set.id === params.id)!
-    if (s.pages.some((p) => !['pending', 'failed'].includes(p.status))) {
+    if (s.pages.some((p) => p.status === 'processing')) {
       return HttpResponse.json(
-        { error: { code: 'drawing_set_in_use', message: 'This drawing set cannot be removed because some of its pages have already been processed or added to the project.', details: {}, request_id: 'r' } },
+        { error: { code: 'drawing_set_processing', message: 'This drawing set cannot be removed while its pages are being processed. Try again when processing has finished.', details: {}, request_id: 'r' } },
         { status: 409 },
       )
     }

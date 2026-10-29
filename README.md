@@ -76,3 +76,10 @@ DigitalOcean App Platform static site — spec in `.do/app.staging.yaml`.
 
 Vercel uses [`vercel.json`](./vercel.json) to rewrite direct requests for client-side routes to
 the SPA entry point. Keep `VITE_API_BASE_URL` configured for the deployed backend.
+
+On Vercel, set `VITE_AUTH_SAME_ORIGIN=true`. A `*.vercel.app` page and the API are different
+sites, so browsers block the API's refresh cookie as third-party and a reload signs you out.
+With the flag, `/api/v1/auth/` calls go to the page's own origin and `vercel.json` rewrites
+them to the staging API, so the cookie is first-party. All other calls (including uploads,
+which a proxy might size-limit) still go straight to `VITE_API_BASE_URL`. Leave the flag unset
+where the frontend is a sibling subdomain of the API (e.g. `steelo.staging.steel.study`).

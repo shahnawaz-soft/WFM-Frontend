@@ -27,6 +27,7 @@ interface RetriableConfig extends InternalAxiosRequestConfig {
 }
 
 const AUTH_PATHS = ['/api/v1/auth/login/', '/api/v1/auth/refresh/', '/api/v1/auth/logout/']
+const AUTH_PREFIX = '/api/v1/auth/' // the refresh cookie's path
 
 let refreshInFlight: Promise<string> | null = null
 
@@ -45,6 +46,7 @@ export function refreshAccessToken(): Promise<string> {
 }
 
 apiClient.interceptors.request.use((config) => {
+  if (config.url?.startsWith(AUTH_PREFIX)) config.baseURL = env.authBaseUrl
   const token = tokenStore.get()
   if (token && !config.headers.Authorization) {
     config.headers.Authorization = `Bearer ${token}`

@@ -159,15 +159,27 @@ describe('Removing a drawing set', () => {
     expect(screen.getByText('No drawings yet')).toBeInTheDocument()
   })
 
-  it('explains when a set can no longer be removed', async () => {
+  it('removes a processed set, warning when its pages are in the ABM', async () => {
     const { container } = await openProject()
     await chooseFile(container, pdfFile('Used.pdf', 1))
     const set = await screen.findByRole('article', { name: 'Used.pdf' })
-    Object.assign(mockDrawings.sets[0]!.pages[0]!, { status: 'processed' }) // simulate Phase 5 use
+    Object.assign(mockDrawings.sets[0]!.pages[0]!, { status: 'added' }) // its members are in the ABM
     await userEvent.click(within(set).getByRole('button', { name: 'Remove Used.pdf' }))
     const dialog = await screen.findByRole('dialog')
+    expect(await within(dialog).findByText(/1 page is in the ABM/)).toBeInTheDocument() // counted afresh on open
     await userEvent.click(within(dialog).getByRole('button', { name: 'Remove drawing set' }))
-    expect(await within(dialog).findByRole('alert')).toHaveTextContent('already been processed')
+    expect(await screen.findByText('Removed “Used.pdf”')).toBeInTheDocument()
+  })
+
+  it('explains when a set is still being processed', async () => {
+    const { container } = await openProject()
+    await chooseFile(container, pdfFile('Busy.pdf', 1))
+    const set = await screen.findByRole('article', { name: 'Busy.pdf' })
+    Object.assign(mockDrawings.sets[0]!.pages[0]!, { status: 'processing' })
+    await userEvent.click(within(set).getByRole('button', { name: 'Remove Busy.pdf' }))
+    const dialog = await screen.findByRole('dialog')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Remove drawing set' }))
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('while its pages are being processed')
   })
 
   it('is not offered to viewers', async () => {
