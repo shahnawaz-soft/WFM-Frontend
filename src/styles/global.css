@@ -971,6 +971,15 @@ a.button { text-decoration: none; justify-content: center; }
 .ops-tabs { margin-bottom: var(--space-4); }
 .ops-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--space-4); }
 .ops-grid .card { margin: 0; }
+.ops-grid .card[aria-labelledby='ops-quality'] {
+  max-height: max(12rem, min(32rem, calc(100vh - 28rem)));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+.ops-grid .card[aria-labelledby='ops-quality']::-webkit-scrollbar {
+  display: none;
+}
 .ops-audit__details { max-width: 32rem; font-size: 0.8rem; word-break: break-word; }
 .column-overlay circle { fill: rgb(234 88 12 / 12%); stroke: #c2410c; stroke-width: 2; vector-effect: non-scaling-stroke; }
 

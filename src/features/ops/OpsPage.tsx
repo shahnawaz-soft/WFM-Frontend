@@ -121,7 +121,7 @@ function Overview({ onShowFailures }: { onShowFailures: () => void }) {
           Wireframes generating: {o.wireframes.generating} · failed (7 days): {o.wireframes.failed_7d}
         </p>
       </section>
-      <section className="card" aria-labelledby="ops-quality">
+      <section className="card" aria-labelledby="ops-quality" tabIndex={0}>
         <h2 id="ops-quality">Corrections, last 7 days</h2>
         <p>
           {o.corrections_7d} member corrections · {o.rejections_7d} rejections

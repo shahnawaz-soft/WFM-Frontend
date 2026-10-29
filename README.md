@@ -73,3 +73,6 @@ src/
 DigitalOcean App Platform static site — spec in `.do/app.staging.yaml`.
 `VITE_API_BASE_URL` is inlined at build time. Production builds default to the staging API
 (`https://steelo-api.staging.steel.study`) if it is unset; set the variable to use another API.
+
+Vercel uses [`vercel.json`](./vercel.json) to rewrite direct requests for client-side routes to
+the SPA entry point. Keep `VITE_API_BASE_URL` configured for the deployed backend.
