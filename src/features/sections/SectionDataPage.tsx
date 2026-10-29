@@ -1,13 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useState, type FormEvent } from 'react'
 
-import { approveDataset, listSectionDatasets, searchProfiles } from '../../api/sections'
+import { approveDataset, listSectionDatasets, searchProfiles, uploadDataset } from '../../api/sections'
 import type { SectionDataset } from '../../api/types'
 import { EmptyState, ErrorState, LoadingState } from '../../components/feedback/States'
 import { Button } from '../../components/ui/Button'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
-import { TextField } from '../../components/ui/Field'
+import { FormAlert, TextField } from '../../components/ui/Field'
 import { StatusBadge } from '../../components/ui/StatusBadge'
+import { NO_ERRORS, toFormErrors, type FormErrors } from '../../lib/formErrors'
 import { useDebouncedValue } from '../../lib/useDebouncedValue'
 
 const STATUS = {
@@ -38,16 +39,7 @@ export function SectionDataPage() {
         Member weights come from the approved section catalogue (AISC Shapes Database). Each project stays on the version it
         started with unless its owner changes it.
       </p>
-      <section className="card" aria-labelledby="import-help">
-        <h2 id="import-help">Importing a new version</h2>
-        <ol>
-          <li>Download the AISC Shapes Database (.xlsx) from aisc.org.</li>
-          <li>
-            On the server run <code>python manage.py import_sections &lt;file&gt; --dataset-version 16.0</code>.
-          </li>
-          <li>Approve it here.</li>
-        </ol>
-      </section>
+      <ImportForm />
 
       {datasets.isPending && <LoadingState label="Loading section data…" />}
       {datasets.error && <ErrorState title="Could not load section data" error={datasets.error} />}
@@ -108,6 +100,64 @@ export function SectionDataPage() {
         </p>
       </ConfirmDialog>
     </>
+  )
+}
+
+function ImportForm() {
+  const queryClient = useQueryClient()
+  const [file, setFile] = useState<File | null>(null)
+  const [version, setVersion] = useState('16.0')
+  const [approve, setApprove] = useState(false)
+  const [errors, setErrors] = useState<FormErrors>(NO_ERRORS)
+  const [inputKey, setInputKey] = useState(0)
+  const upload = useMutation({
+    mutationFn: () => uploadDataset(file!, version.trim(), approve),
+    meta: { suppressErrorToast: true, successMessage: 'Section data imported' },
+    onSuccess: () => {
+      setFile(null)
+      setInputKey((k) => k + 1)
+      setErrors(NO_ERRORS)
+      return queryClient.invalidateQueries({ queryKey: ['section-datasets'] })
+    },
+    onError: (error) => setErrors(toFormErrors(error)),
+  })
+
+  function submit(event: FormEvent) {
+    event.preventDefault()
+    if (!file) return setErrors({ fields: { file: ['Choose the AISC Shapes Database file.'] }, form: null })
+    if (!version.trim()) return setErrors({ fields: { version: ['Enter the version, e.g. 16.0.'] }, form: null })
+    upload.mutate()
+  }
+
+  return (
+    <section className="card" aria-labelledby="import-heading">
+      <h2 id="import-heading">Import a new version</h2>
+      <p className="muted">
+        Download the AISC Shapes Database (.xlsx) from aisc.org and upload it as downloaded. It stays unapproved until you
+        approve it.
+      </p>
+      <FormAlert message={errors.form} />
+      <form onSubmit={submit} noValidate>
+        <TextField
+          key={inputKey}
+          label="AISC Shapes Database file"
+          type="file"
+          accept=".xlsx,.csv"
+          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          error={errors.fields.file}
+        />
+        <TextField label="Version" value={version} onChange={(e) => setVersion(e.target.value)} error={errors.fields.version} />
+        <label className="checkbox">
+          <input type="checkbox" checked={approve} onChange={(e) => setApprove(e.target.checked)} /> Approve and make default
+          now
+        </label>
+        <div className="button-row">
+          <Button type="submit" variant="primary" loading={upload.isPending}>
+            Upload
+          </Button>
+        </div>
+      </form>
+    </section>
   )
 }
 

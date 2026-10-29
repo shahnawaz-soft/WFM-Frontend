@@ -105,6 +105,26 @@ describe('Section data administration', () => {
     expect(within(found).getByText('38.692')).toBeInTheDocument()
   })
 
+  it('uploads a new AISC Shapes Database version and explains a refused upload', async () => {
+    mockBackend.startSession('admin@steelo.test')
+    renderApp('/admin/sections')
+    const card = await screen.findByRole('region', { name: 'Import a new version' })
+    const fileInput = within(card).getByLabelText('AISC Shapes Database file')
+
+    await userEvent.click(within(card).getByRole('button', { name: 'Upload' }))
+    expect(within(card).getByText(/Choose the AISC Shapes Database file/)).toBeInTheDocument()
+
+    await userEvent.upload(fileInput, new File(['x'], 'aisc-shapes-database-v16.0.xlsx'))
+    await userEvent.click(within(card).getByRole('button', { name: 'Upload' }))
+    expect(await within(card).findByRole('alert')).toHaveTextContent('v16.0 has already been imported')
+
+    await userEvent.clear(within(card).getByLabelText('Version'))
+    await userEvent.type(within(card).getByLabelText('Version'), '16.2')
+    await userEvent.click(within(card).getByLabelText(/Approve and make default/))
+    await userEvent.click(within(card).getByRole('button', { name: 'Upload' }))
+    expect(await screen.findByText('Section data imported')).toBeInTheDocument()
+  })
+
   it('is only for administrators', async () => {
     mockBackend.startSession(OWNER)
     renderApp('/admin/sections')

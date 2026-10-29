@@ -1599,6 +1599,20 @@ export const drawingHandlers = [
         .map(([d, [lb, kg]]) => ({ id: `p-${d}`, designation: d, family: 'W', weight_lb_per_ft: lb, weight_kg_per_m: kg, properties: {} })),
     )
   }),
+  http.post('*/api/v1/section-datasets/', async ({ request }) => {
+    const form = await request.formData()
+    const version = String(form.get('version'))
+    if (['15.0', '16.0', '16.1'].includes(version))
+      return HttpResponse.json(
+        { error: { code: 'dataset_exists', message: `AISC Shapes Database v${version} has already been imported. Import a new version instead.`, details: {} } },
+        { status: 409 },
+      )
+    const approved = form.get('approve') === 'true'
+    return HttpResponse.json(
+      { id: 'ds-3', name: 'AISC Shapes Database', version, label: `AISC Shapes Database v${version}`, source: '', original_filename: 'aisc-shapes-database-v16.0.xlsx', checksum: 'w', unit_system: 'imperial', status: approved ? 'approved' : 'draft', is_default: approved, is_test: false, profile_count: 2299, created_at: '2026-10-29T09:00:00Z', approved_at: approved ? '2026-10-29T09:00:00Z' : null },
+      { status: 201 },
+    )
+  }),
   http.post('*/api/v1/section-datasets/:id/approve/', ({ params }) =>
     HttpResponse.json({ id: params.id, label: 'AISC Shapes Database v16.1', status: 'approved', is_default: true }),
   ),

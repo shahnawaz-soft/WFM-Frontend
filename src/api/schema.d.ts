@@ -1122,10 +1122,21 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description All imported section data versions (anyone signed in may see what is available). */
+        /**
+         * @description All imported section data versions (anyone signed in may see what is available).
+         *
+         *     Administrators import a new version by uploading the AISC file (same rules as the
+         *     ``import_sections`` command).
+         */
         get: operations["section_datasets_list"];
         put?: never;
-        post?: never;
+        /**
+         * @description All imported section data versions (anyone signed in may see what is available).
+         *
+         *     Administrators import a new version by uploading the AISC file (same rules as the
+         *     ``import_sections`` command).
+         */
+        post: operations["section_datasets_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1665,6 +1676,8 @@ export interface components {
             pages_added: components["schemas"]["_ChangedPage"][];
             pages_removed: components["schemas"]["_ChangedPage"][];
             set_up_changed: components["schemas"]["_ChangedPage"][];
+            /** @description Pages run again since the revision was generated. */
+            pages_rerun: components["schemas"]["_RerunPage"][];
         };
         /**
          * @description * `no_section_data` - no_section_data
@@ -1934,6 +1947,22 @@ export interface components {
          * @enum {string}
          */
         DatasetStatusEnum: "draft" | "approved" | "retired";
+        DatasetUploadRequest: {
+            /**
+             * Format: binary
+             * @description AISC Shapes Database, .xlsx or .csv
+             */
+            file: string;
+            /** @description e.g. 16.0 */
+            version: string;
+            /** @default AISC Shapes Database */
+            name: string;
+            /**
+             * @description Approve and make it the default
+             * @default false
+             */
+            approve: boolean;
+        };
         DrawingPage: {
             /** Format: uuid */
             readonly id: string;
@@ -2174,6 +2203,8 @@ export interface components {
         FindSimilarRequest: {
             /** @description [x, y] in PDF points on the page: a column symbol Steelo missed */
             point: number[];
+            /** @description [left, bottom, right, top] in PDF points: a box drawn around the symbol (sheets drawn as an image; ``point`` is then its centre) */
+            box?: number[];
             /**
              * @description This page only. Every plan of the drawing set is searched by a job: POST /drawing-pages/{id}/find-similar-columns/jobs/ (scope=set: 400 set_scope_moved)
              *
@@ -3595,6 +3626,16 @@ export interface components {
             page_number: number;
             /** @description The level marker as printed, e.g. 2ND TOS 116'-2 3/4" */
             text: string;
+        };
+        _RerunPage: {
+            /** Format: uuid */
+            id: string;
+            page_number: number;
+            original_filename: string;
+            level_label: string;
+            elevation_mm: string | null;
+            /** @description The engine of the page's newer run. */
+            engine_version: string;
         };
         _SetRef: {
             /** Format: uuid */
@@ -5669,6 +5710,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SectionDataset"][];
+                };
+            };
+        };
+    };
+    section_datasets_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["DatasetUploadRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SectionDataset"];
                 };
             };
         };
