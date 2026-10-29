@@ -33,10 +33,11 @@ describe('Run Plan', () => {
     await userEvent.click(within(pageCard(grid, 1)).getByRole('button', { name: 'Run Plan — page 1' }))
 
     const card = pageCard(grid, 1)
-    expect(await within(card).findByText('Completed')).toBeInTheDocument()
+    expect(await within(card).findByText('3 members')).toBeInTheDocument()
     expect(within(card).getByText('Processed')).toBeInTheDocument()
-    expect(within(card).getByText('Vector drawing')).toBeInTheDocument()
-    expect(within(card).getByText(/3 member labels · 1\/8" = 1'-0"/)).toBeInTheDocument()
+    // The card is short: drawing type, scale and engine notes are in page review.
+    expect(within(card).queryByText('Vector drawing')).not.toBeInTheDocument()
+    expect(within(card).queryByText(/1\/8" = 1'-0"/)).not.toBeInTheDocument()
     // Page 2 is untouched: pages are processed individually.
     expect(within(pageCard(grid, 2)).getByText('Pending')).toBeInTheDocument()
   })
@@ -49,17 +50,16 @@ describe('Run Plan', () => {
     const bar = await within(card).findByRole('progressbar', { name: 'Processing page 1' })
     expect(bar).toHaveAttribute('aria-valuenow', '40')
     expect(within(card).getByText('Processing — Analysing page content')).toBeInTheDocument()
-    expect(within(card).queryByRole('button', { name: /page 1/ })).not.toBeInTheDocument() // no double start
+    expect(within(card).queryByRole('button', { name: /— page 1/ })).not.toBeInTheDocument() // no double start
   })
 
-  it('explains why a page needs review', async () => {
+  it('flags a page that needs review (the reasons are in page review)', async () => {
     mockDrawings.runOutcome(1, 'needs_review')
     const grid = await projectWithPages()
     await userEvent.click(within(pageCard(grid, 1)).getByRole('button', { name: 'Run Plan — page 1' }))
     const card = pageCard(grid, 1)
     expect(await within(card).findByText('Needs review')).toBeInTheDocument()
-    const reasons = within(card).getByRole('list', { name: 'Why page 1 needs review' })
-    expect(reasons).toHaveTextContent('appears to be a scanned image')
+    expect(within(card).queryByRole('list', { name: 'Why page 1 needs review' })).not.toBeInTheDocument()
   })
 
   it('shows a failure and retries it', async () => {
@@ -71,7 +71,7 @@ describe('Run Plan', () => {
     expect(within(card).getAllByText('Failed').length).toBeGreaterThan(0)
 
     await userEvent.click(within(card).getByRole('button', { name: 'Retry — page 1' }))
-    expect(await within(card).findByText('Completed')).toBeInTheDocument()
+    expect(await within(card).findByText(/^\d+ members?$/)).toBeInTheDocument()
   })
 
   it('asks before running a processed page again', async () => {
@@ -93,11 +93,11 @@ describe('Run Plan', () => {
   it('runs every page not run yet with "Run all pages"', async () => {
     const grid = await projectWithPages(3)
     await userEvent.click(within(pageCard(grid, 1)).getByRole('button', { name: 'Run Plan — page 1' }))
-    expect(await within(pageCard(grid, 1)).findByText('Completed')).toBeInTheDocument()
+    expect(await within(pageCard(grid, 1)).findByText(/^\d+ members?$/)).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: 'Run all pages' }))
     expect(await screen.findByText('Running 2 pages')).toBeInTheDocument() // page 1 was already run
-    for (const n of [2, 3]) expect(await within(pageCard(grid, n)).findByText('Completed')).toBeInTheDocument()
+    for (const n of [2, 3]) expect(await within(pageCard(grid, n)).findByText(/^\d+ members?$/)).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: 'Run all pages' }))
     expect(await screen.findByText('Every page has already been run')).toBeInTheDocument()

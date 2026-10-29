@@ -22,6 +22,13 @@ interface StoredProject {
   updated_at: string
   archived_at: string | null
   members: { id: string; user: User; role: ProjectRole; added_by: User; created_at: string }[]
+  client_name?: string
+  team_name?: string
+  tekla_version?: string
+  target_completion_date?: string | null
+  /** Projects list only: page 1 of the first drawing set, and the reviewed ABM weight. */
+  cover_page?: string | null
+  tonnage?: { lb: string; kg: string; short_tons: string; tonnes: string }
 }
 
 let projects: StoredProject[] = []
@@ -73,6 +80,11 @@ function serialize(p: StoredProject, user: User): Project {
     version: p.version,
     my_role: roleOf(p, user),
     member_count: p.members.length,
+    client_name: p.client_name ?? '',
+    team_name: p.team_name ?? '',
+    tekla_version: p.tekla_version ?? '',
+    target_completion_date: p.target_completion_date ?? null,
+    first_upload_at: null,
     section_dataset: sectionDataset,
     my_capabilities: capsOf(p, user),
   } as Project
@@ -175,16 +187,20 @@ export const projectHandlers = [
       count: results.length,
       next: null,
       previous: null,
-      results: results.slice(0, limit).map((p) => serialize(p, user)),
+      results: results.slice(0, limit).map((p) => ({
+        ...serialize(p, user),
+        cover_page: p.cover_page ?? null,
+        tonnage: p.tonnage ?? { lb: '0.0', kg: '0.0', short_tons: '0.000', tonnes: '0.000' },
+      })),
     })
   }),
 
   http.post('*/api/v1/projects/', async ({ request }) => {
     const user = currentUser(request)
     if (!user) return envelope(401, 'token_not_valid', 'Given token not valid')
-    const { name } = (await request.json()) as { name: string }
+    const { name, ...details } = (await request.json()) as { name: string } & Partial<StoredProject>
     if (!name.trim()) return envelope(400, 'validation_error', 'Some fields are invalid.', { name: ['This field may not be blank.'] })
-    const p = mockProjects.create(name.trim(), user.email)
+    const p = Object.assign(mockProjects.create(name.trim(), user.email), details)
     return HttpResponse.json(serialize(p, user), { status: 201 })
   }),
 
@@ -198,11 +214,11 @@ export const projectHandlers = [
     if (r.error) return r.error
     const denied = requireCap(r.p, r.user, 'project.edit')
     if (denied) return denied
-    const body = (await request.json()) as { name: string; version?: number }
-    if (body.version !== undefined && body.version !== r.p.version) {
+    const { version, ...changes } = (await request.json()) as Partial<StoredProject> & { version?: number }
+    if (version !== undefined && version !== r.p.version) {
       return envelope(409, 'stale_version', 'This project was changed by someone else. Reload to see the latest version.')
     }
-    r.p.name = body.name
+    Object.assign(r.p, changes)
     touch(r.p)
     return HttpResponse.json(serialize(r.p, r.user))
   }),

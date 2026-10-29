@@ -135,7 +135,7 @@ export function ProjectReviewCard({ project }: { project: Project }) {
           text: s!.drawing_sets
             ? 'Each page is read on its own; this takes a moment for large sets.'
             : 'Add the structural PDF in Drawings below. Each page is prepared separately.',
-          action: <a className="button" href="#drawings-heading">Go to Drawings</a>,
+          action: <a className="button" href="#drawings-heading">Go to Pages</a>,
         }
       case 'run':
         return {

@@ -21,13 +21,16 @@ export async function getProject(id: string): Promise<Project> {
   return data
 }
 
-export async function createProject(name: string): Promise<Project> {
-  const { data } = await apiClient.post<Project>(base, { name })
+type ProjectSettings = Pick<Project, 'name' | 'client_name' | 'team_name' | 'tekla_version' | 'target_completion_date'>
+
+export async function createProject(settings: ProjectSettings): Promise<Project> {
+  const { data } = await apiClient.post<Project>(base, settings)
   return data
 }
 
-export async function renameProject(id: string, name: string, version: number): Promise<Project> {
-  const { data } = await apiClient.patch<Project>(`${base}${id}/`, { name, version })
+/** Rename and/or change the project's settings; ``version`` is the one edited (stale → 409). */
+export async function updateProject(id: string, changes: Partial<ProjectSettings>, version: number): Promise<Project> {
+  const { data } = await apiClient.patch<Project>(`${base}${id}/`, { ...changes, version })
   return data
 }
 

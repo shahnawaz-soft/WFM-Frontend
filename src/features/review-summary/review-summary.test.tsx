@@ -161,5 +161,8 @@ describe('Project history', () => {
     await userEvent.selectOptions(screen.getByLabelText('Show'), 'processing')
     await waitFor(() => expect(screen.queryByText('Created the project “Warehouse”')).not.toBeInTheDocument())
     expect(screen.getByText(/Run Plan finished on page 1/)).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('link', { name: 'Back to project' }))
+    expect(await screen.findByRole('heading', { level: 1, name: 'Warehouse' })).toBeInTheDocument()
   })
 })

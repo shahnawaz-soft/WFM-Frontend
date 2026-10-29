@@ -156,6 +156,8 @@ h2 { letter-spacing: -0.01em; }
 }
 .card__header h2 { margin: 0; }
 .drawing-set,
+.file-row,
+.project-more > summary,
 .selected-person,
 .page-strip__item,
 .outputs__item { border: none; border-radius: var(--radius); box-shadow: var(--neu-raised-sm); }

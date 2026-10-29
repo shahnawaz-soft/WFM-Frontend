@@ -6,6 +6,7 @@ import { getProject } from '../../api/projects'
 import { getProjectHistory } from '../../api/review'
 import type { HistoryCategory, HistoryItem } from '../../api/types'
 import { ErrorState, LoadingState } from '../../components/feedback/States'
+import { BackLink } from '../../components/ui/BackLink'
 import { Button } from '../../components/ui/Button'
 import { SelectField } from '../../components/ui/Field'
 import { StatusBadge } from '../../components/ui/StatusBadge'
@@ -62,6 +63,7 @@ export function ProjectHistoryPage() {
 
   return (
     <>
+      <BackLink to={`/projects/${projectId}`} label="Back to project" />
       <nav aria-label="Breadcrumb" className="breadcrumb">
         <Link to="/projects">Projects</Link> <span aria-hidden="true">/</span>{' '}
         <Link to={`/projects/${projectId}`}>{project.data.name}</Link>

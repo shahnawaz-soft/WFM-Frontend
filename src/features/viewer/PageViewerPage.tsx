@@ -224,7 +224,8 @@ export function PageViewerPage() {
   }
   if (!project.data || !drawingSet.data || !current) return <LoadingState label="Opening page…" />
 
-  const pages = siblings.data ?? []
+  // Hidden pages are left out of review (the open page stays, even if it is hidden).
+  const pages = (siblings.data ?? []).filter((p) => !p.hidden || p.id === pageId)
   const index = pages.findIndex((p) => p.id === pageId)
   const prev = index > 0 ? pages[index - 1] : undefined
   const next = index >= 0 && index < pages.length - 1 ? pages[index + 1] : undefined
@@ -292,6 +293,9 @@ export function PageViewerPage() {
           </Button>
           <Link className="button button--secondary" to={`/projects/${projectId}/abm`}>
             ABM
+          </Link>
+          <Link className="button button--secondary" to={`/projects/${projectId}`} aria-label="Close page review">
+            <span aria-hidden="true">✕</span> Close
           </Link>
         </div>
       </header>

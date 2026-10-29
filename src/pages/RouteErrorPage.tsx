@@ -14,7 +14,7 @@ export function RouteErrorPage() {
         <div>
           <h1 className="state__title">Something went wrong</h1>
           <p>{message}</p>
-          <Link to="/">Go to the home page</Link>
+          <Link to="/projects">Go to Projects</Link>
         </div>
       </div>
     </main>

@@ -1,11 +1,13 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 
-import { listUsers } from '../../api/users'
+import { toApiError } from '../../api/errors'
+import { listUsers, updateUser } from '../../api/users'
 import { GLOBAL_ROLE_LABELS, type User } from '../../api/types'
 import { useAuth } from '../../auth/AuthContext'
 import { EmptyState, ErrorState, LoadingState } from '../../components/feedback/States'
 import { Button } from '../../components/ui/Button'
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { SelectField, TextField } from '../../components/ui/Field'
 import { StatusBadge } from '../../components/ui/StatusBadge'
 import { useDebouncedValue } from '../../lib/useDebouncedValue'
@@ -27,13 +29,14 @@ type DialogState =
   | { kind: 'create' }
   | { kind: 'edit'; user: User }
   | { kind: 'reset'; user: User }
+  | { kind: 'delete'; user: User }
   | null
 
 export function UsersPage() {
   const { user: me } = useAuth()
   const [search, setSearch] = useState('')
   const [role, setRole] = useState('')
-  const [active, setActive] = useState('')
+  const [active, setActive] = useState('true') // deleted (deactivated) users are out of the way
   const [offset, setOffset] = useState(0)
   const [dialog, setDialog] = useState<DialogState>(null)
   const debouncedSearch = useDebouncedValue(search.trim())
@@ -49,7 +52,7 @@ export function UsersPage() {
     setter(value)
     setOffset(0)
   }
-  const hasFilters = Boolean(debouncedSearch || role || active)
+  const hasFilters = Boolean(debouncedSearch || role || active !== 'true')
   const total = query.data?.count ?? 0
 
   return (
@@ -135,6 +138,12 @@ export function UsersPage() {
                       >
                         Reset password
                       </Button>
+                      {user.is_active && user.id !== me?.id && (
+                        <Button onClick={() => setDialog({ kind: 'delete', user })} aria-label={`Delete ${user.email}`}>
+                          Delete
+                        </Button>
+                      )}
+                      {!user.is_active && <RestoreButton user={user} />}
                     </td>
                   </tr>
                 ))}
@@ -160,6 +169,50 @@ export function UsersPage() {
         <EditUserDialog user={dialog.user} isSelf={dialog.user.id === me?.id} onClose={() => setDialog(null)} />
       )}
       {dialog?.kind === 'reset' && <ResetPasswordDialog user={dialog.user} onClose={() => setDialog(null)} />}
+      {dialog?.kind === 'delete' && <DeleteUserDialog user={dialog.user} onClose={() => setDialog(null)} />}
     </>
+  )
+}
+
+/** Users are never erased (OD-14): deleting deactivates, so their name stays on past work. */
+function DeleteUserDialog({ user, onClose }: { user: User; onClose: () => void }) {
+  const queryClient = useQueryClient()
+  const remove = useMutation({
+    mutationFn: () => updateUser(user.id, { is_active: false }),
+    meta: { suppressErrorToast: true, successMessage: 'User deleted' },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['users'] })
+      onClose()
+    },
+  })
+  return (
+    <ConfirmDialog
+      open
+      title={`Delete ${user.email}?`}
+      confirmLabel="Delete user"
+      pending={remove.isPending}
+      error={remove.error ? toApiError(remove.error).message : null}
+      onConfirm={() => remove.mutate()}
+      onCancel={onClose}
+    >
+      <p>
+        {user.full_name} can no longer sign in and leaves the user list. Their name stays on the reviews and history they
+        made. To bring them back, show deactivated users and choose Restore.
+      </p>
+    </ConfirmDialog>
+  )
+}
+
+function RestoreButton({ user }: { user: User }) {
+  const queryClient = useQueryClient()
+  const restore = useMutation({
+    mutationFn: () => updateUser(user.id, { is_active: true }),
+    meta: { successMessage: 'User restored' },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
+  })
+  return (
+    <Button loading={restore.isPending} onClick={() => restore.mutate()} aria-label={`Restore ${user.email}`}>
+      Restore
+    </Button>
   )
 }

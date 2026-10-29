@@ -56,7 +56,7 @@ describe('Drawing upload', () => {
     expect(await screen.findByText('Drawing set uploaded')).toBeInTheDocument()
     const set = await screen.findByRole('article', { name: 'GA Plans.pdf' })
     expect(await within(set).findByText('Ready')).toBeInTheDocument()
-    const pages = await within(set).findByRole('list', { name: 'Pages of GA Plans.pdf' })
+    const pages = await screen.findByRole('list', { name: 'Pages of GA Plans.pdf' })
     expect(within(pages).getAllByRole('listitem')).toHaveLength(3)
     expect(within(pages).getAllByText('Pending')).toHaveLength(3)
     expect(within(pages).getByText('Page 3')).toBeInTheDocument()
@@ -96,7 +96,7 @@ describe('Drawing upload', () => {
 
     const set = await screen.findByRole('article', { name: 'Mixed.pdf' })
     expect(await within(set).findByText('Ready — 1 page failed')).toBeInTheDocument()
-    const pages = await within(set).findByRole('list', { name: 'Pages of Mixed.pdf' })
+    const pages = await screen.findByRole('list', { name: 'Pages of Mixed.pdf' })
     const page2 = within(pages).getByText('Page 2').closest('li')!
     expect(within(page2).getByText('Failed')).toBeInTheDocument()
     expect(within(page2).getByText(/Page 2 could not be read/)).toBeInTheDocument()
@@ -132,15 +132,29 @@ describe('Drawing upload', () => {
     expect(within(set).queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument()
   })
 
-  it('toggles the page list accessibly', async () => {
+  it('shows every page in one Pages block, with a compact strip of files', async () => {
+    const { container } = await openProject()
+    await chooseFile(container, pdfFile('GA.pdf', 2))
+    expect(await screen.findByRole('heading', { level: 2, name: 'Pages (2)' })).toBeInTheDocument()
+    const file = await screen.findByRole('article', { name: 'GA.pdf' })
+    expect(within(file).getByText('2 pages')).toBeInTheDocument()
+    expect(within(file).queryByText(/uploaded by/)).not.toBeInTheDocument() // details live in the file menu
+    expect(await screen.findByRole('list', { name: 'Pages of GA.pdf' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Hide pages|Show pages/ })).not.toBeInTheDocument()
+
+    // The upload area is out of the way once there are drawings, one click away.
+    expect(screen.queryByRole('button', { name: 'Choose PDF…' })).toBeInTheDocument() // still open from this upload
+    await userEvent.click(screen.getByRole('button', { name: 'Upload PDF' }))
+    expect(screen.queryByRole('button', { name: 'Choose PDF…' })).not.toBeInTheDocument()
+  })
+
+  it('offers Download PDF from the file menu', async () => {
     const { container } = await openProject()
     await chooseFile(container, pdfFile('GA.pdf', 1))
-    const set = await screen.findByRole('article', { name: 'GA.pdf' })
-    const toggle = await within(set).findByRole('button', { name: 'Hide pages' })
-    expect(toggle).toHaveAttribute('aria-expanded', 'true')
-    await userEvent.click(toggle)
-    expect(within(set).getByRole('button', { name: 'Show pages' })).toHaveAttribute('aria-expanded', 'false')
-    expect(within(set).queryByRole('list')).not.toBeInTheDocument()
+    const file = await screen.findByRole('article', { name: 'GA.pdf' })
+    await userEvent.click(within(file).getByRole('button', { name: 'Actions for GA.pdf' }))
+    expect(await screen.findByRole('menuitem', { name: 'Download PDF' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Remove' })).toBeInTheDocument()
   })
 })
 
@@ -149,7 +163,8 @@ describe('Removing a drawing set', () => {
     const { container } = await openProject()
     await chooseFile(container, pdfFile('E101-RA.pdf', 1))
     const set = await screen.findByRole('article', { name: 'E101-RA.pdf' })
-    await userEvent.click(within(set).getByRole('button', { name: 'Remove E101-RA.pdf' }))
+    await userEvent.click(within(set).getByRole('button', { name: 'Actions for E101-RA.pdf' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Remove' }))
     const dialog = await screen.findByRole('dialog', { name: 'Remove “E101-RA.pdf”?' })
     expect(within(dialog).getByText(/original file is kept for the project history/)).toBeInTheDocument()
     await userEvent.click(within(dialog).getByRole('button', { name: 'Remove drawing set' }))
@@ -164,7 +179,8 @@ describe('Removing a drawing set', () => {
     await chooseFile(container, pdfFile('Used.pdf', 1))
     const set = await screen.findByRole('article', { name: 'Used.pdf' })
     Object.assign(mockDrawings.sets[0]!.pages[0]!, { status: 'added' }) // its members are in the ABM
-    await userEvent.click(within(set).getByRole('button', { name: 'Remove Used.pdf' }))
+    await userEvent.click(within(set).getByRole('button', { name: 'Actions for Used.pdf' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Remove' }))
     const dialog = await screen.findByRole('dialog')
     expect(await within(dialog).findByText(/1 page is in the ABM/)).toBeInTheDocument() // counted afresh on open
     await userEvent.click(within(dialog).getByRole('button', { name: 'Remove drawing set' }))
@@ -176,7 +192,8 @@ describe('Removing a drawing set', () => {
     await chooseFile(container, pdfFile('Busy.pdf', 1))
     const set = await screen.findByRole('article', { name: 'Busy.pdf' })
     Object.assign(mockDrawings.sets[0]!.pages[0]!, { status: 'processing' })
-    await userEvent.click(within(set).getByRole('button', { name: 'Remove Busy.pdf' }))
+    await userEvent.click(within(set).getByRole('button', { name: 'Actions for Busy.pdf' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Remove' }))
     const dialog = await screen.findByRole('dialog')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Remove drawing set' }))
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('while its pages are being processed')
@@ -185,7 +202,7 @@ describe('Removing a drawing set', () => {
   it('is not offered to viewers', async () => {
     await openProject('viewer')
     await screen.findByText('Drawing sets uploaded to this project appear here.')
-    expect(screen.queryByRole('button', { name: /^Remove / })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: 'Remove' })).not.toBeInTheDocument()
   })
 })
 

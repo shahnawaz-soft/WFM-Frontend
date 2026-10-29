@@ -8,6 +8,7 @@ export interface AbmFilters {
   profile?: string
   designation?: string
   page?: string
+  batch?: string
   review_status?: string
   source?: string
   match_status?: string

@@ -410,6 +410,7 @@ a.button { text-decoration: none; justify-content: center; }
 
 /* --- Projects ------------------------------------------------------------------------ */
 .breadcrumb { font-size: 0.9rem; margin-bottom: var(--space-3); color: var(--color-text-muted); }
+.back-link { margin-bottom: var(--space-3); }
 .page-header__meta { margin: var(--space-2) 0 0; display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
 .button-row--tight { margin-top: 0; flex-wrap: wrap; }
 .table__primary-link { font-weight: 600; }
@@ -465,6 +466,36 @@ a.button { text-decoration: none; justify-content: center; }
 .upload__limits ul { margin: 0; padding-left: var(--space-6); }
 .progress { width: 100%; height: 10px; background: var(--color-neutral-bg); border-radius: 999px; overflow: hidden; }
 .progress__bar { height: 100%; background: var(--color-primary); transition: width 0.2s; }
+.file-strip { list-style: none; margin: 0 0 var(--space-4); padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.file-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius); font-size: 0.9rem; }
+.file-row__name { font-weight: 600; word-break: break-word; }
+.file-row__menu { margin-left: auto; min-width: 40px; padding-inline: var(--space-2); }
+.file-row__error { flex-basis: 100%; margin: 0; }
+.projects__thumb { width: 96px; }
+.projects__thumb .thumbnail { width: 88px; height: 62px; border-radius: var(--radius); overflow: hidden; }
+.projects__thumb .thumbnail img { width: 100%; height: 100%; object-fit: cover; }
+.projects__thumb-empty { font-size: 0.8rem; }
+.settings-facts { display: grid; grid-template-columns: max-content 1fr; gap: var(--space-1) var(--space-4); margin: var(--space-4) 0 0; font-size: 0.9rem; }
+.settings-facts dt { color: var(--color-text-muted); }
+.settings-facts dd { margin: 0; }
+.batch { margin: 0 0 var(--space-5); padding: var(--space-3) var(--space-4); border: 1px solid var(--color-border); border-left: 4px solid var(--color-primary); border-radius: var(--radius); }
+.batch__header { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); flex-wrap: wrap; margin-bottom: var(--space-3); }
+.batch__header h3 { margin: 0; font-size: 1.05rem; }
+.page-card__move { margin-left: auto; display: inline-flex; gap: var(--space-1); }
+.page-card__move .button { min-width: 32px; min-height: 32px; padding: 0 var(--space-2); }
+.kind-filter { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0 0 var(--space-4); }
+.kind-filter .button[aria-pressed='true'] { border-color: var(--color-primary); color: var(--color-primary); font-weight: 600; }
+.page-card__sheet { margin: 0; padding: var(--space-2) var(--space-3) 0; font-weight: 600; font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.page-card__rename { flex: none; }
+.selection-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin: 0 0 var(--space-4); padding: var(--space-2) var(--space-3); border: 1px solid var(--color-primary); border-radius: var(--radius); }
+.page-card { position: relative; }
+.page-card__members { margin: 0 0 var(--space-2); font-weight: 600; display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.page-card[data-hidden] { opacity: 0.6; }
+.page-card__select { position: absolute; top: var(--space-2); left: var(--space-2); z-index: 1; display: grid; place-items: center; width: 32px; height: 32px; border-radius: var(--radius); background: var(--color-surface); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); cursor: pointer; }
+.page-card__select input { width: 18px; height: 18px; margin: 0; cursor: pointer; }
+.project-more { margin-top: var(--space-4); }
+.project-more > summary { cursor: pointer; font-weight: 600; padding: var(--space-3) var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius); }
+.project-more[open] > summary { margin-bottom: var(--space-3); }
 .drawing-sets { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-4); }
 .drawing-set { border: 1px solid var(--color-border); border-radius: var(--radius); padding: var(--space-4); }
 .drawing-set__header { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-4); flex-wrap: wrap; }

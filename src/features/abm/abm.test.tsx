@@ -157,6 +157,23 @@ describe('ABM', () => {
     await waitFor(() => expect(within(all).getAllByRole('row')).toHaveLength(4))
   })
 
+  it('filters by batch', async () => {
+    const setup = await projectWithReviewedPage()
+    const batch = await call('POST', `/projects/${setup.project.id}/batches/`, { name: 'Roof' })
+    await call('POST', `/projects/${setup.project.id}/batches/`, { name: 'Level 2' })
+    await call('POST', `/projects/${setup.project.id}/batches/arrange/`, { batch: batch.id, pages: [setup.page.id] })
+    const { router } = renderApp(`/projects/${setup.project.id}/abm`)
+    const table = await screen.findByRole('table', { name: /ABM/ })
+    await waitFor(() => expect(within(table).getAllByRole('row')).toHaveLength(4))
+
+    await userEvent.selectOptions(await screen.findByLabelText('Batch'), 'Level 2')
+    expect(await screen.findByText('No entries match these filters.')).toBeInTheDocument()
+    await userEvent.selectOptions(screen.getByLabelText('Batch'), 'Roof')
+    const roof = await screen.findByRole('table', { name: /ABM/ })
+    await waitFor(() => expect(within(roof).getAllByRole('row')).toHaveLength(4))
+    expect(router.state.location.search).toContain(`batch=${batch.id}`)
+  })
+
   it('searches and explains an invalid length filter', async () => {
     const { table } = await openAbm()
     await userEvent.type(screen.getByLabelText('Search'), 'hss')

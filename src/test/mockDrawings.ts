@@ -16,6 +16,8 @@ interface StoredSet {
 }
 
 let sets: StoredSet[] = []
+/** Batches of pages, per project (pages carry ``batch`` and ``batch_position``). */
+let batches: { id: string; project: string; name: string; position: number }[] = []
 /** Set-wide find-similar jobs, by id. */
 let similarJobs: Record<string, Record<string, unknown>> = {}
 let beamMarks: { mark: string; beams: number; length_mm: string; length_display: string; sections: string[]; pages: number[] }[] = []
@@ -26,6 +28,8 @@ let failingPages: Record<string, number[]> = {}
 /** Outcome of the next Run Plan per page number (default: completed vector drawing). */
 type RunOutcome = 'completed' | 'needs_review' | 'failed' | 'stay_processing'
 let runOutcomes: Record<number, RunOutcome> = {}
+/** What the next run of a page number reads the sheet as (default: an unnamed plan). */
+let sheetsRead: Record<number, { kind: string; number?: string; title?: string }> = {}
 let jobCounter = 0
 const runMembers: Record<string, unknown[]> = {}
 const runIssues: Record<string, unknown[]> = {}
@@ -486,11 +490,25 @@ const LIMITS = {
   notes: ['Password-protected PDFs cannot be processed.'],
 }
 
+function batchList(project: string) {
+  const all = sets.filter((s) => s.set.project === project).flatMap((s) => s.pages)
+  return batches
+    .filter((b) => b.project === project)
+    .map((b) => ({
+      ...b,
+      pages: all
+        .filter((p) => p.batch === b.id)
+        .sort((x, y) => x.batch_position - y.batch_position)
+        .map((p) => p.id),
+    }))
+}
+
 function counts(s: StoredSet): DrawingSet {
   const ready = s.pages.filter((p) => p.thumbnail_status === 'ready').length
   const failed = s.pages.filter((p) => p.thumbnail_status === 'failed').length
   const inAbm = s.pages.filter((p) => p.status === 'added').length
-  return { ...s.set, pages_ready: ready, pages_failed: failed, pages_in_abm: inAbm, can_retry: failed > 0 || s.set.status === 'failed' }
+  const hidden = s.pages.filter((p) => p.hidden).length
+  return { ...s.set, pages_ready: ready, pages_failed: failed, pages_in_abm: inAbm, pages_hidden: hidden, can_retry: failed > 0 || s.set.status === 'failed' }
 }
 
 function ingest(s: StoredSet) {
@@ -519,6 +537,7 @@ let noProposedElevation = new Set<string>()
 export const mockDrawings = {
   reset() {
     sets = []
+    batches = []
     similarJobs = {}
     connectionLines = []
     connectionTemplates = []
@@ -526,6 +545,7 @@ export const mockDrawings = {
     versions = []
     failingPages = {}
     runOutcomes = {}
+    sheetsRead = {}
     sheetKinds = {}
     noProposedElevation = new Set()
     beamMarks = []
@@ -539,6 +559,9 @@ export const mockDrawings = {
   },
   noElevationProposed(pageId: string) {
     noProposedElevation.add(pageId)
+  },
+  sheetRead(pageNumber: number, sheet: { kind: string; number?: string; title?: string }) {
+    sheetsRead[pageNumber] = sheet
   },
   runOutcome(pageNumber: number, outcome: RunOutcome) {
     runOutcomes[pageNumber] = outcome
@@ -600,6 +623,7 @@ export async function acceptUpload(
       pages_ready: 0,
       pages_failed: 0,
       pages_in_abm: 0,
+      pages_hidden: 0,
       can_retry: false,
     } as DrawingSet,
     pages: Array.from({ length: pageCount }, (_, i) => ({
@@ -613,6 +637,10 @@ export async function acceptUpload(
       rotation: 0,
       error_code: '',
       error_message: '',
+      hidden: false,
+      batch: null,
+      batch_position: 0,
+      sheet_name: '',
       latest_job: null,
       current_run: null,
       level_label: '',
@@ -841,6 +869,46 @@ export const drawingHandlers = [
       : HttpResponse.json({ error: { code: 'not_found', message: 'Page not found.', details: {}, request_id: 'r' } }, { status: 404 })
   }),
 
+  http.post('*/api/v1/drawing-pages/:id/sheet-name/', async ({ params, request }) => {
+    const page = sets.flatMap((s) => s.pages).find((p) => p.id === params.id)!
+    Object.assign(page, { sheet_name: ((await request.json()) as { name: string }).name.trim() })
+    return HttpResponse.json(page)
+  }),
+
+  http.get('*/api/v1/projects/:id/batches/', ({ params }) => HttpResponse.json(batchList(params.id as string))),
+  http.post('*/api/v1/projects/:id/batches/', async ({ params, request }) => {
+    const { name } = (await request.json()) as { name: string }
+    const project = params.id as string
+    const batch = { id: crypto.randomUUID(), project, name: name.trim(), position: batches.filter((b) => b.project === project).length }
+    batches.push(batch)
+    return HttpResponse.json({ ...batch, pages: [] }, { status: 201 })
+  }),
+  http.post('*/api/v1/projects/:id/batches/arrange/', async ({ params, request }) => {
+    const { batch, pages } = (await request.json()) as { batch: string | null; pages: string[] }
+    const all = sets.flatMap((s) => s.pages)
+    const rest = batch ? all.filter((p) => p.batch === batch && !pages.includes(p.id)).sort((a, b) => a.batch_position - b.batch_position) : []
+    ;[...pages.map((id) => all.find((p) => p.id === id)!), ...rest].forEach((p, i) => Object.assign(p, { batch, batch_position: batch ? i : 0 }))
+    return HttpResponse.json(batchList(params.id as string))
+  }),
+  http.patch('*/api/v1/batches/:id/', async ({ params, request }) => {
+    const batch = batches.find((b) => b.id === params.id)!
+    batch.name = ((await request.json()) as { name: string }).name
+    return HttpResponse.json(batchList(batch.project).find((b) => b.id === batch.id))
+  }),
+  http.delete('*/api/v1/batches/:id/', ({ params }) => {
+    batches = batches.filter((b) => b.id !== params.id)
+    sets.flatMap((s) => s.pages).filter((p) => p.batch === params.id).forEach((p) => Object.assign(p, { batch: null, batch_position: 0 }))
+    return new HttpResponse(null, { status: 204 })
+  }),
+
+  http.post('*/api/v1/projects/:id/pages/hide/', async ({ request }) => {
+    const { pages, hidden = true } = (await request.json()) as { pages: string[]; hidden?: boolean }
+    const all = sets.flatMap((s) => s.pages)
+    const changed = all.filter((p) => pages.includes(p.id) && p.hidden !== hidden)
+    changed.forEach((p) => Object.assign(p, { hidden }))
+    return HttpResponse.json({ updated: changed.length })
+  }),
+
   http.get('*/api/v1/drawing-sets/:id/pages/', ({ params }) =>
     HttpResponse.json(sets.find((s) => s.set.id === params.id)!.pages),
   ),
@@ -945,6 +1013,9 @@ export const drawingHandlers = [
       engine_outdated: false,
       current_engine_version: '1.0',
       page_kind: outcome === 'needs_review' ? 'raster' : 'vector',
+      sheet_kind: sheetsRead[page.page_number]?.kind ?? (outcome === 'needs_review' ? 'unknown' : 'plan'),
+      sheet_number: sheetsRead[page.page_number]?.number ?? '',
+      sheet_title: sheetsRead[page.page_number]?.title ?? '',
       summary: { paths: outcome === 'needs_review' ? 3 : 36986, text_objects: 783, text_chars: outcome === 'needs_review' ? 0 : 5086, images: 1, image_coverage: 0.9, sheet_kind: outcome === 'needs_review' ? 'unknown' : 'plan' },
       review_reasons:
         outcome === 'needs_review'
@@ -1568,6 +1639,10 @@ export const drawingHandlers = [
     if (q.get('length_missing') === 'true') list = list.filter((e) => e.length_mm == null)
     if (q.get('profile')) list = list.filter((e) => q.get('profile')!.split(',').includes(e.profile))
     if (q.get('page')) list = list.filter((e) => e.page === q.get('page'))
+    if (q.get('batch')) {
+      const inBatch = new Set(sets.flatMap((s) => s.pages).filter((p) => p.batch === q.get('batch')).map((p) => p.id))
+      list = list.filter((e) => inBatch.has(e.page))
+    }
     if (statuses) list = list.filter((e) => statuses.includes(e.review_status))
     if (q.get('source')) list = list.filter((e) => e.source === q.get('source'))
     if (q.get('length_min')) {

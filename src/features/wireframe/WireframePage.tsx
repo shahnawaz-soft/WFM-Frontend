@@ -15,6 +15,7 @@ import {
   markWireframeReviewed,
 } from '../../api/wireframe'
 import { ErrorState, LoadingState } from '../../components/feedback/States'
+import { BackLink } from '../../components/ui/BackLink'
 import { Button } from '../../components/ui/Button'
 import { Dialog } from '../../components/ui/Dialog'
 import { SelectField, TextField } from '../../components/ui/Field'
@@ -113,6 +114,7 @@ export function WireframePage() {
   const generating = revisions.data.some((w) => w.status === 'generating')
   return (
     <>
+      <BackLink to={`/projects/${projectId}`} label="Back to project" />
       <nav aria-label="Breadcrumb" className="breadcrumb">
         <Link to="/projects">Projects</Link> <span aria-hidden="true">/</span>{' '}
         <Link to={`/projects/${projectId}`}>{project.data.name}</Link>

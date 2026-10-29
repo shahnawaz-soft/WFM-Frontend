@@ -109,6 +109,24 @@ describe('Page workspace', () => {
     expect(await screen.findByRole('img', { name: 'Drawing: page 2 of GA.pdf' })).toBeInTheDocument()
   })
 
+  it('leaves hidden pages out of Previous/Next', async () => {
+    const project = mockProjects.create('Warehouse', OWNER)
+    mockBackend.startSession(OWNER)
+    await acceptUpload(project.id, new File(['%PDF-1.7 pages:3'], 'GA.pdf'))
+    const [first, second] = mockDrawings.sets[0]!.pages
+    Object.assign(second!, { hidden: true })
+    renderApp(`/projects/${project.id}/pages/${first!.id}`)
+    await screen.findByRole('heading', { level: 1, name: /^Page 1 of 3/ })
+    await userEvent.click(screen.getByRole('button', { name: 'Next →' }))
+    expect(await screen.findByRole('heading', { level: 1, name: /^Page 3 of 3/ })).toBeInTheDocument()
+  })
+
+  it('closes the review and returns to the project', async () => {
+    await openViewer(2)
+    await userEvent.click(screen.getByRole('link', { name: 'Close page review' }))
+    expect(await screen.findByRole('heading', { level: 1, name: 'Warehouse' })).toBeInTheDocument()
+  })
+
   it('moves between pages with Previous/Next and the page strip, keeping the zoom', async () => {
     await openViewer(1)
     expect(screen.getByRole('button', { name: '← Previous' })).toBeDisabled()

@@ -3,13 +3,15 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 
 import { listProjects, type ProjectFilters } from '../../api/projects'
-import { PROJECT_ROLE_LABELS, PROJECT_STATUS_LABELS } from '../../api/types'
+import { PROJECT_STATUS_LABELS } from '../../api/types'
 import { useAuth } from '../../auth/AuthContext'
 import { EmptyState, ErrorState, LoadingState } from '../../components/feedback/States'
 import { Button } from '../../components/ui/Button'
 import { SelectField, TextField } from '../../components/ui/Field'
 import { StatusBadge } from '../../components/ui/StatusBadge'
 import { useDebouncedValue } from '../../lib/useDebouncedValue'
+import { formatTonnes, formatTons } from '../abm/format'
+import { Thumbnail } from '../drawings/Thumbnail'
 import { CreateProjectDialog } from './CreateProjectDialog'
 
 const PAGE_SIZE = 25
@@ -99,28 +101,49 @@ export function ProjectsPage() {
               <caption className="visually-hidden">Projects, {total} total</caption>
               <thead>
                 <tr>
+                  <th scope="col">Drawing</th>
                   <th scope="col">Project</th>
-                  <th scope="col">Your role</th>
-                  <th scope="col">Members</th>
                   <th scope="col">Status</th>
+                  <th scope="col" className="num">
+                    Tonnage
+                  </th>
                   <th scope="col">Last updated</th>
                 </tr>
               </thead>
               <tbody>
                 {query.data.results.map((project) => (
                   <tr key={project.id}>
+                    <td className="projects__thumb">
+                      {project.cover_page ? (
+                        <Link to={`/projects/${project.id}`} tabIndex={-1} aria-hidden="true">
+                          <div role="img" aria-label={`Page 1 of ${project.name}`}>
+                            <Thumbnail page={{ id: project.cover_page, thumbnail_status: 'ready' }} alt="" />
+                          </div>
+                        </Link>
+                      ) : (
+                        <span className="projects__thumb-empty muted">No drawings</span>
+                      )}
+                    </td>
                     <td>
                       <Link to={`/projects/${project.id}`} className="table__primary-link">
                         {project.name}
                       </Link>
                     </td>
-                    <td>{project.my_role ? PROJECT_ROLE_LABELS[project.my_role] : <span className="muted">Not a member</span>}</td>
-                    <td>{project.member_count}</td>
                     <td>
                       <StatusBadge
                         tone={project.status === 'archived' ? 'neutral' : project.status === 'finalized' ? 'info' : 'success'}
                         label={PROJECT_STATUS_LABELS[project.status]}
                       />
+                    </td>
+                    <td className="num">
+                      {Number(project.tonnage.lb) > 0 ? (
+                        <>
+                          {formatTons(project.tonnage)}
+                          <div className="muted">{formatTonnes(project.tonnage)}</div>
+                        </>
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
                     </td>
                     <td>{new Date(project.updated_at).toLocaleString()}</td>
                   </tr>

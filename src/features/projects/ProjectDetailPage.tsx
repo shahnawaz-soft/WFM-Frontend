@@ -2,10 +2,11 @@ import { useMutation, usePrefetchQuery, useQuery, useQueryClient } from '@tansta
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router'
 
-import { getProject, renameProject, setArchived } from '../../api/projects'
+import { getProject, setArchived, updateProject } from '../../api/projects'
 import { toApiError } from '../../api/errors'
-import { PROJECT_ROLE_LABELS, PROJECT_STATUS_LABELS, type Project } from '../../api/types'
+import { PROJECT_STATUS_LABELS, type Project } from '../../api/types'
 import { ErrorState, LoadingState } from '../../components/feedback/States'
+import { BackLink } from '../../components/ui/BackLink'
 import { Button } from '../../components/ui/Button'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { Dialog } from '../../components/ui/Dialog'
@@ -19,6 +20,8 @@ import { DrawingsSection } from '../drawings/DrawingsSection'
 import { drawingSetsQuery } from '../drawings/queries'
 import { ProjectSectionData } from '../sections/ProjectSectionData'
 import { MembersSection } from './MembersSection'
+import { detailsOf, detailsPayload, formatDay } from './projectDetails'
+import { ProjectDetailsFields } from './ProjectDetailsFields'
 import { projectCan } from './useProjectPermissions'
 
 export function ProjectDetailPage() {
@@ -50,6 +53,7 @@ export function ProjectDetailPage() {
   const project = query.data
   return (
     <>
+      <BackLink to="/projects" label="Back to projects" />
       <nav aria-label="Breadcrumb" className="breadcrumb">
         <Link to="/projects">Projects</Link> <span aria-hidden="true">/</span> <span>{project.name}</span>
       </nav>
@@ -62,9 +66,8 @@ export function ProjectDetailPage() {
             <StatusBadge
               tone={project.status === 'archived' ? 'neutral' : project.status === 'finalized' ? 'info' : 'success'}
               label={PROJECT_STATUS_LABELS[project.status]}
-            />{' '}
-            Your role: {project.my_role ? PROJECT_ROLE_LABELS[project.my_role] : 'Not a member (organisation access)'} ·
-            Created by {project.created_by.full_name} on {new Date(project.created_at).toLocaleDateString()}
+            />
+            {settingsLine(project) && <span>{settingsLine(project)}</span>}
           </p>
         </div>
         <ProjectActions project={project} />
@@ -86,17 +89,25 @@ export function ProjectDetailPage() {
         </p>
       )}
 
-      <ProjectReviewCard project={project} />
-
-      <ProjectOutputsCard project={project} />
+      <ProjectAbmCard project={project} />
 
       <DrawingsSection project={project} />
 
-      <ProjectAbmCard project={project} />
+      <details className="project-more">
+        <summary>Review and finalise</summary>
+        <ProjectReviewCard project={project} />
+        <ProjectOutputsCard project={project} />
+      </details>
 
-      <ProjectSectionData project={project} />
+      <details className="project-more">
+        <summary>Section data</summary>
+        <ProjectSectionData project={project} />
+      </details>
 
-      <MembersSection project={project} />
+      <details className="project-more">
+        <summary>Members</summary>
+        <MembersSection project={project} />
+      </details>
     </>
   )
 }
@@ -119,7 +130,7 @@ function ProjectActions({ project }: { project: Project }) {
 
   return (
     <div className="button-row button-row--tight">
-      {projectCan(project, 'project.edit') && <Button onClick={() => setRenaming(true)}>Rename</Button>}
+      {projectCan(project, 'project.edit') && <Button onClick={() => setRenaming(true)}>Project settings</Button>}
       {projectCan(project, 'project.archive') &&
         (archived ? (
           <Button variant="primary" loading={archive.isPending} onClick={() => archive.mutate()}>
@@ -129,7 +140,7 @@ function ProjectActions({ project }: { project: Project }) {
           <Button onClick={() => setConfirmArchive(true)}>Archive</Button>
         ))}
 
-      {renaming && <RenameDialog project={project} onClose={() => setRenaming(false)} />}
+      {renaming && <SettingsDialog project={project} onClose={() => setRenaming(false)} />}
       <ConfirmDialog
         open={confirmArchive}
         title={`Archive “${project.name}”?`}
@@ -148,14 +159,27 @@ function ProjectActions({ project }: { project: Project }) {
   )
 }
 
-function RenameDialog({ project, onClose }: { project: Project; onClose: () => void }) {
+/** "Acme Builders · Team North · Tekla 2024 SP3 · Target 15 Dec 2026", from what is set. */
+function settingsLine(project: Project): string {
+  return [
+    project.client_name,
+    project.team_name,
+    project.tekla_version && `Tekla ${project.tekla_version}`,
+    project.target_completion_date && `Target ${formatDay(project.target_completion_date)}`,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+}
+
+function SettingsDialog({ project, onClose }: { project: Project; onClose: () => void }) {
   const queryClient = useQueryClient()
   const [name, setName] = useState(project.name)
+  const [details, setDetails] = useState(() => detailsOf(project))
   const [errors, setErrors] = useState<FormErrors>(NO_ERRORS)
 
   const mutation = useMutation({
-    mutationFn: () => renameProject(project.id, name.trim(), project.version),
-    meta: { suppressErrorToast: true, successMessage: 'Project renamed' },
+    mutationFn: () => updateProject(project.id, { name: name.trim(), ...detailsPayload(details) }, project.version),
+    meta: { suppressErrorToast: true, successMessage: 'Project settings saved' },
     onSuccess: (updated) => {
       queryClient.setQueryData(['project', project.id], updated)
       void queryClient.invalidateQueries({ queryKey: ['projects'] })
@@ -177,7 +201,7 @@ function RenameDialog({ project, onClose }: { project: Project; onClose: () => v
   }
 
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()} title="Rename project">
+    <Dialog open onOpenChange={(o) => !o && onClose()} title="Project settings">
       <FormAlert message={errors.form} />
       <form onSubmit={handleSubmit} noValidate>
         <TextField
@@ -188,9 +212,20 @@ function RenameDialog({ project, onClose }: { project: Project; onClose: () => v
           maxLength={200}
           autoFocus
         />
+        <ProjectDetailsFields value={details} onChange={setDetails} errors={errors} />
+        <dl className="settings-facts">
+          <dt>Upload date</dt>
+          <dd>
+            {project.first_upload_at ? new Date(project.first_upload_at).toLocaleDateString() : 'No drawings uploaded yet'}
+          </dd>
+          <dt>Created</dt>
+          <dd>
+            {new Date(project.created_at).toLocaleDateString()} by {project.created_by.full_name}
+          </dd>
+        </dl>
         <div className="button-row">
           <Button type="submit" variant="primary" loading={mutation.isPending}>
-            Save name
+            Save settings
           </Button>
           <Button onClick={onClose}>Cancel</Button>
         </div>

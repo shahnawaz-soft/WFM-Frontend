@@ -7,6 +7,7 @@ export interface FilterState {
   profile: string
   designation: string
   page: string
+  batch: string
   status: string
   source: string
   match: string
@@ -28,6 +29,7 @@ export const EMPTY: FilterState = {
   profile: '',
   designation: '',
   page: '',
+  batch: '',
   status: '',
   source: '',
   match: '',
@@ -78,7 +80,7 @@ export const CONFIDENCE_OPTIONS = [
   { value: '0.5', label: 'Below 50%' },
 ]
 
-const TEXT_KEYS = ['search', 'profile', 'designation', 'page', 'status', 'source', 'match', 'confidence', 'length_min', 'length_max', 'quantity_min', 'quantity_max', 'ordering'] as const
+const TEXT_KEYS = ['search', 'profile', 'designation', 'page', 'batch', 'status', 'source', 'match', 'confidence', 'length_min', 'length_max', 'quantity_min', 'quantity_max', 'ordering'] as const
 
 export function fromSearch(params: URLSearchParams): FilterState {
   const state: FilterState = { ...EMPTY }
@@ -117,6 +119,7 @@ export function toApi(state: FilterState): AbmFilters {
     profile: state.profile,
     designation: state.designation,
     page: state.page,
+    batch: state.batch,
     ...status,
     source: state.source,
     match_status: state.match,

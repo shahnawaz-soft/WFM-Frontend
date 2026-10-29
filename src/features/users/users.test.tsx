@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
@@ -123,6 +123,21 @@ describe('Users administration', () => {
     expect(await within(dialog).findByRole('alert')).toHaveTextContent(
       'You cannot remove your own administrator access or deactivate yourself.',
     )
+  })
+
+  it('deletes a user after confirmation and can restore them', async () => {
+    const table = await openUsers()
+    expect(within(table).queryByRole('button', { name: 'Delete admin@steelo.test' })).not.toBeInTheDocument() // not yourself
+    await userEvent.click(within(table).getByRole('button', { name: 'Delete estimator@steelo.test' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Delete estimator@steelo.test?' })
+    expect(within(dialog).getByText(/can no longer sign in/)).toBeInTheDocument()
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Delete user' }))
+    expect(await screen.findByText('User deleted')).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByText('estimator@steelo.test')).not.toBeInTheDocument()) // list shows active users
+
+    await userEvent.selectOptions(screen.getByLabelText('Status'), 'false')
+    await userEvent.click(await screen.findByRole('button', { name: 'Restore estimator@steelo.test' }))
+    expect(await screen.findByText('User restored')).toBeInTheDocument()
   })
 
   it('resets a password', async () => {

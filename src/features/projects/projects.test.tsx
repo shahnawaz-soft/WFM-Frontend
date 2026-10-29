@@ -26,14 +26,27 @@ describe('Projects list', () => {
     expect(screen.getByRole('button', { name: 'Create your first project' })).toBeInTheDocument()
   })
 
-  it('lists projects with the user’s role, member count and text status', async () => {
-    mockProjects.create('Warehouse Extension', OWNER, { 'detailer@steelo.test': 'editor' })
+  it('lists projects in a table with a page-1 thumbnail, text status and tonnage', async () => {
+    const p = mockProjects.create('Warehouse Extension', OWNER, { 'detailer@steelo.test': 'editor' })
+    Object.assign(p, {
+      cover_page: 'page-1',
+      tonnage: { lb: '12340.0', kg: '5597.3', short_tons: '6.170', tonnes: '5.597' },
+    })
     signedInAs('detailer@steelo.test')
     renderApp('/projects')
+    const table = await screen.findByRole('table', { name: /Projects/ })
+    expect(within(table).getAllByRole('columnheader').map((h) => h.textContent)).toEqual([
+      'Drawing',
+      'Project',
+      'Status',
+      'Tonnage',
+      'Last updated',
+    ])
     const row = (await screen.findByRole('link', { name: 'Warehouse Extension' })).closest('tr')!
-    expect(within(row).getByText('Editor')).toBeInTheDocument()
-    expect(within(row).getByText('2')).toBeInTheDocument()
     expect(within(row).getByText('Active')).toBeInTheDocument()
+    expect(within(row).getByText('6.17 US tons')).toBeInTheDocument()
+    expect(within(row).getByText('5.60 t')).toBeInTheDocument()
+    expect(within(row).getByRole('img', { name: 'Page 1 of Warehouse Extension', hidden: true })).toBeInTheDocument() // the name beside it is the link
   })
 
   it('separates archived projects behind the status filter', async () => {
@@ -56,9 +69,14 @@ describe('Projects list', () => {
     expect(within(dialog).getByText('Enter a project name.')).toBeInTheDocument()
 
     await userEvent.type(within(dialog).getByLabelText('Project name'), 'Airport Hangar')
+    await userEvent.type(within(dialog).getByLabelText('Client name'), 'Acme Builders')
+    await userEvent.type(within(dialog).getByLabelText('Team'), 'Team North')
+    await userEvent.type(within(dialog).getByLabelText('Tekla version'), '2024 SP3')
+    await userEvent.type(within(dialog).getByLabelText('Target completion date'), '2026-12-15')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Create project' }))
     expect(await screen.findByRole('heading', { level: 1, name: 'Airport Hangar' })).toBeInTheDocument()
-    expect(screen.getByText(/Your role: Owner/)).toBeInTheDocument()
+    expect(screen.getByText(/Acme Builders · Team North · Tekla 2024 SP3 · Target 15 Dec 2026/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Project settings' })).toBeInTheDocument() // owner actions
   })
 })
 
@@ -76,37 +94,40 @@ describe('Project details', () => {
     renderApp(`/projects/${p.id}`)
     await screen.findByRole('heading', { level: 1, name: 'Warehouse' })
     await screen.findByRole('table')
-    for (const name of ['Rename', 'Archive', 'Add member']) {
+    for (const name of ['Project settings', 'Archive', 'Add member']) {
       expect(screen.queryByRole('button', { name })).not.toBeInTheDocument()
     }
     expect(within(screen.getByRole('table')).getByText('Owner')).toBeInTheDocument() // role as text, no select
   })
 
-  it('renames the project', async () => {
+  it('renames the project and changes its settings', async () => {
     const p = mockProjects.create('Warehouse', OWNER)
     signedInAs(OWNER)
     renderApp(`/projects/${p.id}`)
-    await userEvent.click(await screen.findByRole('button', { name: 'Rename' }))
-    const dialog = await screen.findByRole('dialog', { name: 'Rename project' })
+    await userEvent.click(await screen.findByRole('button', { name: 'Project settings' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Project settings' })
+    expect(within(dialog).getByText('No drawings uploaded yet')).toBeInTheDocument() // upload date, read-only
     const input = within(dialog).getByLabelText('Project name')
     await userEvent.clear(input)
     await userEvent.type(input, 'Warehouse Rev B')
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Save name' }))
+    await userEvent.type(within(dialog).getByLabelText('Team'), 'Team South')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save settings' }))
     expect(await screen.findByRole('heading', { level: 1, name: 'Warehouse Rev B' })).toBeInTheDocument()
+    expect(screen.getByText(/Team South/)).toBeInTheDocument()
   })
 
   it('explains a conflicting edit and lets the user retry on the latest version', async () => {
     const p = mockProjects.create('Warehouse', OWNER)
     signedInAs(OWNER)
     renderApp(`/projects/${p.id}`)
-    await userEvent.click(await screen.findByRole('button', { name: 'Rename' }))
-    const dialog = await screen.findByRole('dialog', { name: 'Rename project' })
+    await userEvent.click(await screen.findByRole('button', { name: 'Project settings' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Project settings' })
     p.version += 1 // someone else saved meanwhile
     p.name = 'Renamed elsewhere'
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Save name' }))
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save settings' }))
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('changed by someone else')
 
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Save name' }))
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save settings' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
 
@@ -119,11 +140,11 @@ describe('Project details', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Archive project' }))
 
     expect(await screen.findByText(/This project is archived and read-only/)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Rename' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Project settings' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Add member' })).not.toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: 'Restore project' }))
-    expect(await screen.findByRole('button', { name: 'Rename' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Project settings' })).toBeInTheDocument()
   })
 })
 
@@ -225,12 +246,14 @@ describe('Project members', () => {
   })
 })
 
-describe('Home', () => {
-  it('lists recent projects', async () => {
+describe('Start page', () => {
+  it('opens on Projects; there is no Home page for now', async () => {
     mockProjects.create('Warehouse', OWNER)
     signedInAs(OWNER)
     renderApp('/')
-    const section = await screen.findByRole('region', { name: 'Recent projects' })
-    expect(await within(section).findByRole('link', { name: 'Warehouse' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Projects' })).toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: 'Warehouse' })).toBeInTheDocument()
+    const nav = screen.getByRole('navigation', { name: /main/i })
+    expect(within(nav).queryByRole('link', { name: 'Home' })).not.toBeInTheDocument()
   })
 })

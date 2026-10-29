@@ -4,7 +4,7 @@ import { fetchThumbnail } from '../../api/drawings'
 import type { DrawingPageListItem } from '../../api/types'
 
 /** Loads a page thumbnail (authenticated) only once it scrolls near the viewport. */
-export function Thumbnail({ page, alt }: { page: DrawingPageListItem; alt: string }) {
+export function Thumbnail({ page, alt }: { page: Pick<DrawingPageListItem, 'id' | 'thumbnail_status'>; alt: string }) {
   const ref = useRef<HTMLDivElement>(null)
   const [visible, setVisible] = useState(typeof IntersectionObserver === 'undefined')
   const [url, setUrl] = useState<string | null>(null)

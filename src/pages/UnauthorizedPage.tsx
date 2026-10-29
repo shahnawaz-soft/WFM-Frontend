@@ -9,7 +9,7 @@ export function UnauthorizedPage() {
       <div>
         <h1 className="state__title">You don’t have access to this page</h1>
         <p>Your account does not have permission to view it. If you need access, ask your Steelo administrator.</p>
-        <Link to="/">Go to the home page</Link>
+        <Link to="/projects">Go to Projects</Link>
       </div>
     </div>
   )

@@ -7,6 +7,7 @@ import { getProject } from '../../api/projects'
 import { getRevision, pairSheet } from '../../api/revisions'
 import type { RevisionReport } from '../../api/types'
 import { ErrorState, LoadingState } from '../../components/feedback/States'
+import { BackLink } from '../../components/ui/BackLink'
 import { SelectField } from '../../components/ui/Field'
 import { StatusBadge } from '../../components/ui/StatusBadge'
 import type { StatusTone } from '../../components/ui/StatusIcon'
@@ -85,6 +86,7 @@ export function RevisionPage() {
   const sheets = onlyChanged ? r.sheets.filter((row) => row.status !== 'compared' || row.changes.length > 0) : r.sheets
   return (
     <>
+      <BackLink to={`/projects/${projectId}`} label="Back to project" />
       <nav aria-label="Breadcrumb" className="breadcrumb">
         <Link to="/projects">Projects</Link> <span aria-hidden="true">/</span>{' '}
         <Link to={`/projects/${projectId}`}>{project.data.name}</Link>

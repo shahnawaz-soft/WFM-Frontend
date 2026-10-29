@@ -7,21 +7,25 @@ import { Button } from '../../components/ui/Button'
 import { Dialog } from '../../components/ui/Dialog'
 import { FormAlert, TextField } from '../../components/ui/Field'
 import { NO_ERRORS, toFormErrors, type FormErrors } from '../../lib/formErrors'
+import { detailsPayload, NO_DETAILS } from './projectDetails'
+import { ProjectDetailsFields } from './ProjectDetailsFields'
 
 export function CreateProjectDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [name, setName] = useState('')
+  const [details, setDetails] = useState(NO_DETAILS)
   const [errors, setErrors] = useState<FormErrors>(NO_ERRORS)
 
   function close() {
     setName('')
+    setDetails(NO_DETAILS)
     setErrors(NO_ERRORS)
     onClose()
   }
 
   const mutation = useMutation({
-    mutationFn: () => createProject(name.trim()),
+    mutationFn: () => createProject({ name: name.trim(), ...detailsPayload(details) }),
     meta: { suppressErrorToast: true, successMessage: 'Project created' },
     onSuccess: async (project) => {
       await queryClient.invalidateQueries({ queryKey: ['projects'] })
@@ -56,6 +60,7 @@ export function CreateProjectDialog({ open, onClose }: { open: boolean; onClose:
           required
           autoFocus
         />
+        <ProjectDetailsFields value={details} onChange={setDetails} errors={errors} />
         <div className="button-row">
           <Button type="submit" variant="primary" loading={mutation.isPending}>
             Create project

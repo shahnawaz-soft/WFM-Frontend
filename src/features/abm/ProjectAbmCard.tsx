@@ -1,8 +1,9 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router'
 
-import { getAbmSummary, getAbmTotals } from '../../api/abm'
+import { downloadDraftAbm, getAbmSummary, getAbmTotals } from '../../api/abm'
 import type { Project } from '../../api/types'
+import { Button } from '../../components/ui/Button'
 import { formatTonnes, formatTons } from './format'
 
 /** Where the project's ABM stands, with the way in. */
@@ -11,6 +12,11 @@ export function ProjectAbmCard({ project }: { project: Project }) {
   const totals = useQuery({ queryKey: ['abm', project.id, 'totals'], queryFn: () => getAbmTotals(project.id) })
   const s = summary.data
   const t = totals.data
+  const download = useMutation({
+    // The Excel of every page that has been run (team columns + 3D coordinates); a finalised
+    // version's frozen Excel is under Review and finalise.
+    mutationFn: () => downloadDraftAbm(project.id, `${project.name.replace(/[^A-Za-z0-9]+/g, '-')}-ABM.xlsx`),
+  })
   return (
     <section className="card" aria-labelledby="abm-card-heading">
       <div className="card__header">
@@ -19,6 +25,9 @@ export function ProjectAbmCard({ project }: { project: Project }) {
           <Link className="button button--secondary" to={`/projects/${project.id}/wireframe?tab=columns`}>
             Column scheduler
           </Link>
+          <Button loading={download.isPending} onClick={() => download.mutate()}>
+            Download ABM
+          </Button>
           <Link className="button button--primary" to={`/projects/${project.id}/abm`}>
             Open ABM
           </Link>

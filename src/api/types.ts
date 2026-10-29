@@ -21,7 +21,9 @@ export const GLOBAL_ROLE_LABELS: Record<GlobalRole, string> = {
 }
 
 export type Project = Schemas['Project']
-export type PaginatedProjects = Schemas['PaginatedProjectList']
+export type ProjectListItem = Schemas['ProjectListItem']
+export type PageBatch = Schemas['Batch']
+export type PaginatedProjects = Schemas['PaginatedProjectListItemList']
 export type ProjectRole = Schemas['ProjectRoleEnum']
 export type ProjectStatus = Schemas['ProjectStatusEnum']
 export type Membership = Schemas['Membership']

@@ -7,11 +7,13 @@ import { getPage } from '../../api/drawings'
 import { toApiError } from '../../api/errors'
 import { getMember } from '../../api/members'
 import { getProject } from '../../api/projects'
-import type { AbmEntry, AbmSummary, AbmTotals, ExtractedMember } from '../../api/types'
+import type { AbmEntry, AbmSummary, AbmTotals, ExtractedMember, PageBatch } from '../../api/types'
 import { ErrorState, LoadingState } from '../../components/feedback/States'
+import { BackLink } from '../../components/ui/BackLink'
 import { Button } from '../../components/ui/Button'
 import { FormAlert, SelectField, TextField } from '../../components/ui/Field'
 import { AbmExport } from '../finalize/AbmExport'
+import { batchesQuery } from '../drawings/queries'
 import { projectCan } from '../projects/useProjectPermissions'
 import { AddMemberForm } from '../review/AddMemberForm'
 import { ConnectionJump, ConnectionPanel } from '../connections/ConnectionPanel'
@@ -60,6 +62,7 @@ export function AbmPage() {
 
   const project = useQuery({ queryKey: ['project', projectId], queryFn: () => getProject(projectId) })
   const summary = useQuery({ queryKey: ['abm', projectId, 'summary', draft], queryFn: () => getAbmSummary(projectId, draft) })
+  const batches = useQuery(batchesQuery(projectId))
   const totals = useQuery({ queryKey: ['abm', projectId, 'totals', draft], queryFn: () => getAbmTotals(projectId, draft) })
   // Beams the drawings name by a mark only: a tab of their own, when there are any.
   const beamMarks = useQuery({ queryKey: ['beam-marks', projectId], queryFn: () => listBeamMarks(projectId) })
@@ -193,6 +196,7 @@ export function AbmPage() {
     <div className="abm">
       <header className="abm__header">
         <div>
+          <BackLink to={`/projects/${projectId}`} label="Back to project" />
           <nav aria-label="Breadcrumb" className="breadcrumb">
             <Link to="/projects">Projects</Link> <span aria-hidden="true">/</span>{' '}
             <Link to={`/projects/${projectId}`}>{project.data.name}</Link>
@@ -267,7 +271,7 @@ export function AbmPage() {
               )
             ) : (
               <>
-                <Filters filters={filters} summary={summary.data} onChange={update} />
+                <Filters filters={filters} summary={summary.data} batches={batches.data ?? []} onChange={update} />
                 {entries.error && (
                   <FormAlert
                     message={`${toApiError(entries.error).message} ${Object.values(toApiError(entries.error).details ?? {})
@@ -465,7 +469,17 @@ function NoPagesYet({ projectId, summary }: { projectId: string; summary: AbmSum
   )
 }
 
-function Filters({ filters, summary, onChange }: { filters: FilterState; summary: AbmSummary; onChange: (patch: Partial<FilterState>) => void }) {
+function Filters({
+  filters,
+  summary,
+  batches,
+  onChange,
+}: {
+  filters: FilterState
+  summary: AbmSummary
+  batches: PageBatch[]
+  onChange: (patch: Partial<FilterState>) => void
+}) {
   const [search, setSearch] = useState(filters.search)
   const advancedInUse = Boolean(
     filters.match || filters.confidence || filters.length_min || filters.length_max || filters.length_missing || filters.quantity_min || filters.quantity_max,
@@ -505,6 +519,14 @@ function Filters({ filters, summary, onChange }: { filters: FilterState; summary
             ...summary.pages.map((p) => ({ value: p.id, label: `p.${p.page_number} · ${p.drawing_set.original_filename} (${p.entries})` })),
           ]}
         />
+        {batches.length > 0 && (
+          <SelectField
+            label="Batch"
+            value={filters.batch}
+            onChange={(e) => onChange({ batch: e.target.value })}
+            options={[{ value: '', label: 'All batches' }, ...batches.map((b) => ({ value: b.id, label: b.name }))]}
+          />
+        )}
         <SelectField label="Status" value={filters.status} onChange={(e) => onChange({ status: e.target.value })} options={STATUS_OPTIONS} />
         <SelectField label="Values" value={filters.source} onChange={(e) => onChange({ source: e.target.value })} options={SOURCE_OPTIONS} />
         <label

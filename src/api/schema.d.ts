@@ -86,6 +86,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/batches/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["batches_destroy"];
+        options?: never;
+        head?: never;
+        patch: operations["batches_partial_update"];
+        trace?: never;
+    };
     "/api/v1/connection-material/{id}/": {
         parameters: {
             query?: never;
@@ -347,6 +363,23 @@ export interface paths {
         put?: never;
         /** @description Start processing a page. Returns the existing job if one is already active. */
         post: operations["drawing_pages_run_plan_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/drawing-pages/{id}/sheet-name/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Name the sheet as a person reads it (empty: the name read from the drawing). */
+        post: operations["drawing_pages_sheet_name_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1046,6 +1079,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_pk}/batches/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The project's batches of pages (anyone who sees the project), and adding one. */
+        get: operations["projects_batches_list"];
+        put?: never;
+        /** @description The project's batches of pages (anyone who sees the project), and adding one. */
+        post: operations["projects_batches_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_pk}/batches/arrange/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Put pages in a batch, in a given order (or take them out of batches). */
+        post: operations["projects_batches_arrange_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{project_pk}/drawing-sets/": {
         parameters: {
             query?: never;
@@ -1096,6 +1164,23 @@ export interface paths {
         head?: never;
         /** @description Members of one project. Listing needs view access; changes need member management. */
         patch: operations["projects_members_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/projects/{project_pk}/pages/hide/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Hide selected pages of the project (or show them again with ``hidden: false``). */
+        post: operations["projects_pages_hide_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/projects/{project_pk}/section-dataset/": {
@@ -1605,6 +1690,15 @@ export interface components {
             /** @default true */
             make_default: boolean;
         };
+        ArrangePagesRequest: {
+            /**
+             * Format: uuid
+             * @description null takes the pages out of batches
+             */
+            batch: string | null;
+            /** @description In the order they should have in the batch, first first */
+            pages: string[];
+        };
         AssignMarkRequest: {
             mark: string;
             designation: string;
@@ -1615,6 +1709,17 @@ export interface components {
             updated: number;
             /** @description On reviewed pages: not changed until reopened */
             locked: number;
+        };
+        Batch: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly name: string;
+            readonly position: number;
+            /** @description Its pages' ids, in the batch's order */
+            readonly pages: string[];
+        };
+        BatchNameRequest: {
+            name: string;
         };
         /** @enum {unknown} */
         BlankEnum: "";
@@ -1978,6 +2083,11 @@ export interface components {
             readonly rotation: number;
             readonly error_code: string;
             readonly error_message: string;
+            readonly hidden: boolean;
+            /** Format: uuid */
+            readonly batch: string | null;
+            readonly batch_position: number;
+            readonly sheet_name: string;
             readonly latest_job: components["schemas"]["PageJob"] | null;
             readonly current_run: components["schemas"]["ExtractionRun"] | null;
             readonly level_label: string;
@@ -2008,6 +2118,11 @@ export interface components {
             readonly rotation: number;
             readonly error_code: string;
             readonly error_message: string;
+            readonly hidden: boolean;
+            /** Format: uuid */
+            readonly batch: string | null;
+            readonly batch_position: number;
+            readonly sheet_name: string;
             readonly latest_job: components["schemas"]["PageJob"] | null;
             readonly current_run: components["schemas"]["RunListItem"] | null;
             readonly level_label: string;
@@ -2040,6 +2155,7 @@ export interface components {
             readonly pages_failed: number;
             /** @description Pages whose members are in the ABM */
             readonly pages_in_abm: number;
+            readonly pages_hidden: number;
             readonly can_retry: boolean;
             /** Format: uuid */
             readonly revises: string | null;
@@ -2154,6 +2270,9 @@ export interface components {
             /** @description The engine version pages are read with now */
             readonly current_engine_version: string | null;
             readonly page_kind: components["schemas"]["PageKindEnum"];
+            readonly sheet_kind: string;
+            readonly sheet_number: string;
+            readonly sheet_title: string;
             summary: components["schemas"]["RunSummary"];
             review_reasons: components["schemas"]["ReviewReason"][];
             readonly scale_text: string;
@@ -2327,6 +2446,17 @@ export interface components {
          * @enum {string}
          */
         HealthStatusStatusEnum: "ok" | "error";
+        HidePagesRequest: {
+            pages: string[];
+            /**
+             * @description false shows the pages again
+             * @default true
+             */
+            hidden: boolean;
+        };
+        HidePagesResult: {
+            updated: number;
+        };
         HistoryItem: {
             /** Format: uuid */
             id: string;
@@ -2661,7 +2791,7 @@ export interface components {
             previous?: string | null;
             results: components["schemas"]["AbmEntry"][];
         };
-        PaginatedProjectList: {
+        PaginatedProjectListItemList: {
             /** @example 123 */
             count: number;
             /**
@@ -2674,7 +2804,7 @@ export interface components {
              * @example http://api.example.org/accounts/?offset=200&limit=100
              */
             previous?: string | null;
-            results: components["schemas"]["Project"][];
+            results: components["schemas"]["ProjectListItem"][];
         };
         PaginatedUserList: {
             /** @example 123 */
@@ -2702,6 +2832,9 @@ export interface components {
         };
         PasswordResetRequest: {
             new_password: string;
+        };
+        PatchedBatchNameRequest: {
+            name?: string;
         };
         PatchedEditConnectionMaterialRequest: {
             kind?: components["schemas"]["ConnectionKindEnum"];
@@ -2762,6 +2895,11 @@ export interface components {
             last_name?: string;
         };
         PatchedProjectUpdateRequest: {
+            client_name?: string;
+            team_name?: string;
+            tekla_version?: string;
+            /** Format: date */
+            target_completion_date?: string | null;
             name?: string;
             /** @description Version you edited; a stale value returns 409. */
             version?: number;
@@ -2826,6 +2964,16 @@ export interface components {
             readonly version: number;
             readonly my_role: (components["schemas"]["ProjectRoleEnum"] | components["schemas"]["NullEnum"]) | null;
             readonly member_count: number;
+            readonly client_name: string;
+            readonly team_name: string;
+            readonly tekla_version: string;
+            /** Format: date */
+            readonly target_completion_date: string | null;
+            /**
+             * Format: date-time
+             * @description When the first drawing set was uploaded
+             */
+            readonly first_upload_at: string | null;
             readonly section_dataset: components["schemas"]["ProjectSectionDataset"] | null;
             /** @description What the current user may do in this project (drives the UI). */
             readonly my_capabilities: string[];
@@ -2834,6 +2982,11 @@ export interface components {
             version?: number;
         };
         ProjectCreateRequest: {
+            client_name?: string;
+            team_name?: string;
+            tekla_version?: string;
+            /** Format: date */
+            target_completion_date?: string | null;
             name: string;
         };
         ProjectDatasetRequest: {
@@ -2844,6 +2997,45 @@ export interface components {
             results: components["schemas"]["HistoryItem"][];
             /** Format: date-time */
             next_before: string | null;
+        };
+        /** @description A project as the projects list shows it: its cover page and reviewed tonnage too. */
+        ProjectListItem: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly name: string;
+            readonly status: components["schemas"]["ProjectStatusEnum"];
+            readonly created_by: components["schemas"]["UserSummary"];
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+            /** Format: date-time */
+            readonly archived_at: string | null;
+            /** Format: date-time */
+            readonly finalized_at: string | null;
+            readonly version: number;
+            readonly my_role: (components["schemas"]["ProjectRoleEnum"] | components["schemas"]["NullEnum"]) | null;
+            readonly member_count: number;
+            readonly client_name: string;
+            readonly team_name: string;
+            readonly tekla_version: string;
+            /** Format: date */
+            readonly target_completion_date: string | null;
+            /**
+             * Format: date-time
+             * @description When the first drawing set was uploaded
+             */
+            readonly first_upload_at: string | null;
+            readonly section_dataset: components["schemas"]["ProjectSectionDataset"] | null;
+            /** @description What the current user may do in this project (drives the UI). */
+            readonly my_capabilities: string[];
+            /**
+             * Format: uuid
+             * @description Page 1 of the first drawing set (thumbnail)
+             */
+            readonly cover_page: string | null;
+            /** @description Reviewed ABM weight */
+            readonly tonnage: components["schemas"]["_Amounts"];
         };
         /**
          * @description * `owner` - Owner
@@ -2965,6 +3157,9 @@ export interface components {
             /** @description The engine version pages are read with now */
             readonly current_engine_version: string | null;
             readonly page_kind: components["schemas"]["PageKindEnum"];
+            readonly sheet_kind: string;
+            readonly sheet_number: string;
+            readonly sheet_title: string;
             review_reasons: components["schemas"]["ReviewReason"][];
             readonly scale_text: string;
             /** Format: double */
@@ -3118,6 +3313,10 @@ export interface components {
          * @enum {string}
          */
         SheetKindEnum: "plan" | "elevation" | "section" | "detail" | "schedule" | "notes" | "unknown";
+        SheetNameRequest: {
+            /** @description Empty: use the name read from the drawing */
+            name: string;
+        };
         /** @description A search of every plan of a drawing set for marks drawn like the one pointed at. */
         SimilarColumnsJob: {
             /** Format: uuid */
@@ -3901,6 +4100,51 @@ export interface operations {
             };
         };
     };
+    batches_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    batches_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedBatchNameRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Batch"];
+                };
+            };
+        };
+    };
     connection_material_destroy: {
         parameters: {
             query?: never;
@@ -4359,6 +4603,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProcessingJob"];
+                };
+            };
+        };
+    };
+    drawing_pages_sheet_name_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SheetNameRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DrawingPage"];
                 };
             };
         };
@@ -4877,7 +5146,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedProjectList"];
+                    "application/json": components["schemas"]["PaginatedProjectListItemList"];
                 };
             };
         };
@@ -4954,6 +5223,8 @@ export interface operations {
     projects_abm_list: {
         parameters: {
             query?: {
+                /** @description Only pages in this batch */
+                batch?: string;
                 confidence_lt?: number;
                 designation?: string[];
                 /** @description Every page that has been run, not only those added (not a final figure) */
@@ -5533,6 +5804,77 @@ export interface operations {
             };
         };
     };
+    projects_batches_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Batch"][];
+                };
+            };
+        };
+    };
+    projects_batches_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchNameRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Batch"];
+                };
+            };
+        };
+    };
+    projects_batches_arrange_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArrangePagesRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Batch"][];
+                };
+            };
+        };
+    };
     projects_drawing_sets_list: {
         parameters: {
             query?: never;
@@ -5668,6 +6010,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Membership"];
+                };
+            };
+        };
+    };
+    projects_pages_hide_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HidePagesRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HidePagesResult"];
                 };
             };
         };

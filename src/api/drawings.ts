@@ -1,5 +1,5 @@
 import { apiClient } from './client'
-import type { DrawingPage, DrawingPageListItem, DrawingSet, UploadLimits } from './types'
+import type { DrawingPage, DrawingPageListItem, DrawingSet, PageBatch, UploadLimits } from './types'
 
 export async function getUploadLimits(): Promise<UploadLimits> {
   const { data } = await apiClient.get<UploadLimits>('/api/v1/drawing-sets/limits/')
@@ -63,6 +63,49 @@ export async function downloadOriginal(drawingSet: DrawingSet): Promise<void> {
 }
 
 /** Remove a drawing set from its project (soft: the file and history are kept). */
+export async function listBatches(projectId: string): Promise<PageBatch[]> {
+  const { data } = await apiClient.get<PageBatch[]>(`/api/v1/projects/${projectId}/batches/`)
+  return data
+}
+
+export async function createBatch(projectId: string, name: string): Promise<PageBatch> {
+  const { data } = await apiClient.post<PageBatch>(`/api/v1/projects/${projectId}/batches/`, { name })
+  return data
+}
+
+/** Put pages in a batch in this order (``batch`` null: out of every batch). */
+export async function arrangePages(projectId: string, batch: string | null, pageIds: string[]): Promise<PageBatch[]> {
+  const { data } = await apiClient.post<PageBatch[]>(`/api/v1/projects/${projectId}/batches/arrange/`, {
+    batch,
+    pages: pageIds,
+  })
+  return data
+}
+
+export async function renameBatch(batchId: string, name: string): Promise<PageBatch> {
+  const { data } = await apiClient.patch<PageBatch>(`/api/v1/batches/${batchId}/`, { name })
+  return data
+}
+
+export async function deleteBatch(batchId: string): Promise<void> {
+  await apiClient.delete(`/api/v1/batches/${batchId}/`)
+}
+
+/** A person's name for the sheet ('' = the name read from the drawing). */
+export async function nameSheet(pageId: string, name: string): Promise<DrawingPage> {
+  const { data } = await apiClient.post<DrawingPage>(`/api/v1/drawing-pages/${pageId}/sheet-name/`, { name })
+  return data
+}
+
+/** Hide pages of the project (or show them again with ``hidden: false``). */
+export async function hidePages(projectId: string, pageIds: string[], hidden: boolean): Promise<{ updated: number }> {
+  const { data } = await apiClient.post<{ updated: number }>(`/api/v1/projects/${projectId}/pages/hide/`, {
+    pages: pageIds,
+    hidden,
+  })
+  return data
+}
+
 export async function removeDrawingSet(drawingSetId: string): Promise<void> {
   await apiClient.delete(`/api/v1/drawing-sets/${drawingSetId}/`)
 }

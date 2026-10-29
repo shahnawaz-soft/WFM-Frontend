@@ -24,14 +24,14 @@ describe('Login', () => {
   it('signs in and shows the app with the user menu', async () => {
     renderApp('/')
     await signIn('estimator@steelo.test')
-    expect(await screen.findByRole('heading', { name: 'Welcome, Esha' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Projects' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Account menu for Esha Estimator' })).toBeInTheDocument()
   })
 
   it('signs in with a username, ignoring case', async () => {
     renderApp('/')
     await signIn('ESHA')
-    expect(await screen.findByRole('heading', { name: 'Welcome, Esha' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Projects' })).toBeInTheDocument()
   })
 
   it('returns the user to the page they originally asked for', async () => {
@@ -60,13 +60,13 @@ describe('Session lifecycle', () => {
   it('restores an existing session on page load without asking to sign in', async () => {
     mockBackend.startSession('estimator@steelo.test')
     renderApp('/')
-    expect(await screen.findByRole('heading', { name: 'Welcome, Esha' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Projects' })).toBeInTheDocument()
   })
 
   it('renews an expired access token transparently and retries the request', async () => {
     mockBackend.startSession('admin@steelo.test')
     renderApp('/')
-    await screen.findByRole('heading', { name: 'Welcome, Ada' })
+    await screen.findByRole('heading', { level: 1, name: 'Projects' })
     const refreshesAfterBoot = mockBackend.state.refreshCalls
 
     mockBackend.expireAccessTokens()
@@ -85,7 +85,7 @@ describe('Session lifecycle', () => {
   it('signs the user out with an explanation when the session cannot be renewed', async () => {
     mockBackend.startSession('admin@steelo.test')
     renderApp('/')
-    await screen.findByRole('heading', { name: 'Welcome, Ada' })
+    await screen.findByRole('heading', { level: 1, name: 'Projects' })
 
     mockBackend.expireAccessTokens()
     mockBackend.endSession()
@@ -111,7 +111,7 @@ describe('Permission-aware navigation', () => {
   it('hides admin navigation from members and blocks direct access', async () => {
     mockBackend.startSession('estimator@steelo.test')
     const { router } = renderApp('/')
-    await screen.findByRole('heading', { name: 'Welcome, Esha' })
+    await screen.findByRole('heading', { level: 1, name: 'Projects' })
     expect(screen.queryByRole('link', { name: 'Users' })).not.toBeInTheDocument()
 
     await router.navigate('/admin/users')
