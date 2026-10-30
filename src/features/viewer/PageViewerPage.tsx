@@ -4,12 +4,14 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 
 import { fetchOriginalPdf, getDrawingSet, getPage, listPages } from '../../api/drawings'
 import { toApiError } from '../../api/errors'
-import { findSimilarColumns, type FindSimilarResult } from '../../api/processing'
+import { findSimilarColumns, removeColumn, removeLike, type FindSimilarResult } from '../../api/processing'
 import { listPageIssues, listPageMembers } from '../../api/members'
 import { getProject } from '../../api/projects'
-import type { DrawingPageListItem } from '../../api/types'
+import type { ColumnSymbol, DrawingPageListItem } from '../../api/types'
 import { ErrorState, LoadingState } from '../../components/feedback/States'
+import { notify } from '../../components/feedback/toastStore'
 import { Button } from '../../components/ui/Button'
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { StatusBadge } from '../../components/ui/StatusBadge'
 import { isActiveJob, PAGE_STATUS } from '../drawings/status'
 import { ProjectLockedNotice } from '../finalize/ProjectLockedNotice'
@@ -76,6 +78,11 @@ export function PageViewerPage() {
   // Picking a pen: the next click on the drawing reads the pen of the line there.
   const [pickingPen, setPickingPen] = useState(false)
   const [penPoint, setPenPoint] = useState<[number, number] | null>(null)
+  // A column a person is removing (found wrongly), and the last one removed (for Undo).
+  const [removingColumn, setRemovingColumn] = useState<ColumnSymbol | null>(null)
+  const [lastRemoved, setLastRemoved] = useState<{ pageId: string; points: [number, number][] } | null>(null)
+  // "Remove all like this": the columns found drawn like the last one removed, to confirm.
+  const [likeFound, setLikeFound] = useState<[number, number][] | null>(null)
   const [similarFound, setSimilar] = useState<{ pageId: string; point: [number, number]; result: FindSimilarResult } | null>(null)
   const similar = similarFound?.pageId === pageId ? similarFound : null  // shown on its own page only
   const queryClient = useQueryClient()
@@ -167,6 +174,34 @@ export function PageViewerPage() {
     void refetchMembers()
   }, [queryClient, setId, refetchMembers])
   // This page only: one request.
+  const refreshColumns = () => {
+    void queryClient.invalidateQueries({ queryKey: ['drawing-page'] })
+    void refetchMembers()
+  }
+  const columnRemoval = useMutation({
+    mutationFn: async ({ points, undo }: { points: [number, number][]; undo: boolean }) => {
+      for (const point of points) await removeColumn(pageId, point, undo)
+    },
+    meta: { successMessage: 'Column list updated' },
+    onSuccess: (_, { points, undo }) => {
+      setRemovingColumn(null)
+      setLastRemoved(undo ? null : { pageId, points })
+      refreshColumns()
+    },
+  })
+  const findLike = useMutation({
+    mutationFn: (point: [number, number]) => removeLike(pageId, point, false),
+    onSuccess: (result) => setLikeFound(result.columns),
+  })
+  const removeAllLike = useMutation({
+    mutationFn: (point: [number, number]) => removeLike(pageId, point, true),
+    onSuccess: () => {
+      notify.success(`Removed ${likeFound?.length ?? 0} columns drawn like it`)
+      setLastRemoved((last) => (last ? { pageId, points: [...last.points, ...(likeFound ?? [])] } : last))
+      setLikeFound(null)
+      refreshColumns()
+    },
+  })
   const findSimilar = useMutation({
     mutationFn: ({ point, box }: { point: [number, number]; box?: [number, number, number, number] }) =>
       findSimilarColumns(pageId, point, box),
@@ -505,6 +540,7 @@ export function PageViewerPage() {
               : undefined
           }
           columns={detailRun?.columns ?? undefined}
+          onColumnClick={canRun && !reviewLocked ? setRemovingColumn : undefined}
           grids={detailRun?.grids ?? undefined}
           showGrids={showGrids}
           onPlace={place}
@@ -564,6 +600,23 @@ export function PageViewerPage() {
                 >
                   Pens
                 </Button>
+              )}
+              {lastRemoved?.pageId === pageId && canRun && (
+                <>
+                  <Button
+                    loading={findLike.isPending}
+                    title="Find the columns on this page drawn like the one you removed"
+                    onClick={() => findLike.mutate(lastRemoved.points[0]!)}
+                  >
+                    Remove all like this
+                  </Button>
+                  <Button
+                    loading={columnRemoval.isPending}
+                    onClick={() => columnRemoval.mutate({ points: lastRemoved.points, undo: true })}
+                  >
+                    Undo remove
+                  </Button>
+                </>
               )}
               <PageAreaControls
                 page={current}
@@ -682,6 +735,40 @@ export function PageViewerPage() {
           </p>
         )}
       </div>
+
+      <ConfirmDialog
+        open={removingColumn !== null}
+        title="Remove this column?"
+        confirmLabel="Remove column"
+        pending={columnRemoval.isPending}
+        error={columnRemoval.error ? toApiError(columnRemoval.error).message : null}
+        onConfirm={() => removingColumn && columnRemoval.mutate({ points: [[removingColumn.x, removingColumn.y]], undo: false })}
+        onCancel={() => {
+          setRemovingColumn(null)
+          columnRemoval.reset()
+        }}
+      >
+        <p>
+          Steelo found a column here that isn’t one. It is taken off this page and stays off when the page runs again; if it
+          has an ABM entry, that entry is rejected. Undo brings it back.
+        </p>
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={likeFound !== null}
+        title={likeFound?.length ? `Remove ${likeFound.length} columns drawn like this?` : 'No other column is drawn like it'}
+        confirmLabel={likeFound?.length ? `Remove ${likeFound.length} columns` : 'OK'}
+        pending={removeAllLike.isPending}
+        error={removeAllLike.error ? toApiError(removeAllLike.error).message : null}
+        onConfirm={() => (likeFound?.length && lastRemoved ? removeAllLike.mutate(lastRemoved.points[0]!) : setLikeFound(null))}
+        onCancel={() => setLikeFound(null)}
+      >
+        <p>
+          {likeFound?.length
+            ? 'Columns on this page whose drawing matches the one you removed, closely. Each is removed as you would one by one: it stays off when the page runs again, and Undo remove brings them all back.'
+            : 'Steelo compares the drawing round each column with the one you removed; none on this page matches it closely.'}
+        </p>
+      </ConfirmDialog>
 
       {penPoint && project.data && (
         <PickedPenDialog project={project.data} pageId={pageId} point={penPoint} onClose={() => setPenPoint(null)} />

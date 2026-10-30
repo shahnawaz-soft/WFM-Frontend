@@ -55,6 +55,8 @@ interface DrawingStageProps {
   placingHint?: string
   /** Column symbols found on the plan (drawn with the outlines). */
   columns?: ColumnSymbol[] | null
+  /** A click on a column's box (a person removing a column found wrongly); none: not clickable. */
+  onColumnClick?: (column: ColumnSymbol) => void
   /** Structural grid lines found on the plan, drawn when ``showGrids`` is on. */
   grids?: GridLine[] | null
   showGrids?: boolean
@@ -313,7 +315,7 @@ export function DrawingStage(props: DrawingStageProps) {
               />
             )}
             {showLabels && props.columns && props.columns.length > 0 && viewport && Math.abs(viewport.scale - zoom) < 0.001 && (
-              <ColumnOverlay viewport={viewport} columns={props.columns} />
+              <ColumnOverlay viewport={viewport} columns={props.columns} onClick={placing ? undefined : props.onColumnClick} />
             )}
             {props.area && viewport && Math.abs(viewport.scale - zoom) < 0.001 && (
               <AreaOverlay viewport={viewport} area={props.area} />
@@ -362,16 +364,45 @@ function PointMarker({ viewport, point, label }: { viewport: PageViewport; point
 }
 
 /** A box around each column symbol found on the plan (outline + legend text, not colour alone). */
-function ColumnOverlay({ viewport, columns }: { viewport: PageViewport; columns: ColumnSymbol[] }) {
+function ColumnOverlay({
+  viewport,
+  columns,
+  onClick,
+}: {
+  viewport: PageViewport
+  columns: ColumnSymbol[]
+  onClick?: (column: ColumnSymbol) => void
+}) {
   const half = 9 // PDF points: just larger than the symbol
   return (
-    <svg className="column-overlay" width={viewport.width} height={viewport.height} aria-hidden="true">
-      {columns.map((c) => {
+    <svg
+      className="column-overlay"
+      data-clickable={onClick ? 'true' : undefined}
+      width={viewport.width}
+      height={viewport.height}
+      aria-hidden={onClick ? undefined : true}
+    >
+      {columns.map((c, i) => {
         const [x1, y1] = viewport.convertToViewportPoint(c.x - half, c.y + half) as [number, number]
         const [x2, y2] = viewport.convertToViewportPoint(c.x + half, c.y - half) as [number, number]
         const title = <title>{describeColumn(c)}</title>
+        const click = onClick
+          ? {
+              role: 'button',
+              tabIndex: 0,
+              'aria-label': `Column ${i + 1}: ${describeColumn(c)}`,
+              onClick: (event: React.MouseEvent) => {
+                event.stopPropagation()
+                onClick(c)
+              },
+              onPointerDown: (event: React.PointerEvent) => event.stopPropagation(),
+              onKeyDown: (event: React.KeyboardEvent) => {
+                if (event.key === 'Enter' || event.key === ' ') onClick(c)
+              },
+            }
+          : {}
         return c.shape === 'round_tube' ? (
-          <circle key={`${c.x},${c.y}`} cx={(x1 + x2) / 2} cy={(y1 + y2) / 2} r={Math.abs(x2 - x1) / 2} data-shape={c.shape}>
+          <circle key={`${c.x},${c.y}`} cx={(x1 + x2) / 2} cy={(y1 + y2) / 2} r={Math.abs(x2 - x1) / 2} data-shape={c.shape} {...click}>
             {title}
           </circle>
         ) : (
@@ -382,6 +413,7 @@ function ColumnOverlay({ viewport, columns }: { viewport: PageViewport; columns:
             width={Math.abs(x2 - x1)}
             height={Math.abs(y2 - y1)}
             data-shape={c.shape ?? 'wide_flange'}
+            {...click}
           >
             {title}
           </rect>

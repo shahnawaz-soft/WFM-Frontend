@@ -216,6 +216,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/drawing-pages/{id}/columns/remove/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Remove a column Steelo found wrongly (it stays removed on Run again), or undo that. */
+        post: operations["drawing_pages_columns_remove_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/drawing-pages/{id}/columns/remove-like/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description The page's columns drawn like the one at a point: listed, or removed (``apply``). */
+        post: operations["drawing_pages_columns_remove_like_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/drawing-pages/{id}/find-similar-columns/": {
         parameters: {
             query?: never;
@@ -3458,6 +3492,44 @@ export interface components {
          * @enum {string}
          */
         ReasonEnum: "failed" | "needs_review" | "not_reviewed" | "not_added";
+        RemoveColumnRequest: {
+            /**
+             * Format: double
+             * @description PDF points: on the column's box
+             */
+            x: number;
+            /** Format: double */
+            y: number;
+            /**
+             * @description Bring back the one removed there
+             * @default false
+             */
+            undo: boolean;
+        };
+        RemoveColumnResult: {
+            /** @description Columns the page has removed */
+            removed: number;
+        };
+        RemoveLikeRequest: {
+            /**
+             * Format: double
+             * @description PDF points: on the column (or where it was)
+             */
+            x: number;
+            /** Format: double */
+            y: number;
+            /**
+             * @description False: only list them
+             * @default false
+             */
+            apply: boolean;
+        };
+        RemoveLikeResult: {
+            /** @description The page's columns drawn alike ([x, y], PDF points) */
+            columns: number[][];
+            /** @description Columns the page has removed (after apply) */
+            removed: number;
+        };
         ReopenProjectRequest: {
             reason: string;
         };
@@ -4809,6 +4881,56 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DrawingPage"];
+                };
+            };
+        };
+    };
+    drawing_pages_columns_remove_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RemoveColumnRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RemoveColumnResult"];
+                };
+            };
+        };
+    };
+    drawing_pages_columns_remove_like_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RemoveLikeRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RemoveLikeResult"];
                 };
             };
         };

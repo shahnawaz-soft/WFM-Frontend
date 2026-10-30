@@ -931,6 +931,8 @@ a.button { text-decoration: none; justify-content: center; }
 .grid-overlay text { fill: #0e7490; font: 700 12px system-ui, sans-serif; text-anchor: middle; paint-order: stroke; stroke: #fff; stroke-width: 3px; }
 .grid-overlay__key { stroke: #0e7490; stroke-width: 1.5; stroke-dasharray: 6 2 1 2; }
 .column-overlay { position: absolute; inset: 0; overflow: visible; pointer-events: none; }
+.column-overlay[data-clickable] rect, .column-overlay[data-clickable] circle { pointer-events: all; cursor: pointer; }
+.column-overlay[data-clickable] rect:hover, .column-overlay[data-clickable] circle:hover { fill: rgb(234 88 12 / 30%); }
 .column-overlay rect, .column-overlay__key { fill: rgb(234 88 12 / 12%); stroke: #c2410c; stroke-width: 2; vector-effect: non-scaling-stroke; }
 
 /* --- Finalisation (Phase 15) ------------------------------------------------------------ */

@@ -218,6 +218,7 @@ interface MockGrid {
   hidden: boolean
 }
 let gridTables: Record<string, MockGrid[]> = {}
+let removedColumns: Record<string, { x: number; y: number }[]> = {}
 
 /** What the mock plans' grids say (grid 1 and A cross at the reference point; 2 is 30'-0" on). */
 function drawnGrids(): MockGrid[] {
@@ -606,6 +607,7 @@ export const mockDrawings = {
     connectionTemplates = []
     wireframes = []
     gridTables = {}
+    removedColumns = {}
     versions = []
     failingPages = {}
     runOutcomes = {}
@@ -1066,6 +1068,39 @@ export const drawingHandlers = [
     return HttpResponse.json(result, { status: 202 })
   }),
 
+  // A column a person removes: off the page's run (kept aside for Undo).
+  http.post('*/api/v1/drawing-pages/:id/columns/remove/', async ({ params, request }) => {
+    const page = pageById(params.id as string) as Mutable<DrawingPage>
+    const body = (await request.json()) as { x: number; y: number; undo?: boolean }
+    const run = page.current_run as unknown as { columns: { x: number; y: number }[] }
+    const aside = (removedColumns[page.id] ??= [])
+    const near = (c: { x: number; y: number }) => Math.hypot(c.x - body.x, c.y - body.y) <= 12
+    if (body.undo) {
+      const back = aside.filter(near)
+      removedColumns[page.id] = aside.filter((c) => !near(c))
+      run.columns = [...run.columns, ...back]
+    } else {
+      const column = run.columns.find(near)
+      if (!column) return err(404, 'no_column_here', 'No column there: click on the column’s box.')
+      run.columns = run.columns.filter((c) => c !== column)
+      aside.push(column)
+    }
+    return HttpResponse.json({ removed: removedColumns[page.id]!.length })
+  }),
+  // Remove all like this: the mock calls columns of the removed one's shape alike.
+  http.post('*/api/v1/drawing-pages/:id/columns/remove-like/', async ({ params, request }) => {
+    const page = pageById(params.id as string) as Mutable<DrawingPage>
+    const body = (await request.json()) as { x: number; y: number; apply?: boolean }
+    const run = page.current_run as unknown as { columns: { x: number; y: number; shape?: string }[] }
+    const aside = (removedColumns[page.id] ??= [])
+    const removed = aside.find((c) => Math.hypot(c.x - body.x, c.y - body.y) <= 12) as { shape?: string } | undefined
+    const like = run.columns.filter((c) => c.shape === removed?.shape)
+    if (body.apply) {
+      run.columns = run.columns.filter((c) => !like.includes(c))
+      aside.push(...like)
+    }
+    return HttpResponse.json({ columns: like.map((c) => [c.x, c.y]), removed: body.apply ? aside.length : 0 })
+  }),
   // The pen of the line clicked: the mock sheet's beams are black 1.08 pt; nothing at x < 0.
   http.get('*/api/v1/drawing-pages/:id/pen/', ({ request }) => {
     const x = Number(new URL(request.url).searchParams.get('x'))

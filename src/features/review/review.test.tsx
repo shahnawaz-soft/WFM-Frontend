@@ -307,6 +307,42 @@ describe('Pens', () => {
   })
 })
 
+describe('Removing a column', () => {
+  it('removes a column found wrongly, and Undo brings it back', async () => {
+    await openProcessedPage()
+    await screen.findByRole('table', { name: /Detected members/ })
+    const [first] = await screen.findAllByRole('button', { name: /^Column 1:/ })
+    expect(screen.getByText('Column (3)')).toBeInTheDocument()
+    await userEvent.click(first!)
+    const dialog = await screen.findByRole('dialog', { name: 'Remove this column?' })
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Remove column' }))
+    expect(await screen.findByText('Column (2)')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Undo remove' }))
+    expect(await screen.findByText('Column (3)')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Undo remove' })).not.toBeInTheDocument()
+  })
+
+  it('finds the columns drawn like one removed, after confirming', async () => {
+    await openProcessedPage()
+    await screen.findByRole('table', { name: /Detected members/ })
+    const [first] = await screen.findAllByRole('button', { name: /^Column 1:/ })
+    await userEvent.click(first!)
+    await userEvent.click(within(await screen.findByRole('dialog', { name: 'Remove this column?' })).getByRole('button', { name: 'Remove column' }))
+    await screen.findByText('Column (2)')
+    await userEvent.click(screen.getByRole('button', { name: 'Remove all like this' }))
+    // The mock's other columns are a square and a round tube: none drawn like the "I".
+    const dialog = await screen.findByRole('dialog', { name: 'No other column is drawn like it' })
+    await userEvent.click(within(dialog).getByRole('button', { name: 'OK' }))
+    expect(screen.getByText('Column (2)')).toBeInTheDocument()
+  })
+
+  it('offers no removal to viewers', async () => {
+    await openProcessedPage('viewer')
+    await screen.findByRole('heading', { level: 1, name: /^Page 1/ })
+    expect(screen.queryByRole('button', { name: /^Column \d+:/ })).not.toBeInTheDocument()
+  })
+})
+
 describe('Page area', () => {
   /** Drag a box on the drawing from one PDF point to another (the stand-in viewport's mapping). */
   async function dragBox([x1, y1]: [number, number], [x2, y2]: [number, number]) {

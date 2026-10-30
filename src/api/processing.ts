@@ -88,6 +88,31 @@ export async function setProjectPens(projectId: string, pens: ProjectPens, runAg
   return data
 }
 
+/** Remove the column found at (x, y) on the page (PDF points): it stays removed when the page
+ *  runs again, and its ABM entry is rejected. ``undo``: bring back the one removed there. */
+export async function removeColumn(pageId: string, point: [number, number], undo = false): Promise<{ removed: number }> {
+  const { data } = await apiClient.post<{ removed: number }>(`/api/v1/drawing-pages/${pageId}/columns/remove/`, {
+    x: point[0],
+    y: point[1],
+    undo,
+  })
+  return data
+}
+
+/** The page's columns drawn like the one at (x, y): listed, or removed (``apply``). */
+export async function removeLike(
+  pageId: string,
+  point: [number, number],
+  apply: boolean,
+): Promise<{ columns: [number, number][]; removed: number }> {
+  const { data } = await apiClient.post<{ columns: [number, number][]; removed: number }>(
+    `/api/v1/drawing-pages/${pageId}/columns/remove-like/`,
+    { x: point[0], y: point[1], apply },
+    { timeout: 120_000 },
+  )
+  return data
+}
+
 export async function listPageJobs(pageId: string): Promise<ProcessingJob[]> {
   const { data } = await apiClient.get<ProcessingJob[]>(`/api/v1/drawing-pages/${pageId}/jobs/`)
   return data
