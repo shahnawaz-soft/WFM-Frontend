@@ -199,6 +199,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/drawing-pages/{id}/area/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Count only inside a box on the sheet (or the whole sheet again); the page runs again. */
+        post: operations["drawing_pages_area_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/drawing-pages/{id}/find-similar-columns/": {
         parameters: {
             query?: never;
@@ -314,6 +331,43 @@ export interface paths {
         put?: never;
         /** @description The page's current members (active run + manually added). Earlier runs stay in history. */
         post: operations["drawing_pages_members_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/drawing-pages/{id}/members/bulk/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Several members of the page at once: accept, reject or edit them together. */
+        post: operations["drawing_pages_members_bulk_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/drawing-pages/{id}/pen/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description The pen (width, colour) of the line nearest a point on the page, to pick the project's
+         *     member or grid pens from the drawing.
+         */
+        get: operations["drawing_pages_pen_retrieve"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -929,6 +983,77 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{id}/grids/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The project's grid table (lines in project mm): list, or add one. */
+        get: operations["projects_grids_list"];
+        put?: never;
+        /** @description The project's grid table (lines in project mm): list, or add one. */
+        post: operations["projects_grids_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/grids/{grid_pk}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["projects_grids_destroy"];
+        options?: never;
+        head?: never;
+        patch: operations["projects_grids_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/grids/fill/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Fill or refresh the grid table from the drawings (rows a person set or locked stay). */
+        post: operations["projects_grids_fill_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/grids/import/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description A grids file (Tekla export, or a grids CSV): previewed against the drawings, or applied
+         *     to the grid table.
+         */
+        post: operations["projects_grids_import_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/history/": {
         parameters: {
             query?: never;
@@ -1177,6 +1302,43 @@ export interface paths {
         put?: never;
         /** @description Hide selected pages of the project (or show them again with ``hidden: false``). */
         post: operations["projects_pages_hide_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_pk}/pens/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description The project's pens: only lines drawn with them are read as members, or grid lines. */
+        post: operations["projects_pens_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_pk}/scale/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Set the scale of one page, or the project's (for pages whose scale isn't clear), and
+         *     run again the pages it changes.
+         */
+        post: operations["projects_scale_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1633,14 +1795,6 @@ export interface components {
             groups: components["schemas"]["_TotalsGroup"][];
         };
         /**
-         * @description * `created` - Added manually
-         *     * `edited` - Corrected
-         *     * `reviewed` - Review status changed
-         *     * `restored` - Original values restored
-         * @enum {string}
-         */
-        ActionEnum: "created" | "edited" | "reviewed" | "restored";
-        /**
          * @description * `user` - user
          *     * `system` - system
          *     * `job` - job
@@ -1723,8 +1877,27 @@ export interface components {
         };
         /** @enum {unknown} */
         BlankEnum: "";
+        BulkChangesRequest: {
+            designation?: string;
+            member_type?: string;
+            /** @description Feet-inches (24'-3"), inches (291"), or mm (7391 mm) */
+            length?: string | null;
+            quantity?: number;
+            /** @description Shear studs: 44, or by segment 36, 4, 4, 40 */
+            studs?: string;
+            /** @description Camber in inches: 3/4", 1 1/2", 0.75 */
+            camber?: string | null;
+        };
         BulkResult: {
             accepted: number;
+        };
+        /** @description The same review status and/or edits for several members of one page. */
+        BulkReviewRequest: {
+            members: components["schemas"]["MemberRefRequest"][];
+            status?: components["schemas"]["ReviewStatusEnum"];
+            changes?: components["schemas"]["BulkChangesRequest"];
+            /** @default  */
+            reason: string;
         };
         /**
          * @description * `members` - members
@@ -1751,7 +1924,7 @@ export interface components {
              *     * `symbol` - symbol
              *     * `schedule` - schedule
              */
-            source: components["schemas"]["SourceEnum"];
+            source: components["schemas"]["CellSourceEnum"];
             /**
              * Format: uuid
              * @description Its member entry
@@ -1773,6 +1946,14 @@ export interface components {
             issues: string[];
             readonly issue_messages: string[];
         };
+        /**
+         * @description * `label` - label
+         *     * `person` - person
+         *     * `symbol` - symbol
+         *     * `schedule` - schedule
+         * @enum {string}
+         */
+        CellSourceEnum: "label" | "person" | "symbol" | "schedule";
         ChangePasswordRequest: {
             current_password: string;
             new_password: string;
@@ -2068,6 +2249,13 @@ export interface components {
              */
             approve: boolean;
         };
+        /**
+         * @description * `x` - Along X
+         *     * `y` - Along Y
+         *     * `angled` - Angled
+         * @enum {string}
+         */
+        DirectionEnum: "x" | "y" | "angled";
         DrawingPage: {
             /** Format: uuid */
             readonly id: string;
@@ -2088,6 +2276,9 @@ export interface components {
             readonly batch: string | null;
             readonly batch_position: number;
             readonly sheet_name: string;
+            readonly scale: string;
+            /** @description Part of the sheet counted [left, bottom, right, top], PDF points; null = all */
+            readonly area: number[] | null;
             readonly latest_job: components["schemas"]["PageJob"] | null;
             readonly current_run: components["schemas"]["ExtractionRun"] | null;
             readonly level_label: string;
@@ -2123,6 +2314,9 @@ export interface components {
             readonly batch: string | null;
             readonly batch_position: number;
             readonly sheet_name: string;
+            readonly scale: string;
+            /** @description Part of the sheet counted [left, bottom, right, top], PDF points; null = all */
+            readonly area: number[] | null;
             readonly latest_job: components["schemas"]["PageJob"] | null;
             readonly current_run: components["schemas"]["RunListItem"] | null;
             readonly level_label: string;
@@ -2347,6 +2541,13 @@ export interface components {
          */
         FindSimilarScopeEnum: "page";
         /**
+         * @description * `tekla` - tekla
+         *     * `exported` - exported
+         *     * `legacy` - legacy
+         * @enum {string}
+         */
+        FormatEnum: "tekla" | "exported" | "legacy";
+        /**
          * @description * `symbol` - symbol
          *     * `label` - label
          * @enum {string}
@@ -2366,6 +2567,14 @@ export interface components {
          * @enum {string}
          */
         GlobalRoleEnum: "member" | "operator" | "admin";
+        GridAddRequest: {
+            label: string;
+            direction: components["schemas"]["DirectionEnum"];
+            /** @description From the origin, e.g. 30'-0", -12'-6", 0 or 9144 mm */
+            position: string | null;
+            /** Format: double */
+            angle_deg?: number | null;
+        };
         GridArc: {
             /** Format: double */
             cx: number;
@@ -2381,6 +2590,49 @@ export interface components {
             /** Format: double */
             a1: number;
         };
+        GridFill: {
+            added: number;
+            updated: number;
+            removed: number;
+            /** @description Rows a person set or locked: left as they are */
+            kept: number;
+        };
+        GridImportRequest: {
+            /**
+             * Format: binary
+             * @description A Tekla grids export, or a grids CSV
+             */
+            file: string;
+            /**
+             * @description False: preview only
+             * @default false
+             */
+            apply: boolean;
+        };
+        GridImportResult: {
+            format: components["schemas"]["FormatEnum"];
+            applied: boolean;
+            /**
+             * @description How the file was lined up: on the reference crossing, onto the drawings' grid lines, or as the file has it (nothing to line it up on)
+             *
+             *     * `reference` - reference
+             *     * `drawings` - drawings
+             *     * `file` - file
+             */
+            origin: components["schemas"]["GridImportResultOriginEnum"];
+            /** @description What was added to the file's positions */
+            shift_mm: components["schemas"]["_Shift"];
+            grids: components["schemas"]["_ImportedGrid"][];
+            /** @description Labels whose direction is not known */
+            unplaced: string[];
+        };
+        /**
+         * @description * `reference` - reference
+         *     * `drawings` - drawings
+         *     * `file` - file
+         * @enum {string}
+         */
+        GridImportResultOriginEnum: "reference" | "drawings" | "file";
         GridLine: {
             label: string;
             /**
@@ -2602,10 +2854,16 @@ export interface components {
          * @enum {string}
          */
         MemberOriginEnum: "automated" | "manual";
+        MemberRefRequest: {
+            /** Format: uuid */
+            id: string;
+            /** @description The version the person saw */
+            version: number;
+        };
         MemberRevision: {
             /** Format: uuid */
             readonly id: string;
-            readonly action: components["schemas"]["ActionEnum"];
+            readonly action: components["schemas"]["MemberRevisionActionEnum"];
             readonly actor: string;
             before: {
                 [key: string]: unknown;
@@ -2617,6 +2875,14 @@ export interface components {
             /** Format: date-time */
             readonly created_at: string;
         };
+        /**
+         * @description * `created` - Added manually
+         *     * `edited` - Corrected
+         *     * `reviewed` - Review status changed
+         *     * `restored` - Original values restored
+         * @enum {string}
+         */
+        MemberRevisionActionEnum: "created" | "edited" | "reviewed" | "restored";
         Membership: {
             /** Format: uuid */
             readonly id: string;
@@ -2731,6 +2997,15 @@ export interface components {
             reopen_reason: string;
             /** @description The version the project is finalised at now */
             readonly is_current: boolean;
+        };
+        PageAreaRequest: {
+            /** @description [left, bottom, right, top] in PDF points; null = count the whole sheet */
+            area: number[] | null;
+            /**
+             * @description Confirm running again a page already reviewed
+             * @default false
+             */
+            discard_review: boolean;
         };
         /**
          * @description A page's latest job: the job without its run, which the page shows once, as
@@ -2868,6 +3143,15 @@ export interface components {
             /** @default  */
             reason: string;
         };
+        PatchedGridChangeRequest: {
+            label?: string;
+            /** @description From the origin, e.g. 30'-0", -12'-6", 0 or 9144 mm */
+            position?: string | null;
+            /** Format: double */
+            angle_deg?: number | null;
+            hidden?: boolean;
+            locked?: boolean;
+        };
         PatchedMemberEditRequest: {
             version?: number;
             designation?: string;
@@ -2876,6 +3160,10 @@ export interface components {
             /** @description Feet-inches (24'-3"), inches (291"), or mm (7391 mm) */
             length?: string | null;
             quantity?: number;
+            /** @description Shear studs: 44, or by segment 36, 4, 4, 40 */
+            studs?: string;
+            /** @description Camber in inches: 3/4", 1 1/2", 0.75 */
+            camber?: string | null;
             /** @default  */
             reason: string;
         };
@@ -2911,6 +3199,29 @@ export interface components {
             last_name?: string;
             global_role?: components["schemas"]["GlobalRoleEnum"];
             is_active?: boolean;
+        };
+        PenAt: {
+            /**
+             * Format: double
+             * @description Points
+             */
+            width: number;
+            /** @description #rrggbb ("" when not read) */
+            colour: string;
+            /** @description x1, y1, x2, y2 */
+            line: number[];
+            /** @description Lines on the page drawn with this pen */
+            same_pen: number;
+        };
+        /** @description A pen: a line width, a colour, or both (a pen without one takes any). */
+        PenRequest: {
+            /**
+             * Format: double
+             * @description Points
+             */
+            width?: number | null;
+            /** @description #rrggbb */
+            colour?: string;
         };
         ProcessingJob: {
             /** Format: uuid */
@@ -2969,6 +3280,8 @@ export interface components {
             readonly tekla_version: string;
             /** Format: date */
             readonly target_completion_date: string | null;
+            readonly scale: string;
+            readonly pens: unknown;
             /**
              * Format: date-time
              * @description When the first drawing set was uploaded
@@ -2993,6 +3306,38 @@ export interface components {
             /** Format: uuid */
             dataset_id: string;
         };
+        ProjectGrid: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly label: string;
+            readonly direction: components["schemas"]["DirectionEnum"];
+            /** Format: decimal */
+            readonly position_mm: string;
+            /** @description Position in feet-inches */
+            readonly position_display: string;
+            /** Format: double */
+            readonly angle_deg: number | null;
+            /** Format: decimal */
+            readonly start_mm: string | null;
+            /** Format: decimal */
+            readonly end_mm: string | null;
+            readonly source: components["schemas"]["ProjectGridSourceEnum"];
+            readonly plans: number;
+            readonly plans_agreeing: number;
+            /** Format: decimal */
+            readonly spread_mm: string | null;
+            /** @description Some plans that draw it place it elsewhere (more than 6" away): check it */
+            readonly disagrees: boolean;
+            readonly locked: boolean;
+            readonly hidden: boolean;
+        };
+        /**
+         * @description * `found` - Found on the drawings
+         *     * `person` - Set by a person
+         *     * `csv` - Loaded from a grids file
+         * @enum {string}
+         */
+        ProjectGridSourceEnum: "found" | "person" | "csv";
         ProjectHistory: {
             results: components["schemas"]["HistoryItem"][];
             /** Format: date-time */
@@ -3021,6 +3366,8 @@ export interface components {
             readonly tekla_version: string;
             /** Format: date */
             readonly target_completion_date: string | null;
+            readonly scale: string;
+            readonly pens: unknown;
             /**
              * Format: date-time
              * @description When the first drawing set was uploaded
@@ -3036,6 +3383,23 @@ export interface components {
             readonly cover_page: string | null;
             /** @description Reviewed ABM weight */
             readonly tonnage: components["schemas"]["_Amounts"];
+        };
+        ProjectPensRequest: {
+            member?: components["schemas"]["PenRequest"][];
+            grid?: components["schemas"]["PenRequest"][];
+            /**
+             * @description Run the project's pages again with them (review work is kept)
+             * @default true
+             */
+            run_again: boolean;
+        };
+        ProjectPensResult: {
+            /** @description {"member": [pen…], "grid": [pen…]} */
+            pens: {
+                [key: string]: unknown;
+            };
+            queued: string[];
+            skipped: components["schemas"]["SetScaleSkipped"][];
         };
         /**
          * @description * `owner` - Owner
@@ -3214,6 +3578,15 @@ export interface components {
              * @default
              */
             sheet_kind: components["schemas"]["SheetKindEnum"] | components["schemas"]["BlankEnum"];
+            /**
+             * @description Who set the scale used: a person for this page, the project's; empty = read
+             *
+             *     * `page` - page
+             *     * `project` - project
+             *     * `` -
+             * @default
+             */
+            scale_set_by: components["schemas"]["ScaleSetByEnum"] | components["schemas"]["BlankEnum"];
         };
         ScaleCheck: {
             /** @description Printed dimensions whose ends were found */
@@ -3226,6 +3599,13 @@ export interface components {
             implied_text: string | null;
             verdict: components["schemas"]["VerdictEnum"];
         };
+        /**
+         * @description * `page` - page
+         *     * `project` - project
+         *     * `` -
+         * @enum {string}
+         */
+        ScaleSetByEnum: "page" | "project";
         Schedule: {
             levels: components["schemas"]["Level"][];
             /** @description The storeys columns are counted over, lowest first (base → top) */
@@ -3301,6 +3681,32 @@ export interface components {
             /** @description page_not_ready, page_not_runnable, … */
             reason: string;
         };
+        SetScaleRequest: {
+            /** @description e.g. 1/4" = 1'-0" or 1:100; empty = use the scale read from the drawing */
+            scale: string;
+            /**
+             * Format: uuid
+             * @description Omit for the project's scale
+             */
+            page?: string | null;
+            /**
+             * @description One page: confirm running again a page already reviewed
+             * @default false
+             */
+            discard_review: boolean;
+        };
+        /** @description The scale saved, and the pages run again (or left as they are, and why). */
+        SetScaleResult: {
+            scale: string;
+            queued: string[];
+            skipped: components["schemas"]["SetScaleSkipped"][];
+        };
+        SetScaleSkipped: {
+            /** Format: uuid */
+            page: string;
+            /** @description review_in_progress, page_processing, … */
+            reason: string;
+        };
         /**
          * @description * `plan` - plan
          *     * `elevation` - elevation
@@ -3357,14 +3763,6 @@ export interface components {
             page_number: number;
             missing: string[];
         };
-        /**
-         * @description * `label` - label
-         *     * `person` - person
-         *     * `symbol` - symbol
-         *     * `schedule` - schedule
-         * @enum {string}
-         */
-        SourceEnum: "label" | "person" | "symbol" | "schedule";
         Stack: {
             /** @description Grid crossing, e.g. "B/3"; empty if off grid */
             grid: string;
@@ -3525,9 +3923,11 @@ export interface components {
             readonly error_code: string;
             readonly error_message: string;
             /** @description Counts, levels and page set-up at generation */
-            summary: {
+            readonly summary: {
                 [key: string]: unknown;
             };
+            /** @description The project's grid lines when it was generated (mm), for drawing in 3D; empty for revisions generated before grids were kept */
+            readonly grids: components["schemas"]["WireframeGrid"][];
             /** @description Current counts, after people's edits */
             readonly counts: {
                 [key: string]: unknown;
@@ -3586,6 +3986,18 @@ export interface components {
          * @enum {string}
          */
         WireframeEnum: "not_generated" | "generating" | "draft" | "reviewed" | "failed";
+        WireframeGrid: {
+            label: string;
+            direction: components["schemas"]["DirectionEnum"];
+            /** Format: decimal */
+            position_mm: string;
+            /** Format: double */
+            angle_deg: number | null;
+            /** Format: decimal */
+            start_mm: string | null;
+            /** Format: decimal */
+            end_mm: string | null;
+        };
         WireframeSetup: {
             pages: components["schemas"]["_SetupPage"][];
             /** @description Every added page has a level, reference and scale */
@@ -3738,6 +4150,36 @@ export interface components {
             entries: number;
             quantity: number;
         };
+        _ImportedGrid: {
+            label: string;
+            direction: components["schemas"]["DirectionEnum"];
+            /** Format: decimal */
+            position_mm: string;
+            readonly position_display: string;
+            /** Format: decimal */
+            drawn_mm: string | null;
+            /**
+             * Format: decimal
+             * @description File minus drawings
+             */
+            difference_mm: string | null;
+            readonly difference_display: string;
+            /**
+             * @description locked: the table's row is kept
+             *
+             *     * `add` - add
+             *     * `replace` - replace
+             *     * `locked` - locked
+             */
+            action: components["schemas"]["_ImportedGridActionEnum"];
+        };
+        /**
+         * @description * `add` - add
+         *     * `replace` - replace
+         *     * `locked` - locked
+         * @enum {string}
+         */
+        _ImportedGridActionEnum: "add" | "replace" | "locked";
         _IncompleteBucket: {
             entries: number;
             quantity: number;
@@ -3903,6 +4345,12 @@ export interface components {
          * @enum {string}
          */
         _SheetComparisonStatusEnum: "compared" | "not_run" | "new_sheet" | "removed_sheet";
+        _Shift: {
+            /** Format: decimal */
+            x: string;
+            /** Format: decimal */
+            y: string;
+        };
         _SimilarPage: {
             /** Format: uuid */
             page_id: string;
@@ -4340,6 +4788,31 @@ export interface operations {
             };
         };
     };
+    drawing_pages_area_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PageAreaRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DrawingPage"];
+                };
+            };
+        };
+    };
     drawing_pages_find_similar_columns_create: {
         parameters: {
             query?: never;
@@ -4520,6 +4993,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ExtractedMember"];
+                };
+            };
+        };
+    };
+    drawing_pages_members_bulk_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkReviewRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExtractedMember"][];
+                };
+            };
+        };
+    };
+    drawing_pages_pen_retrieve: {
+        parameters: {
+            query: {
+                /** @description PDF points */
+                x: number;
+                /** @description PDF points */
+                y: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PenAt"];
                 };
             };
         };
@@ -5567,6 +6091,145 @@ export interface operations {
             };
         };
     };
+    projects_grids_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectGrid"][];
+                };
+            };
+        };
+    };
+    projects_grids_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GridAddRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectGrid"];
+                };
+            };
+        };
+    };
+    projects_grids_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                grid_pk: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    projects_grids_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                grid_pk: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedGridChangeRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectGrid"];
+                };
+            };
+        };
+    };
+    projects_grids_fill_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GridFill"];
+                };
+            };
+        };
+    };
+    projects_grids_import_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["GridImportRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GridImportResult"];
+                };
+            };
+        };
+    };
     projects_history_retrieve: {
         parameters: {
             query?: {
@@ -6035,6 +6698,56 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HidePagesResult"];
+                };
+            };
+        };
+    };
+    projects_pens_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ProjectPensRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectPensResult"];
+                };
+            };
+        };
+    };
+    projects_scale_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetScaleRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetScaleResult"];
                 };
             };
         };

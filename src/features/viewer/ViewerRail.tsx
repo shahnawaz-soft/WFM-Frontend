@@ -15,10 +15,10 @@ interface ViewerRailProps {
   onChange: (tab: ViewerTab) => void
 }
 
-/** Vertical tab list. Selecting the open tab again collapses the panel. */
+/** The page tools, as tabs along the top bar. Selecting the open tab again collapses the panel. */
 export function ViewerRail({ active, open, counts, onChange }: ViewerRailProps) {
   return (
-    <div className="rail" role="tablist" aria-orientation="vertical" aria-label="Page tools">
+    <div className="rail" role="tablist" aria-orientation="horizontal" aria-label="Page tools">
       {TABS.map((tab) => {
         const selected = open && tab.id === active
         return (

@@ -173,7 +173,8 @@ describe('Page workspace', () => {
     const { container } = await openViewer()
     const table = await runPlan()
     const rows = within(table).getAllByRole('row').slice(1)
-    expect(rows.map((r) => within(r).getAllByRole('cell')[0]!.textContent)).toEqual(['W12X26', 'W12X26', 'HSS6X6X1/4'])
+    // Cell 0 is the tick box for choosing several members.
+    expect(rows.map((r) => within(r).getAllByRole('cell')[1]!.textContent)).toEqual(['W12X26', 'W12X26 (12) C=3/4"', 'HSS6X6X1/4'])
     expect(within(rows[0]!).getByText('Not measured')).toHaveClass('visually-hidden') // shown as —
     expect(within(rows[2]!).getByText('Unsupported type · Length not measured')).toBeInTheDocument()
     await waitFor(() => expect(shapes(container)).toHaveLength(3))
@@ -199,6 +200,10 @@ describe('Page workspace', () => {
     })
     await userEvent.click(second)
     expect(second).toHaveAttribute('aria-pressed', 'true')
+    // Selecting only shows it; the edit form opens from its edit button.
+    expect(screen.queryByRole('region', { name: /member 2$/ })).not.toBeInTheDocument()
+    await userEvent.click(within(table).getByRole('button', { name: 'Edit W12X26, member 2' }))
+    expect(screen.getByRole('region', { name: /member 2$/ })).toBeInTheDocument()
     await waitFor(() => expect(shapes(container)[1]).toHaveAttribute('data-selected', 'true'))
     expect(screen.getByRole('img', { name: /Drawing/ })).toHaveAttribute('data-zoom', '1.5')
     // Its measured span (support centre to support centre) is drawn.
@@ -227,18 +232,12 @@ describe('Page workspace', () => {
     expect(shapes(container)).toHaveLength(0)
   })
 
-  it('groups quantities by section', async () => {
+  it('lists members without quantities (totals are in the ABM draft)', async () => {
     await openViewer()
-    await runPlan()
-    await userEvent.click(screen.getByRole('checkbox', { name: 'Group by section' }))
-    const grouped = screen.getByRole('table', {
-      name: 'Members grouped by section',
-    })
-    const rows = within(grouped)
-      .getAllByRole('row')
-      .slice(1)
-      .map((r) => r.textContent)
-    expect(rows).toEqual(['W12X262', 'HSS6X6X1/41'])
+    const table = await runPlan()
+    expect(within(table).queryByRole('columnheader', { name: 'Qty' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('checkbox', { name: 'Group by section' })).not.toBeInTheDocument()
+    expect(screen.getByText(/^3 members/)).toBeInTheDocument()
   })
 
   it('lists flags and the scale', async () => {
@@ -259,6 +258,87 @@ describe('Page workspace', () => {
 
     await userEvent.click(tab('Page'))
     expect(within(screen.getByRole('tabpanel')).getByText('Plan')).toBeInTheDocument()
+  })
+
+  it('changes the scale of this page, and goes back to the drawing\'s', async () => {
+    await openViewer()
+    await runPlan()
+    await userEvent.click(tab('Scale'))
+    const panel = screen.getByRole('tabpanel')
+    await userEvent.click(within(panel).getByRole('button', { name: 'Change' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Change the scale' })
+    const field = within(dialog).getByRole('combobox', { name: 'Scale' })
+    await userEvent.clear(field)
+    await userEvent.type(field, 'a quarter')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save and run again' }))
+    expect(await within(dialog).findByText(/Type a scale like/)).toBeInTheDocument()
+
+    await userEvent.clear(field)
+    await userEvent.type(field, '1/4" = 1\'-0"')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save and run again' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(await within(panel).findByText('Set by you')).toBeInTheDocument()
+    expect(within(panel).getByText(/^1\/4" = 1'-0"/)).toBeInTheDocument()
+    expect(await screen.findByText(/Scale 1\/4" = 1'-0" saved: 1 page run again/)).toBeInTheDocument()
+
+    await userEvent.click(within(panel).getByRole('button', { name: 'Use the drawing’s scale' }))
+    await waitFor(() => expect(within(panel).queryByText('Set by you')).not.toBeInTheDocument())
+  })
+
+  it('sets the project scale for pages whose scale is not clear', async () => {
+    await openViewer()
+    await runPlan() // its scale is 1/8" but unconfirmed (several on the sheet)
+    await userEvent.click(tab('Scale'))
+    const panel = screen.getByRole('tabpanel')
+    await userEvent.click(within(panel).getByRole('button', { name: 'Change' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Change the scale' })
+    await userEvent.click(within(dialog).getByRole('radio', { name: 'All pages in the project' }))
+    expect(within(dialog).getByText(/Pages with a clear printed scale keep their own/)).toBeInTheDocument()
+    const field = within(dialog).getByRole('combobox', { name: 'Scale' })
+    await userEvent.clear(field)
+    await userEvent.type(field, '3/16" = 1\'-0"')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save and run again' }))
+    expect(await within(panel).findByText('Project scale')).toBeInTheDocument()
+    expect(within(panel).queryByRole('button', { name: 'Use the drawing’s scale' })).not.toBeInTheDocument()
+  })
+
+  it('asks before replacing review work when the scale changes', async () => {
+    const { page } = await openViewer()
+    await runPlan()
+    await userEvent.click(screen.getByRole('button', { name: /^Accept all remaining \(/ }))
+    await userEvent.click(within(await screen.findByRole('dialog', { name: /^Accept \d+ remaining/ })).getByRole('button', { name: 'Accept all remaining' }))
+    await screen.findByText(/^Accepted \d+ members?/)
+    await userEvent.click(tab('Scale'))
+    await userEvent.click(within(screen.getByRole('tabpanel')).getByRole('button', { name: 'Change' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Change the scale' })
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save and run again' }))
+    const confirm = await screen.findByRole('dialog', { name: 'This page has review work' })
+    await userEvent.click(within(confirm).getByRole('button', { name: 'Run again and replace review' }))
+    await waitFor(() => expect(mockDrawings.sets[0]!.pages.find((p) => p.id === page.id)!.scale).toBe('1/8" = 1\'-0"'))
+  })
+
+  it('offers no scale change to viewers', async () => {
+    await openViewer(1, 'viewer')
+    await userEvent.click(tab('Scale'))
+    expect(within(screen.getByRole('tabpanel')).queryByRole('button', { name: 'Change' })).not.toBeInTheDocument()
+  })
+
+  it('gives the drawing the whole window, with the page tools along the top', async () => {
+    const { container } = await openViewer()
+    const workspace = container.querySelector('.workspace')!
+    const header = container.querySelector('.workspace__header')!
+    expect(within(header as HTMLElement).getByRole('tablist', { name: 'Page tools' })).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Full drawing' }))
+    expect(workspace).toHaveAttribute('data-full', 'on')
+    expect(screen.queryByRole('tabpanel')).not.toBeInTheDocument()
+    expect(container.querySelector('.workspace__strip')).toBeNull()
+
+    await userEvent.click(tab('Flags')) // the tools stay at hand
+    expect(screen.getByRole('tabpanel')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Exit full drawing' }))
+    expect(workspace).toHaveAttribute('data-full', 'off')
+    expect(container.querySelector('.workspace__strip')).not.toBeNull()
   })
 
   it('collapses the panel when its tab is chosen again', async () => {

@@ -3,7 +3,10 @@ import type {
   ApplyToAbmResult,
   ColumnChanges,
   DrawingPage,
+  GridFillResult,
+  GridImportResult,
   LevelProposals,
+  ProjectGrid,
   SchedulerColumns,
   Wireframe,
   WireframeElement,
@@ -135,5 +138,53 @@ export async function downloadColumnsCsv(wireframeId: string, filename: string):
 /** Give the ABM entries the revision's column sections and heights. */
 export async function applyColumnsToAbm(wireframeId: string): Promise<ApplyToAbmResult> {
   const { data } = await apiClient.post<ApplyToAbmResult>(`/api/v1/wireframes/${wireframeId}/columns/apply-to-abm/`)
+  return data
+}
+
+/** The project's grid table: grid lines in project mm, filled from the drawings. */
+export async function listProjectGrids(projectId: string): Promise<ProjectGrid[]> {
+  const { data } = await apiClient.get<ProjectGrid[]>(`/api/v1/projects/${projectId}/grids/`)
+  return data
+}
+
+/** Fill or refresh the grid table from the drawings; rows a person set or locked stay. */
+export async function fillProjectGrids(projectId: string): Promise<GridFillResult> {
+  const { data } = await apiClient.post<GridFillResult>(`/api/v1/projects/${projectId}/grids/fill/`)
+  return data
+}
+
+export interface GridChanges {
+  label?: string
+  /** From the origin, as typed: 30'-0", -12'-6", 0 or 9144 mm. */
+  position?: string
+  angle_deg?: number | null
+  hidden?: boolean
+  locked?: boolean
+}
+
+export async function addProjectGrid(
+  projectId: string,
+  grid: { label: string; direction: ProjectGrid['direction']; position: string; angle_deg?: number | null },
+): Promise<ProjectGrid> {
+  const { data } = await apiClient.post<ProjectGrid>(`/api/v1/projects/${projectId}/grids/`, grid)
+  return data
+}
+
+export async function changeProjectGrid(projectId: string, gridId: string, changes: GridChanges): Promise<ProjectGrid> {
+  const { data } = await apiClient.patch<ProjectGrid>(`/api/v1/projects/${projectId}/grids/${gridId}/`, changes)
+  return data
+}
+
+export async function deleteProjectGrid(projectId: string, gridId: string): Promise<void> {
+  await apiClient.delete(`/api/v1/projects/${projectId}/grids/${gridId}/`)
+}
+
+/** A grids file (Tekla export, or a grids CSV): ``apply`` false previews it against the
+ *  drawings, true puts it in the grid table (locked rows stay). */
+export async function importProjectGrids(projectId: string, file: File, apply: boolean): Promise<GridImportResult> {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('apply', apply ? 'true' : 'false')
+  const { data } = await apiClient.post<GridImportResult>(`/api/v1/projects/${projectId}/grids/import/`, form)
   return data
 }

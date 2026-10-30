@@ -279,11 +279,10 @@ h2 { letter-spacing: -0.01em; }
 
 /* --- Drawing workspace -------------------------------------------------------------------- */
 .workspace__header,
-.rail,
 .workspace__panel,
 .workspace__strip { background: var(--color-bg); border: none; }
 .workspace__header { box-shadow: 0 6px 14px -10px var(--neu-dark); z-index: 2; }
-.rail { gap: var(--space-2); padding: var(--space-3) var(--space-2); }
+.rail { gap: var(--space-2); }
 .rail__tab { border: none; border-radius: var(--radius); }
 .rail__tab:hover { background: transparent; box-shadow: var(--neu-raised-xs); }
 .rail__tab[aria-selected='true'] { color: var(--color-primary); background: var(--color-surface); box-shadow: var(--neu-inset-sm); }

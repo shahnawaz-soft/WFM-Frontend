@@ -23,6 +23,10 @@ export interface MemberChanges {
   /** As typed: 24'-3", 291", 7391 mm… Blank clears the length. */
   length?: string
   quantity?: number
+  /** Shear studs: 44, or by segment 36, 4, 4, 40. Blank clears them. */
+  studs?: string
+  /** Camber in inches: 3/4", 1 1/2", 0.75. Blank clears it. */
+  camber?: string
 }
 
 export async function editMember(id: string, version: number, changes: MemberChanges, reason = '') {
@@ -32,6 +36,19 @@ export async function editMember(id: string, version: number, changes: MemberCha
 
 export async function reviewMember(id: string, version: number, status: ReviewStatus, reason = '') {
   const { data } = await apiClient.post<ExtractedMember>(`/api/v1/members/${id}/review/`, { version, status, reason })
+  return data
+}
+
+/** The same review status and/or changes for several members of a page, all or nothing. */
+export async function reviewMembers(
+  pageId: string,
+  members: Pick<ExtractedMember, 'id' | 'version'>[],
+  action: { status?: ReviewStatus; changes?: Omit<MemberChanges, 'mark'>; reason?: string },
+): Promise<ExtractedMember[]> {
+  const { data } = await apiClient.post<ExtractedMember[]>(`/api/v1/drawing-pages/${pageId}/members/bulk/`, {
+    members: members.map(({ id, version }) => ({ id, version })),
+    ...action,
+  })
   return data
 }
 

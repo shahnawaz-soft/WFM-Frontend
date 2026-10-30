@@ -28,6 +28,7 @@ import { describeColumn } from '../viewer/columnSymbols'
 import { ColumnScheduler } from './ColumnScheduler'
 import { IsometricPreview } from './IsometricPreview'
 import { LevelProposalsCard } from './LevelProposals'
+import { ProjectGridsCard } from './ProjectGridsCard'
 import type { CameraView } from './Wireframe3D'
 
 /** Built from every page that has been run, not only pages added to the project. */
@@ -225,6 +226,8 @@ export function WireframePage() {
 
       <LevelProposalsCard projectId={projectId} canEdit={canEdit} />
 
+      <ProjectGridsCard projectId={projectId} canEdit={canEdit} />
+
       {current && (
         <RevisionSection
           key={current.id}
@@ -291,6 +294,7 @@ function RevisionSection({
   // Columns picked in the schedule or in the view (Ctrl+click): one selection for both.
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const [allHeights, setAllHeights] = useState(false)
+  const [showGrids, setShowGrids] = useState(true)
   // What a left-drag does in the view, 3D or simple: one switch for both.
   const [dragMode, setDragMode] = useState<'turn' | 'move'>('turn')
   // Bumped when a column's values change in its panel: the panel re-reads the element.
@@ -510,6 +514,8 @@ function RevisionSection({
                       viewNonce={view.nonce}
                       dragMode={dragMode}
                       onSelect={pick}
+                      grids={current.grids}
+                      showGrids={showGrids}
                     />
                   </Suspense>
                 ) : (
@@ -537,6 +543,13 @@ function RevisionSection({
                     <input type="checkbox" checked={allHeights} onChange={(e) => setAllHeights(e.target.checked)} /> Show every column’s height
                   </label>
                 </li>
+                {webgl && current.grids.length > 0 && (
+                  <li>
+                    <label className="checkbox">
+                      <input type="checkbox" checked={showGrids} onChange={(e) => setShowGrids(e.target.checked)} /> Grids ({current.grids.length})
+                    </label>
+                  </li>
+                )}
               </ul>
               <p className="muted wf3d__help">
                 Drag to rotate or move (the switch above) · right-drag does the other · wheel to zoom · click an element to select it (Ctrl+click to pick several).

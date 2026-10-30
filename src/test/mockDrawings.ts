@@ -57,6 +57,10 @@ function member(pageId: string, runId: string, designation: string, profile: str
     original: { designation, length_mm: null, quantity: 1 },
     version: 1,
     length_display: '',
+    studs: null as number | null,
+    studs_text: '',
+    camber_mm: null as string | null,
+    camber_display: '',
     weight: null as Amounts | null,
     ...sectionFor(designation),
   }
@@ -100,6 +104,14 @@ function findMember(id: string): { member: MockMember; pageId: string } | null {
 
 function pageById(id: string) {
   return sets.flatMap((s) => s.pages).find((p) => p.id === id) as Mutable<DrawingPage> | undefined
+}
+
+/** 1/4\" = 1'-0\" → 48, 1:100 → 100; null when not a scale. */
+function scaleRatio(text: string): number | null {
+  const metric = /^(?:SCALE\s*)?1\s?:\s?(\d{1,4})$/i.exec(text)
+  if (metric) return Number(metric[1]) || null
+  const imperial = /^(\d+)\/(\d+)"\s*=\s*1'(?:\s*-\s*0")?$/.exec(text)
+  return imperial ? (12 * Number(imperial[2])) / Number(imperial[1]) : null
 }
 
 const err = (status: number, code: string, message: string, details: unknown = {}) =>
@@ -188,6 +200,47 @@ function historyFor(projectId: string) {
 }
 
 /** Wireframe revisions (generated synchronously by the mock, same placement rules). */
+interface MockGrid {
+  id: string
+  label: string
+  direction: 'x' | 'y' | 'angled'
+  position_mm: string
+  position_display: string
+  angle_deg: number | null
+  start_mm: string | null
+  end_mm: string | null
+  source: 'found' | 'person' | 'csv'
+  plans: number
+  plans_agreeing: number
+  spread_mm: string | null
+  disagrees: boolean
+  locked: boolean
+  hidden: boolean
+}
+let gridTables: Record<string, MockGrid[]> = {}
+
+/** What the mock plans' grids say (grid 1 and A cross at the reference point; 2 is 30'-0" on). */
+function drawnGrids(): MockGrid[] {
+  const found = (label: string, direction: 'x' | 'y', mm: string, display: string): MockGrid => ({
+    id: crypto.randomUUID(), label, direction, position_mm: mm, position_display: display, angle_deg: null,
+    start_mm: '-1000.0', end_mm: '10000.0', source: 'found', plans: 2, plans_agreeing: 2, spread_mm: '0.0',
+    disagrees: false, locked: false, hidden: false,
+  })
+  return [
+    found('1', 'x', '0.0', '0\'-0"'),
+    { ...found('2', 'x', '9144.0', '30\'-0"'), plans_agreeing: 1, disagrees: true, spread_mm: '2032.0' },
+    found('A', 'y', '0.0', '0\'-0"'),
+  ]
+}
+
+/** Feet-inches of a signed mm value, as the backend shows a grid position. */
+function signedFtIn(mm: number): string {
+  const sixteenths = Math.round((Math.abs(mm) / 25.4) * 16)
+  const feet = Math.floor(sixteenths / 192)
+  const inches = Math.round((sixteenths % 192) / 16)
+  return `${mm < 0 ? '-' : ''}${feet}'-${inches}"`
+}
+
 interface MockWireframe {
   project: string
   id: string
@@ -199,6 +252,7 @@ interface MockWireframe {
   error_code: string
   error_message: string
   summary: object
+  grids: Record<string, unknown>[]
   elements: Record<string, unknown>[]
   reviewed_at?: string | null
   reviewed_by?: string | null
@@ -393,6 +447,15 @@ function generateMock(projectId: string, user: string): MockWireframe {
       }),
       pages: addedPageEntries(projectId),
     },
+    // The grid table without hidden rows, or (no table) what the drawings say.
+    grids: (gridTables[projectId]?.length ? gridTables[projectId]!.filter((g) => !g.hidden) : drawnGrids()).map((g) => ({
+      label: g.label,
+      direction: g.direction,
+      position_mm: g.position_mm,
+      angle_deg: g.angle_deg,
+      start_mm: g.start_mm,
+      end_mm: g.end_mm,
+    })),
     elements,
   }
   wireframes.push(w)
@@ -542,6 +605,7 @@ export const mockDrawings = {
     connectionLines = []
     connectionTemplates = []
     wireframes = []
+    gridTables = {}
     versions = []
     failingPages = {}
     runOutcomes = {}
@@ -641,6 +705,8 @@ export async function acceptUpload(
       batch: null,
       batch_position: 0,
       sheet_name: '',
+      scale: '',
+      area: null,
       latest_job: null,
       current_run: null,
       level_label: '',
@@ -875,6 +941,47 @@ export const drawingHandlers = [
     return HttpResponse.json(page)
   }),
 
+  // A person's scale: one page, or the project's (pages whose run has no clear scale). The
+  // page "runs again" at once: its run takes the scale, as the engine would.
+  http.post('*/api/v1/projects/:id/scale/', async ({ params, request }) => {
+    const body = (await request.json()) as { scale: string; page?: string | null; discard_review?: boolean }
+    const scale = body.scale.trim().replace(/\s+/g, ' ')
+    const ratio = scaleRatio(scale)
+    if (scale && ratio === null) return err(400, 'validation_error', 'Some fields are invalid.', { scale: ['Type a scale like 1/4" = 1\'-0" or 1:100.'] })
+    const project = mockProjects.all.find((p) => p.id === params.id)!
+    const pages = sets.filter((s) => s.set.project === project.id).flatMap((s) => s.pages) as Mutable<DrawingPage>[]
+    const rerun = (page: Mutable<DrawingPage>, by: 'page' | 'project', typed: string) => {
+      const run = page.current_run as Mutable<NonNullable<DrawingPage['current_run']>> | null
+      if (!run) return
+      const summary = { ...run.summary, scale_set_by: typed ? by : '' }
+      Object.assign(run, typed ? { scale_text: typed, scale_ratio: scaleRatio(typed), scale_confidence: 1, summary } : { summary })
+    }
+    const reviewed = (page: DrawingPage) => ((runMembers[page.id] ?? []) as MockMember[]).some((m) => m.review_status !== 'unreviewed' || m.is_corrected)
+    if (body.page) {
+      const page = pages.find((p) => p.id === body.page)
+      if (!page) return err(404, 'not_found', 'Page not found.')
+      if (reviewed(page) && !body.discard_review) {
+        return err(409, 'review_in_progress', 'People have already reviewed or corrected members on this page. Running it again replaces the extracted members and their review decisions.')
+      }
+      page.scale = scale
+      rerun(page, 'page', scale || project.scale || '')
+      return HttpResponse.json({ scale, queued: [page.id], skipped: [] })
+    }
+    project.scale = scale
+    const result = { scale, queued: [] as string[], skipped: [] as { page: string; reason: string }[] }
+    for (const page of pages) {
+      const run = page.current_run
+      const unclear = run && (!run.scale_ratio || (run.scale_confidence ?? 0) < 0.7 || run.summary?.scale_set_by === 'project')
+      if (page.hidden || page.scale || !unclear) continue
+      if (reviewed(page)) result.skipped.push({ page: page.id, reason: 'review_in_progress' })
+      else {
+        rerun(page, 'project', scale)
+        result.queued.push(page.id)
+      }
+    }
+    return HttpResponse.json(result)
+  }),
+
   http.get('*/api/v1/projects/:id/batches/', ({ params }) => HttpResponse.json(batchList(params.id as string))),
   http.post('*/api/v1/projects/:id/batches/', async ({ params, request }) => {
     const { name } = (await request.json()) as { name: string }
@@ -957,6 +1064,40 @@ export const drawingHandlers = [
       }
     }
     return HttpResponse.json(result, { status: 202 })
+  }),
+
+  // The pen of the line clicked: the mock sheet's beams are black 1.08 pt; nothing at x < 0.
+  http.get('*/api/v1/drawing-pages/:id/pen/', ({ request }) => {
+    const x = Number(new URL(request.url).searchParams.get('x'))
+    if (x < 0) return err(404, 'no_line_here', 'No line there: click right on the line whose pen you want.')
+    return HttpResponse.json({ width: 1.08, colour: '#000000', line: [150, 95, 450, 95], same_pen: 42 })
+  }),
+  http.post('*/api/v1/projects/:id/pens/', async ({ params, request }) => {
+    const body = (await request.json()) as { member?: { width: number | null; colour: string }[]; grid?: { width: number | null; colour: string }[]; run_again?: boolean }
+    const project = mockProjects.all.find((p) => p.id === params.id)!
+    project.pens = { member: body.member ?? [], grid: body.grid ?? [] }
+    const pages = sets.filter((s) => s.set.project === project.id).flatMap((s) => s.pages).filter((p) => p.current_run && !p.hidden)
+    return HttpResponse.json({ pens: project.pens, queued: body.run_again === false ? [] : pages.map((p) => p.id), skipped: [] })
+  }),
+
+  // The part of the sheet to count: members whose label is outside are set aside, as the
+  // engine does when the page "runs again".
+  http.post('*/api/v1/drawing-pages/:id/area/', async ({ params, request }) => {
+    const page = pageById(params.id as string) as Mutable<DrawingPage>
+    const body = (await request.json()) as { area: [number, number, number, number] | null; discard_review?: boolean }
+    const list = (runMembers[page.id] ?? []) as MockMember[]
+    if (list.some((m) => m.review_status !== 'unreviewed' && !m.warnings.includes('outside_area')) && !body.discard_review) {
+      return err(409, 'review_in_progress', 'People have already reviewed or corrected members on this page. Running it again replaces the extracted members and their review decisions.')
+    }
+    page.area = body.area
+    for (const m of list) {
+      const [l, b, r, t] = m.label_bbox as number[]
+      const [x, y] = [(l! + r!) / 2, (b! + t!) / 2]
+      const out = body.area !== null && !(body.area[0] <= x && x <= body.area[2] && body.area[1] <= y && y <= body.area[3])
+      m.warnings = m.warnings.filter((w) => w !== 'outside_area').concat(out ? ['outside_area'] : [])
+      ;(m as { review_status: string }).review_status = out ? 'rejected' : 'unreviewed'
+    }
+    return HttpResponse.json(page)
   }),
 
   http.post('*/api/v1/drawing-pages/:id/run-plan/', async ({ params, request }) => {
@@ -1061,6 +1202,11 @@ export const drawingHandlers = [
               ...member(page.id, run.id, 'W12X26', 'W', 1),
               length_mm: '10160.0',
               length_display: "33'-4\"",
+              // Printed with its label: W12X26 (12) C=3/4"
+              studs: 12,
+              studs_text: '12',
+              camber_mm: '19.1',
+              camber_display: '3/4"',
               geometry: [[150, 95], [450, 95]],
               confidence: 0.75,
               low_confidence: false,
@@ -1116,7 +1262,7 @@ export const drawingHandlers = [
     const found = findMember(params.id as string)!
     const m = found.member
     if (!['processed', 'added'].includes(pageById(found.pageId)!.status)) return err(409, 'page_review_complete', 'This page’s review is complete. Reopen the review to make changes.')
-    const body = (await request.json()) as { version: number; designation?: string; member_type?: string; length?: string; quantity?: number; reason?: string }
+    const body = (await request.json()) as { version: number; designation?: string; member_type?: string; length?: string; quantity?: number; studs?: string; camber?: string; reason?: string }
     if (body.version !== m.version) return err(409, 'stale_version', 'This member was changed by someone else. Reload to see the latest values.')
     const before: Record<string, unknown> = {}
     const after: Record<string, unknown> = {}
@@ -1134,6 +1280,22 @@ export const drawingHandlers = [
       m.length_display = display(length)
       m.warnings = m.warnings.filter((w) => w !== 'length_not_determined').concat(length == null ? ['length_not_determined'] : [])
       after.length_mm = length
+    }
+    if (body.studs !== undefined) {
+      const studs = body.studs.trim().split(/\s*,\s*/).filter(Boolean)
+      if (studs.some((n) => !/^\d{1,3}$/.test(n) || Number(n) < 1)) return err(400, 'validation_error', 'Some fields are invalid.', { studs: ['Type the number of studs, e.g. 44, or by segment: 36, 4, 4, 40.'] })
+      before.studs_text = m.studs_text
+      m.studs_text = studs.join(', ')
+      m.studs = studs.length === 1 ? Number(studs[0]) : null
+      after.studs_text = m.studs_text
+    }
+    if (body.camber !== undefined) {
+      const typed = body.camber.trim().replace(/"$/, '')
+      if (typed && !/^(\d+(\.\d+)?( \d+\/\d+)?|\d+\/\d+)$/.test(typed)) return err(400, 'validation_error', 'Some fields are invalid.', { camber: ['Type the camber in inches, e.g. 3/4" or 1 1/2".'] })
+      before.camber_mm = m.camber_mm
+      m.camber_display = typed ? `${typed}"` : ''
+      m.camber_mm = typed ? 'set' : null
+      after.camber_mm = m.camber_mm
     }
     if (body.member_type !== undefined) {
       before.member_type = m.member_type
@@ -1162,6 +1324,35 @@ export const drawingHandlers = [
     ;(m as { review_status: string }).review_status = body.status
     revise(m, 'reviewed', { review_status: before }, { review_status: body.status }, body.reason)
     return HttpResponse.json(m)
+  }),
+
+  // Several members at once: checked first (all or nothing), then each one through the
+  // single-member handlers above.
+  http.post('*/api/v1/drawing-pages/:id/members/bulk/', async ({ params, request }) => {
+    const body = (await request.json()) as { members: { id: string; version: number }[]; status?: string; changes?: Record<string, unknown>; reason?: string }
+    const list = (runMembers[params.id as string] ?? []) as MockMember[]
+    const chosen = body.members.map((ref) => list.find((m) => m.id === ref.id))
+    if (chosen.some((m) => !m)) return err(400, 'validation_error', 'Some fields are invalid.', { members: ['Choose members of this page only.'] })
+    if (body.members.some((ref, i) => chosen[i]!.version !== ref.version)) return err(409, 'stale_version', 'This member was changed by someone else. Reload to see the latest values.')
+    if (body.status === 'rejected' && !body.reason?.trim()) return err(400, 'validation_error', 'Some fields are invalid.', { reason: ['Say why this member is rejected.'] })
+    const call = (method: string, path: string, payload: object) =>
+      fetch(new URL(`/api/v1/members/${path}`, request.url), {
+        method,
+        headers: { 'Content-Type': 'application/json', Authorization: request.headers.get('Authorization') ?? '' },
+        body: JSON.stringify(payload),
+      })
+    for (const m of chosen as MockMember[]) {
+      if (body.changes) {
+        const response = await call('PATCH', `${m.id}/`, { version: m.version, reason: body.reason, ...body.changes })
+        if (!response.ok) {
+          // The backend gives the changes' errors under "changes".
+          const failed = (await response.json()) as { error: { code: string; message: string; details: unknown } }
+          return err(response.status, failed.error.code, failed.error.message, failed.error.code === 'validation_error' ? { changes: failed.error.details } : failed.error.details)
+        }
+      }
+      if (body.status) await call('POST', `${m.id}/review/`, { version: m.version, status: body.status, reason: body.reason })
+    }
+    return HttpResponse.json(chosen)
   }),
 
   http.post('*/api/v1/members/:id/restore/', ({ params }) => {
@@ -1297,6 +1488,88 @@ export const drawingHandlers = [
     return HttpResponse.json({ pages: rows, ready: rows.length > 0 && rows.every((r) => !r.missing.length) })
   }),
   // Level proposals: every processed page reads as LEVEL 2 at 14'-0", reference A/1 (150, 95).
+  http.get('*/api/v1/projects/:id/grids/', ({ params }) => HttpResponse.json(gridTables[params.id as string] ?? [])),
+  http.post('*/api/v1/projects/:id/grids/fill/', ({ params }) => {
+    const table = (gridTables[params.id as string] ??= [])
+    const result = { added: 0, updated: 0, removed: 0, kept: 0 }
+    for (const g of [...table]) {
+      if (g.locked || g.source !== 'found') result.kept += 1
+      else result.updated += 1
+    }
+    for (const g of drawnGrids()) {
+      if (table.some((t) => t.label === g.label && t.direction === g.direction)) continue
+      table.push(g)
+      result.added += 1
+    }
+    return HttpResponse.json(result)
+  }),
+  http.post('*/api/v1/projects/:id/grids/', async ({ params, request }) => {
+    const body = (await request.json()) as { label: string; direction: MockGrid['direction']; position: string; angle_deg?: number | null }
+    const table = (gridTables[params.id as string] ??= [])
+    const mm = parseLength(body.position.replace(/^-/, ''))
+    if (mm === 'invalid' || (mm == null && !/^-?0$/.test(body.position.trim()))) return err(400, 'validation_error', 'Some fields are invalid.', { position: ['Use feet and inches (24\'-3"), inches (291"), or millimetres (7391 mm).'] })
+    if (table.some((g) => g.label === body.label && g.direction === body.direction)) return err(400, 'validation_error', 'Some fields are invalid.', { label: [`The project already has a grid ${body.label} in this direction.`] })
+    const value = (body.position.trim().startsWith('-') ? -1 : 1) * Number(mm ?? 0)
+    const grid: MockGrid = {
+      id: crypto.randomUUID(), label: body.label, direction: body.direction, position_mm: value.toFixed(1), position_display: signedFtIn(value),
+      angle_deg: body.angle_deg ?? null, start_mm: null, end_mm: null, source: 'person', plans: 0, plans_agreeing: 0, spread_mm: null,
+      disagrees: false, locked: false, hidden: false,
+    }
+    table.push(grid)
+    return HttpResponse.json(grid, { status: 201 })
+  }),
+  // A grids file: jsdom loses an upload's content, so the mock reads one fixed Tekla file
+  // (grid 1 at the origin, 2 at 30'-0" as on the plans, 3 at 50'-0" which no plan shows).
+  http.post('*/api/v1/projects/:id/grids/import/', async ({ params, request }) => {
+    const apply = (await request.formData()).get('apply') === 'true'
+    const table = (gridTables[params.id as string] ??= [])
+    const lines = [
+      { label: '1', mm: 0, drawn: 0 },
+      { label: '2', mm: 9144, drawn: 9144 + 254 },
+      { label: '3', mm: 15240, drawn: null },
+    ].map((l) => {
+      const row = table.find((g) => g.label === l.label && g.direction === 'x')
+      return {
+        label: l.label,
+        direction: 'x' as const,
+        position_mm: l.mm.toFixed(1),
+        position_display: signedFtIn(l.mm),
+        drawn_mm: l.drawn == null ? null : l.drawn.toFixed(1),
+        difference_mm: l.drawn == null ? null : (l.mm - l.drawn).toFixed(1),
+        difference_display: l.drawn == null ? '' : signedFtIn(l.mm - l.drawn),
+        action: row?.locked ? 'locked' : row ? 'replace' : 'add',
+      }
+    })
+    if (apply) {
+      for (const line of lines) {
+        if (line.action === 'locked') continue
+        const row = table.find((g) => g.label === line.label && g.direction === 'x')
+        const values = { position_mm: line.position_mm, position_display: line.position_display, source: 'csv' as const }
+        if (row) Object.assign(row, values)
+        else table.push({ ...drawnGrids()[0]!, id: crypto.randomUUID(), label: line.label, plans: 0, plans_agreeing: 0, ...values })
+      }
+    }
+    return HttpResponse.json({ format: 'tekla', applied: apply, origin: 'reference', shift_mm: { x: '-1000.0', y: '0.0' }, grids: lines, unplaced: [] })
+  }),
+  http.patch('*/api/v1/projects/:id/grids/:grid/', async ({ params, request }) => {
+    const grid = gridTables[params.id as string]!.find((g) => g.id === params.grid)!
+    const body = (await request.json()) as { label?: string; position?: string; hidden?: boolean; locked?: boolean }
+    if (body.position !== undefined) {
+      const mm = parseLength(body.position.replace(/^-/, ''))
+      if (mm === 'invalid') return err(400, 'validation_error', 'Some fields are invalid.', { position: ['Use feet and inches (24\'-3"), inches (291"), or millimetres (7391 mm).'] })
+      const value = (body.position.trim().startsWith('-') ? -1 : 1) * Number(mm ?? 0)
+      Object.assign(grid, { position_mm: value.toFixed(1), position_display: signedFtIn(value), source: 'person' })
+    }
+    if (body.label !== undefined) Object.assign(grid, { label: body.label, source: 'person' })
+    if (body.hidden !== undefined) grid.hidden = body.hidden
+    if (body.locked !== undefined) grid.locked = body.locked
+    return HttpResponse.json(grid)
+  }),
+  http.delete('*/api/v1/projects/:id/grids/:grid/', ({ params }) => {
+    gridTables[params.id as string] = gridTables[params.id as string]!.filter((g) => g.id !== params.grid)
+    return new HttpResponse(null, { status: 204 })
+  }),
+
   http.get('*/api/v1/projects/:id/level-proposals/', ({ params }) => HttpResponse.json(levelProposals(params.id as string))),
   http.post('*/api/v1/projects/:id/level-proposals/apply/', async ({ params, request }) => {
     const { pages } = (await request.json()) as { pages: string[] }

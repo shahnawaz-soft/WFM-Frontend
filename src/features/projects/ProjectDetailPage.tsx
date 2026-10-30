@@ -23,6 +23,7 @@ import { MembersSection } from './MembersSection'
 import { detailsOf, detailsPayload, formatDay } from './projectDetails'
 import { ProjectDetailsFields } from './ProjectDetailsFields'
 import { projectCan } from './useProjectPermissions'
+import { ProjectPensList } from './ProjectPens'
 
 export function ProjectDetailPage() {
   const { projectId = '' } = useParams()
@@ -213,6 +214,7 @@ function SettingsDialog({ project, onClose }: { project: Project; onClose: () =>
           autoFocus
         />
         <ProjectDetailsFields value={details} onChange={setDetails} errors={errors} />
+        <ProjectPensList project={project} canEdit />
         <dl className="settings-facts">
           <dt>Upload date</dt>
           <dd>

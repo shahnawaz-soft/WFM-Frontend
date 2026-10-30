@@ -11,6 +11,7 @@ import { NO_ERRORS, toFormErrors, type FormErrors } from '../../lib/formErrors'
 import { countedElsewhere, isColumnMember, lengthNote, MATCH_LABELS } from '../viewer/memberAppearance'
 import { formatKg, formatLb } from '../abm/format'
 import { REVIEW_STATUS } from './reviewStatus'
+import { MEMBER_TYPES } from './memberTypes'
 
 interface MemberEditorProps {
   member: ExtractedMember
@@ -23,13 +24,6 @@ interface MemberEditorProps {
   /** Shown after the section in the title (default "member N"). */
   subtitle?: string
 }
-
-const MEMBER_TYPES = [
-  { value: '', label: 'Not set (beam)' },
-  { value: 'beam', label: 'Beam' },
-  { value: 'column', label: 'Column' },
-  { value: 'brace', label: 'Brace' },
-]
 
 /** The type choices, keeping any other type already recorded (e.g. typed through the API). */
 function typeOptions(current: string) {
@@ -74,6 +68,8 @@ export function MemberEditor({ member, index, canEdit, locked, onSaved, onStale,
     member_type: member.member_type,
     length: member.length_display,
     quantity: String(member.quantity),
+    studs: member.studs_text,
+    camber: member.camber_display,
     reason: '',
   })
   const [errors, setErrors] = useState<FormErrors>(NO_ERRORS)
@@ -87,7 +83,14 @@ export function MemberEditor({ member, index, canEdit, locked, onSaved, onStale,
   }
   const done = (saved: ExtractedMember, message?: string) => {
     setErrors(NO_ERRORS)
-    setForm((f) => ({ ...f, reason: '', length: saved.length_display, designation: saved.designation }))
+    setForm((f) => ({
+      ...f,
+      reason: '',
+      length: saved.length_display,
+      designation: saved.designation,
+      studs: saved.studs_text,
+      camber: saved.camber_display,
+    }))
     onSaved(saved)
     if (message) setStatusNote(message)
   }
@@ -139,6 +142,8 @@ export function MemberEditor({ member, index, canEdit, locked, onSaved, onStale,
     if (form.member_type !== member.member_type) changes.member_type = form.member_type
     if (form.length.trim() !== member.length_display) changes.length = form.length
     if (quantity !== member.quantity) changes.quantity = quantity
+    if (form.studs.trim() !== member.studs_text) changes.studs = form.studs.trim()
+    if (form.camber.trim() !== member.camber_display) changes.camber = form.camber.trim()
     if (Object.keys(changes).length === 0) {
       // A reason typed but nothing edited: the person most likely means to reject it.
       return setStatusNote(
@@ -227,6 +232,22 @@ export function MemberEditor({ member, index, canEdit, locked, onSaved, onStale,
               hint={lengthHint(member)}
             />
           </div>
+          <TextField
+            label="Studs"
+            value={form.studs}
+            onChange={set('studs')}
+            error={errors.fields.studs}
+            placeholder="e.g. 44 or 36, 4, 4"
+            hint="Shear studs, as printed in brackets after the label"
+          />
+          <TextField
+            label="Camber"
+            value={form.camber}
+            onChange={set('camber')}
+            error={errors.fields.camber}
+            placeholder={'e.g. 3/4" or 1 1/2"'}
+            hint="In inches, as printed after C="
+          />
           <TextField
             label="Reason / note"
             value={form.reason}

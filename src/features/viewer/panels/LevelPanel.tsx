@@ -110,10 +110,6 @@ export function LevelPanel({ projectId, page, canEdit, picked, pickedLabel, grid
     <div className="panel">
       <div className="panel__header">
         <h2>Level</h2>
-        <p className="muted">
-          Used to place this plan in the 3D wireframe. Pick the <strong>shared grid intersection</strong> (e.g. A/1) so the
-          plans line up; a plan that doesn't show it can use any crossing a plan on the shared one also shows.
-        </p>
       </div>
       {notAPlan && (
         <p className="notice notice--compact" role="note">
@@ -143,7 +139,8 @@ export function LevelPanel({ projectId, page, canEdit, picked, pickedLabel, grid
             {proposed === 'applied' && stillNeeded.length > 0 && (
               <p className="level-proposal__hint">
                 Still needed: {stillNeeded.join(' and ')}. The drawings don’t give {stillNeeded.length > 1 ? 'them' : 'it'}:
-                type {stillNeeded.length > 1 ? 'them' : 'it'} below.
+                type {stillNeeded.length > 1 ? 'them' : 'it'} below
+                {setupRow?.missing?.includes('reference_missing') ? ' (the reference point is under “Reference grid point”)' : ''}.
               </p>
             )}
             {proposed === 'filled' && <p className="level-proposal__hint">Filled in below: choose Save level to keep them.</p>}
@@ -167,40 +164,49 @@ export function LevelPanel({ projectId, page, canEdit, picked, pickedLabel, grid
               error={errors.fields.elevation}
               hint="Below ground: start with a minus, e.g. -10'."
             />
-            <div className="level-form__point">
-              <p className="field__label">Reference grid point</p>
-              <p className={point ? '' : 'muted'}>
-                {point ? (
-                  <>
-                    {picked ? 'Picked (not saved yet)' : 'Set'}
-                    {picked && pickedLabel ? ` on grid ${pickedLabel}` : ''} at {point[0].toFixed(0)}, {point[1].toFixed(0)} pt on the
-                    sheet
-                  </>
-                ) : (
-                  'Not set'
-                )}
+            <details className="project-more">
+              <summary>
+                Reference grid point: {page.reference_label || (page.reference_point ? 'set' : 'not set')}
+              </summary>
+              <p className="muted">
+                Used to place this plan in the 3D wireframe. Pick the <strong>shared grid intersection</strong> (e.g. A/1) so
+                the plans line up; a plan that doesn't show it can use any crossing a plan on the shared one also shows.
               </p>
-              <div className="button-row button-row--tight">
-                <Button onClick={onPick}>{point ? 'Pick again' : 'Pick on the drawing'}</Button>
-                {page.reference_point && !picked && (
-                  <Button onClick={() => save.mutate(true)}>Clear point</Button>
+              <div className="level-form__point">
+                <p className="field__label">Reference grid point</p>
+                <p className={point ? '' : 'muted'}>
+                  {point ? (
+                    <>
+                      {picked ? 'Picked (not saved yet)' : 'Set'}
+                      {picked && pickedLabel ? ` on grid ${pickedLabel}` : ''} at {point[0].toFixed(0)}, {point[1].toFixed(0)} pt on the
+                      sheet
+                    </>
+                  ) : (
+                    'Not set'
+                  )}
+                </p>
+                <div className="button-row button-row--tight">
+                  <Button onClick={onPick}>{point ? 'Pick again' : 'Pick on the drawing'}</Button>
+                  {page.reference_point && !picked && (
+                    <Button onClick={() => save.mutate(true)}>Clear point</Button>
+                  )}
+                </div>
+                {errors.fields.reference_point && <p className="field__error">{errors.fields.reference_point.join(' ')}</p>}
+                {gridPointsLoading && onChoose && <LoadingState label="Loading the grid intersections…" />}
+                {!gridPointsLoading && choices.length > 0 && onChoose && (
+                  <SelectField
+                    label="Or choose a grid intersection"
+                    value={picked && pickedLabel ? pickedLabel : ''}
+                    options={[{ value: '', label: 'Choose…' }, ...choices.map((p) => ({ value: p.label, label: p.label }))]}
+                    onChange={(e) => {
+                      const choice = choices.find((p) => p.label === e.target.value)
+                      if (choice) onChoose(choice)
+                    }}
+                  />
                 )}
               </div>
-              {errors.fields.reference_point && <p className="field__error">{errors.fields.reference_point.join(' ')}</p>}
-              {gridPointsLoading && onChoose && <LoadingState label="Loading the grid intersections…" />}
-              {!gridPointsLoading && choices.length > 0 && onChoose && (
-                <SelectField
-                  label="Or choose a grid intersection"
-                  value={picked && pickedLabel ? pickedLabel : ''}
-                  options={[{ value: '', label: 'Choose…' }, ...choices.map((p) => ({ value: p.label, label: p.label }))]}
-                  onChange={(e) => {
-                    const choice = choices.find((p) => p.label === e.target.value)
-                    if (choice) onChoose(choice)
-                  }}
-                />
-              )}
-            </div>
-            <TextField label="Grid label" placeholder="e.g. A/1" value={form.reference_label} onChange={set('reference_label')} error={errors.fields.reference_label} />
+              <TextField label="Grid label" placeholder="e.g. A/1" value={form.reference_label} onChange={set('reference_label')} error={errors.fields.reference_label} />
+            </details>
           </fieldset>
           {canEdit && (
             <div className="button-row button-row--tight">

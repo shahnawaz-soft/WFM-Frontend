@@ -3,9 +3,10 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 
-import type { WireframeElement } from '../../api/types'
+import type { WireframeElement, WireframeGrid } from '../../api/types'
 import { signedFeetInches } from '../abm/format'
 import { elementPoints } from './elementPoints'
+import { gridSegments } from './gridGeometry'
 
 export type CameraView = '3d' | 'top' | 'front' | 'side'
 
@@ -32,6 +33,9 @@ interface Wireframe3DProps {
   dragMode?: 'turn' | 'move'
   /** ``additive``: Ctrl/⌘+click adds to (or takes from) the picked columns. */
   onSelect: (id: string | null, additive?: boolean) => void
+  /** The project's grid lines (mm), drawn at the lowest level; none: a plain helper grid. */
+  grids?: WireframeGrid[]
+  showGrids?: boolean
 }
 
 const COLORS = { beam: '#2563eb', column: '#c2410c', selected: '#7c3aed', added: '#15803d', hover: '#db2777' }
@@ -288,6 +292,81 @@ function ColumnDimensions({ items, reach }: { items: Placed[]; reach: number }) 
   return <primitive object={group} />
 }
 
+const GRID_COLOR = '#64748b'
+
+/** The structural grid at the foot of the model: dashed lines, each labelled in a bubble at
+ *  both ends, as on the plans. */
+function Grids3D({ grids, box }: { grids: WireframeGrid[]; box: THREE.Box3 }) {
+  const { lines, labels } = useMemo(() => {
+    const plan = { minX: box.min.x, minY: box.min.y, maxX: box.max.x, maxY: box.max.y }
+    const segments = gridSegments(grids, plan)
+    const z = box.min.z
+    const positions = segments.flatMap((s) => [s.from[0], s.from[1], z, s.to[0], s.to[1], z])
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+    const size = Math.max(box.max.x - box.min.x, box.max.y - box.min.y, 1)
+    const lines = new THREE.LineSegments(
+      geometry,
+      new THREE.LineDashedMaterial({ color: GRID_COLOR, dashSize: size / 80, gapSize: size / 160 }),
+    )
+    lines.computeLineDistances()
+    const bubble = size / 45
+    const labels = segments.flatMap((s) =>
+      [s.from, s.to].map((end, i) => {
+        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: bubbleTexture(s.label), depthTest: false }))
+        sprite.position.set(end[0], end[1], z)
+        sprite.scale.set(bubble, bubble, 1)
+        sprite.name = `${s.label}:${i}`
+        return sprite
+      }),
+    )
+    return { lines, labels }
+  }, [grids, box])
+  useEffect(
+    () => () => {
+      lines.geometry.dispose()
+      ;(lines.material as THREE.Material).dispose()
+      for (const l of labels) {
+        l.material.map?.dispose()
+        l.material.dispose()
+      }
+    },
+    [lines, labels],
+  )
+  return (
+    <group name="grids" raycast={() => null}>
+      <primitive object={lines} raycast={() => null} />
+      {labels.map((l) => (
+        <primitive key={l.name} object={l} raycast={() => null} />
+      ))}
+    </group>
+  )
+}
+
+/** A grid bubble: the label in a circle, drawn once per label. */
+function bubbleTexture(label: string): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas')
+  canvas.width = canvas.height = 128
+  const ctx = canvas.getContext('2d')
+  if (ctx) {
+    ctx.fillStyle = '#ffffff'
+    ctx.strokeStyle = GRID_COLOR
+    ctx.lineWidth = 6
+    ctx.beginPath()
+    ctx.arc(64, 64, 58, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.stroke()
+    ctx.fillStyle = '#1e293b'
+    ctx.font = `bold ${label.length > 3 ? 34 : 48}px system-ui, sans-serif`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(label, 64, 66)
+  }
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.colorSpace = THREE.SRGBColorSpace
+  return texture
+}
+
 interface PlacedTag {
   el: HTMLElement
   x: number
@@ -399,6 +478,8 @@ export default function Wireframe3D({
   viewNonce,
   dragMode = 'turn',
   onSelect,
+  grids,
+  showGrids = true,
 }: Wireframe3DProps) {
   const items = useMemo(() => placed(elements), [elements])
   // Only which element is hovered is state: the pointer moves the tooltip directly, so a move
@@ -462,11 +543,15 @@ export default function Wireframe3D({
       >
         <color attach="background" args={['#f8fafc']} />
         <CameraRig box={box} view={view} nonce={viewNonce} dragMode={dragMode} />
-        <gridHelper
-          args={[grid, 20, '#cbd5e1', '#e2e8f0']}
-          position={[centre.x, centre.y, box.min.z]}
-          rotation={[Math.PI / 2, 0, 0]}
-        />
+        {grids && grids.length > 0 ? (
+          showGrids && <Grids3D grids={grids} box={box} />
+        ) : (
+          <gridHelper
+            args={[grid, 20, '#cbd5e1', '#e2e8f0']}
+            position={[centre.x, centre.y, box.min.z]}
+            rotation={[Math.PI / 2, 0, 0]}
+          />
+        )}
         <Elements3D items={items} onSelect={onSelect} onHover={onHover} />
         {picked.map((p) => (
           <Selected3D key={p.e.id} p={p} />

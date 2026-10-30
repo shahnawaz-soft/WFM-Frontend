@@ -53,7 +53,7 @@ describe('Section weights in Quantities', () => {
 
   it('re-matches after a correction and explains a missing match', async () => {
     const table = await processedPage()
-    await userEvent.click(within(table).getByRole('button', { name: 'W12X26, member 1. Show on drawing' }))
+    await userEvent.click(within(table).getByRole('button', { name: 'Edit W12X26, member 1' }))
     const editor = screen.getByRole('region', { name: /member 1$/ })
     expect(within(editor).getByText(/26 lb\/ft \(38\.692 kg\/m\)/)).toBeInTheDocument()
 

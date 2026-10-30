@@ -26,6 +26,9 @@ interface StoredProject {
   team_name?: string
   tekla_version?: string
   target_completion_date?: string | null
+  /** The project's scale, for pages whose own isn't clear ('' = none). */
+  scale?: string
+  pens?: { member: { width: number | null; colour: string }[]; grid: { width: number | null; colour: string }[] }
   /** Projects list only: page 1 of the first drawing set, and the reviewed ABM weight. */
   cover_page?: string | null
   tonnage?: { lb: string; kg: string; short_tons: string; tonnes: string }
@@ -84,6 +87,8 @@ function serialize(p: StoredProject, user: User): Project {
     team_name: p.team_name ?? '',
     tekla_version: p.tekla_version ?? '',
     target_completion_date: p.target_completion_date ?? null,
+    scale: p.scale ?? '',
+    pens: p.pens ?? {},
     first_upload_at: null,
     section_dataset: sectionDataset,
     my_capabilities: capsOf(p, user),

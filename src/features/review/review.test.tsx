@@ -50,15 +50,15 @@ async function openProcessedPage(role: 'owner' | 'viewer' = 'owner') {
     await within(screen.getByRole('tabpanel')).findByText('Completed')
     await userEvent.click(screen.getByRole('tab', { name: /^Quantities/ }))
   }
-  return { page, ...view }
+  return { page, project, ...view }
 }
 
 const memberButton = (n: number, name = 'W12X26') => screen.getByRole('button', { name: `${name}, member ${n}. Show on drawing` })
 const editor = () => screen.getByRole('region', { name: /member \d+$/ })
 
-async function select(n: number, name?: string) {
+async function select(n: number, name = 'W12X26') {
   await screen.findByRole('table', { name: /Detected members/ })
-  await userEvent.click(memberButton(n, name))
+  await userEvent.click(screen.getByRole('button', { name: `Edit ${name}, member ${n}` }))
   return editor()
 }
 
@@ -83,6 +83,35 @@ describe('Correcting members', () => {
     await userEvent.click(within(panel).getByRole('button', { name: 'Show history' }))
     const history = await within(panel).findByRole('list', { name: 'Member history' })
     expect(within(history).getByText('Corrected')).toBeInTheDocument()
+  })
+
+  it('shows the studs and camber printed with the label, in the list and the editor', async () => {
+    await openProcessedPage()
+    await screen.findByRole('table', { name: /Detected members/ })
+    const row = memberButton(2).closest('tr')!
+    expect(within(row).getByTitle('Studs and camber, as printed with the label')).toHaveTextContent('(12) C=3/4"')
+    expect(within(memberButton(1).closest('tr')!).queryByTitle(/Studs and camber/)).not.toBeInTheDocument()
+    await userEvent.click(within(row).getByRole('button', { name: 'Edit W12X26, member 2' }))
+    expect(within(editor()).getByLabelText('Studs')).toHaveValue('12')
+    expect(within(editor()).getByLabelText('Camber')).toHaveValue('3/4"')
+  })
+
+  it('corrects the studs and camber', async () => {
+    await openProcessedPage()
+    const panel = await select(2)
+    await userEvent.clear(within(panel).getByLabelText('Studs'))
+    await userEvent.type(within(panel).getByLabelText('Studs'), 'many')
+    await userEvent.click(within(panel).getByRole('button', { name: 'Save changes' }))
+    expect(await within(panel).findByText(/Type the number of studs/)).toBeInTheDocument()
+
+    await userEvent.clear(within(panel).getByLabelText('Studs'))
+    await userEvent.type(within(panel).getByLabelText('Studs'), '36, 4, 4')
+    await userEvent.clear(within(panel).getByLabelText('Camber'))
+    await userEvent.type(within(panel).getByLabelText('Camber'), '1 1/4"')
+    await userEvent.click(within(panel).getByRole('button', { name: 'Save changes' }))
+    expect(await within(panel).findByText('Changes saved')).toBeInTheDocument()
+    const row = memberButton(2).closest('tr')!
+    expect(within(row).getByTitle('Studs and camber, as printed with the label')).toHaveTextContent('(36, 4, 4) C=1 1/4"')
   })
 
   it('types a member as a column, and explains where its length and weight come from', async () => {
@@ -168,6 +197,70 @@ describe('Page review', () => {
   })
 })
 
+describe('Choosing several members', () => {
+  const tickBox = (n: number, name = 'W12X26') => screen.getByRole('checkbox', { name: `Choose ${name}, member ${n}` })
+
+  it('accepts the chosen members together', async () => {
+    await openProcessedPage()
+    await screen.findByRole('table', { name: /Detected members/ })
+    await userEvent.click(tickBox(1))
+    await userEvent.click(tickBox(2))
+    const bar = screen.getByRole('group', { name: 'Chosen members' })
+    expect(within(bar).getByText('2 members chosen')).toBeInTheDocument()
+    await userEvent.click(within(bar).getByRole('button', { name: 'Accept' }))
+    expect(await screen.findByText('Accepted 2 members')).toBeInTheDocument()
+    const rows = within(screen.getByRole('table', { name: /Detected members/ })).getAllByRole('row').slice(1)
+    expect(rows.map((r) => within(r).queryByText('Accepted') !== null)).toEqual([true, true, false])
+    expect(screen.queryByRole('group', { name: 'Chosen members' })).not.toBeInTheDocument() // cleared
+  })
+
+  it('rejects the chosen members with one reason', async () => {
+    await openProcessedPage()
+    await screen.findByRole('table', { name: /Detected members/ })
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Choose every member listed' }))
+    const bar = screen.getByRole('group', { name: 'Chosen members' })
+    expect(within(bar).getByText('3 members chosen')).toBeInTheDocument()
+    await userEvent.click(within(bar).getByRole('button', { name: 'Reject…' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Reject 3 members?' })
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Reject 3 members' }))
+    expect(await within(dialog).findByText(/Say why/)).toBeInTheDocument()
+    await userEvent.type(within(dialog).getByLabelText('Reason'), 'Not steel')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Reject 3 members' }))
+    expect(await screen.findByText('Rejected 3 members')).toBeInTheDocument()
+  })
+
+  it('edits only the fields filled in, for every chosen member', async () => {
+    await openProcessedPage()
+    await screen.findByRole('table', { name: /Detected members/ })
+    await userEvent.click(tickBox(1))
+    await userEvent.click(tickBox(2))
+    await userEvent.click(within(screen.getByRole('group', { name: 'Chosen members' })).getByRole('button', { name: 'Edit…' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Edit 2 members' })
+    const save = within(dialog).getByRole('button', { name: 'Save 2 members' })
+    expect(save).toBeDisabled() // nothing to change yet
+    await userEvent.type(within(dialog).getByLabelText('Length'), 'long')
+    await userEvent.click(save)
+    expect(await within(dialog).findByText(/Use feet and inches/)).toBeInTheDocument()
+    await userEvent.clear(within(dialog).getByLabelText('Length'))
+    await userEvent.type(within(dialog).getByLabelText('Section'), 'w14x22')
+    await userEvent.selectOptions(within(dialog).getByLabelText('Type'), 'column')
+    await userEvent.type(within(dialog).getByLabelText('Studs'), '20')
+    await userEvent.type(within(dialog).getByLabelText('Camber'), '1/2"')
+    await userEvent.click(within(dialog).getByRole('checkbox', { name: 'Also accept them' }))
+    await userEvent.click(save)
+    expect(await screen.findByText('2 members changed and accepted')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'W14X22, member 1. Show on drawing' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'W14X22, member 2. Show on drawing' })).toBeInTheDocument()
+    expect(within(memberButton(1, 'W14X22').closest('tr')!).getByTitle(/Studs and camber/)).toHaveTextContent('(20) C=1/2"')
+    expect(screen.getByRole('button', { name: 'HSS6X6X1/4, member 3. Show on drawing' })).toBeInTheDocument()
+  })
+
+  it('offers no tick boxes to viewers', async () => {
+    await openProcessedPage('viewer')
+    expect(screen.queryByRole('checkbox', { name: /^Choose/ })).not.toBeInTheDocument()
+  })
+})
+
 describe('Adding a missed member', () => {
   it('places it on the drawing and adds it to the list', async () => {
     const { container } = await openProcessedPage()
@@ -195,6 +288,78 @@ describe('Adding a missed member', () => {
     await userEvent.keyboard('{Escape}')
     expect(screen.queryByText(/Click the drawing where the member is/)).not.toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Add a missed member' })).toHaveTextContent('No location on the drawing yet')
+  })
+})
+
+describe('Pens', () => {
+  it('reads the pen of a line clicked and sets it as the project’s member pen', async () => {
+    const { project } = await openProcessedPage()
+    await screen.findByRole('table', { name: /Detected members/ })
+    await userEvent.click(screen.getByRole('button', { name: 'Pens' }))
+    expect(screen.getByText(/Click a line on the drawing to see its pen/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('img', { name: /Drawing/ }))
+    const dialog = await screen.findByRole('dialog', { name: 'Pen of this line' })
+    expect(await within(dialog).findByText(/42 lines drawn with it on this page/)).toBeInTheDocument()
+    expect(within(dialog).getByText('1.08 pt · #000000')).toBeInTheDocument()
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Member lines are this pen' }))
+    expect(await screen.findByText(/Pens saved: 1 page running again/)).toBeInTheDocument()
+    expect(mockProjects.all.find((p) => p.id === project.id)!.pens).toEqual({ member: [{ width: 1.08, colour: '#000000' }], grid: [] })
+  })
+})
+
+describe('Page area', () => {
+  /** Drag a box on the drawing from one PDF point to another (the stand-in viewport's mapping). */
+  async function dragBox([x1, y1]: [number, number], [x2, y2]: [number, number]) {
+    const drawing = screen.getByRole('img', { name: /Drawing/ })
+    const zoom = Number(drawing.dataset.zoom)
+    const screenPoint = (x: number, y: number) => ({ clientX: (x - 500) * zoom, clientY: (1684 - 400 - y) * zoom })
+    await userEvent.pointer([
+      { keys: '[MouseLeft>]', target: drawing, coords: screenPoint(x1, y1) },
+      { target: drawing, coords: screenPoint(x2, y2) },
+      { keys: '[/MouseLeft]', target: drawing, coords: screenPoint(x2, y2) },
+    ])
+  }
+
+  it('counts only the members inside the box drawn, and clears it again', async () => {
+    const { container } = await openProcessedPage()
+    await screen.findByRole('table', { name: /Detected members/ })
+    await userEvent.click(screen.getByRole('button', { name: 'Area' }))
+    expect(screen.getByText(/around the part of the sheet to count/)).toBeInTheDocument()
+    await dragBox([100, 200], [200, 50]) // around members 1 and 2 (labels at x 120, 170)
+    const confirm = await screen.findByRole('dialog', { name: 'Count only inside this area?' })
+    await userEvent.click(within(confirm).getByRole('button', { name: 'Save area and run again' }))
+    expect(await screen.findByText('Area saved: the page is running again')).toBeInTheDocument()
+
+    const page = mockDrawings.sets[0]!.pages[0]!
+    expect(page.area).toEqual([100, 50, 200, 200])
+    await waitFor(() => expect(container.querySelector('.area-overlay')).not.toBeNull())
+    const hss = memberButton(3, 'HSS6X6X1/4').closest('tr')!
+    await waitFor(() => expect(within(hss).getByText('Rejected')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: 'Clear area' }))
+    const clear = await screen.findByRole('dialog', { name: 'Count the whole sheet again?' })
+    await userEvent.click(within(clear).getByRole('button', { name: 'Clear area and run again' }))
+    await waitFor(() => expect(container.querySelector('.area-overlay')).toBeNull())
+    expect(page.area).toBeNull()
+  })
+
+  it('asks before replacing review work', async () => {
+    await openProcessedPage()
+    await screen.findByRole('table', { name: /Detected members/ })
+    await userEvent.click(screen.getByRole('button', { name: /^Accept all remaining \(/ }))
+    await userEvent.click(within(await screen.findByRole('dialog', { name: /^Accept \d+ remaining/ })).getByRole('button', { name: 'Accept all remaining' }))
+    await screen.findByText(/^Accepted \d+ members?/)
+    await userEvent.click(screen.getByRole('button', { name: 'Area' }))
+    await dragBox([100, 200], [200, 50])
+    await userEvent.click(within(await screen.findByRole('dialog', { name: 'Count only inside this area?' })).getByRole('button', { name: 'Save area and run again' }))
+    const warning = await screen.findByRole('dialog', { name: 'This page has review work' })
+    await userEvent.click(within(warning).getByRole('button', { name: 'Run again and replace review' }))
+    await waitFor(() => expect(mockDrawings.sets[0]!.pages[0]!.area).toEqual([100, 50, 200, 200]))
+  })
+
+  it('offers no area to viewers', async () => {
+    await openProcessedPage('viewer')
+    expect(screen.queryByRole('button', { name: 'Area' })).not.toBeInTheDocument()
   })
 })
 

@@ -1,6 +1,6 @@
 import { apiClient } from './client'
 import type { components } from './schema'
-import type { ProcessingJob, SimilarColumnsJob } from './types'
+import type { DrawingPage, ProcessingJob, SimilarColumnsJob } from './types'
 
 type Schemas = components['schemas']
 
@@ -22,6 +22,69 @@ export interface SetRunResult {
 /** Run Plan on every page of a drawing set not run yet (pending or failed pages). */
 export async function runAllPages(drawingSetId: string): Promise<SetRunResult> {
   const { data } = await apiClient.post<SetRunResult>(`/api/v1/drawing-sets/${drawingSetId}/run-plan/`)
+  return data
+}
+
+export type SetScaleResult = Schemas['SetScaleResult']
+
+/** Set the scale of one page (``page``), or the project's: used on pages whose own scale
+ *  isn't clear. '' = back to the scale read from the drawing. The pages it changes run again. */
+export async function setScale(
+  projectId: string,
+  scale: string,
+  options: { page?: string; discardReview?: boolean } = {},
+): Promise<SetScaleResult> {
+  const { data } = await apiClient.post<SetScaleResult>(`/api/v1/projects/${projectId}/scale/`, {
+    scale,
+    page: options.page ?? null,
+    discard_review: options.discardReview ?? false,
+  })
+  return data
+}
+
+/** Count only inside ``area`` ([left, bottom, right, top], PDF points) on the page, or the
+ *  whole sheet again (null). The page runs again. */
+export async function setPageArea(
+  pageId: string,
+  area: [number, number, number, number] | null,
+  options: { discardReview?: boolean } = {},
+): Promise<DrawingPage> {
+  const { data } = await apiClient.post<DrawingPage>(`/api/v1/drawing-pages/${pageId}/area/`, {
+    area,
+    discard_review: options.discardReview ?? false,
+  })
+  return data
+}
+
+/** A pen: a line width (pt) and/or a colour (#rrggbb); one without either takes any. */
+export interface Pen {
+  width: number | null
+  colour: string
+}
+
+export interface ProjectPens {
+  member: Pen[]
+  grid: Pen[]
+}
+
+export type PenAt = Schemas['PenAt']
+export type ProjectPensResult = Schemas['ProjectPensResult']
+
+/** The pen of the line nearest a point on the page (PDF points); 404 ``no_line_here``. */
+export async function getPenAt(pageId: string, point: [number, number]): Promise<PenAt> {
+  const { data } = await apiClient.get<PenAt>(`/api/v1/drawing-pages/${pageId}/pen/`, {
+    params: { x: point[0], y: point[1] },
+  })
+  return data
+}
+
+/** Save the project's pens and (``runAgain``) run its pages again with them; pages with review
+ *  work are left as they are and listed. */
+export async function setProjectPens(projectId: string, pens: ProjectPens, runAgain = true): Promise<ProjectPensResult> {
+  const { data } = await apiClient.post<ProjectPensResult>(`/api/v1/projects/${projectId}/pens/`, {
+    ...pens,
+    run_again: runAgain,
+  })
   return data
 }
 

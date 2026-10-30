@@ -47,6 +47,8 @@ interface DrawingStageProps {
   boxing?: boolean
   onBox?: (box: [number, number, number, number]) => void
   onCancelPlace?: () => void
+  /** The part of the sheet counted ([left, bottom, right, top], PDF points): outside is dimmed. */
+  area?: [number, number, number, number] | null
   /** A labelled point to mark on the drawing (PDF points), e.g. the reference grid point. */
   marker?: { point: [number, number]; label: string } | null
   /** Text shown while placing (default: placing a member). */
@@ -313,6 +315,9 @@ export function DrawingStage(props: DrawingStageProps) {
             {showLabels && props.columns && props.columns.length > 0 && viewport && Math.abs(viewport.scale - zoom) < 0.001 && (
               <ColumnOverlay viewport={viewport} columns={props.columns} />
             )}
+            {props.area && viewport && Math.abs(viewport.scale - zoom) < 0.001 && (
+              <AreaOverlay viewport={viewport} area={props.area} />
+            )}
             {props.marker && viewport && Math.abs(viewport.scale - zoom) < 0.001 && (
               <PointMarker viewport={viewport} {...props.marker} />
             )}
@@ -321,6 +326,26 @@ export function DrawingStage(props: DrawingStageProps) {
         )}
       </div>
     </section>
+  )
+}
+
+/** The page's area: everything outside it dimmed (not counted), the box outlined. */
+function AreaOverlay({ viewport, area }: { viewport: PageViewport; area: [number, number, number, number] }) {
+  const [x1, y1] = viewport.convertToViewportPoint(area[0], area[3]) as [number, number]
+  const [x2, y2] = viewport.convertToViewportPoint(area[2], area[1]) as [number, number]
+  const [left, right, top, bottom] = [Math.min(x1, x2), Math.max(x1, x2), Math.min(y1, y2), Math.max(y1, y2)]
+  const { width, height } = viewport
+  return (
+    <svg className="area-overlay" width={width} height={height} aria-hidden="true">
+      <path
+        fillRule="evenodd"
+        d={`M0 0H${width}V${height}H0Z M${left} ${top}H${right}V${bottom}H${left}Z`}
+        className="area-overlay__outside"
+      />
+      <rect x={left} y={top} width={right - left} height={bottom - top} className="area-overlay__box">
+        <title>The area counted on this page</title>
+      </rect>
+    </svg>
   )
 }
 

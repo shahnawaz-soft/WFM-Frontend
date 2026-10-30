@@ -224,7 +224,7 @@ describe('Adding pages to the project', () => {
     expect(link).toHaveAttribute('href', `/projects/${project.id}/abm`)
 
     // Entries stay editable once the page is in the project (OD-31).
-    await userEvent.click(screen.getByRole('button', { name: 'W12X26, member 1. Show on drawing' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Edit W12X26, member 1' }))
     const editor = screen.getByRole('region', { name: /member 1$/ })
     expect(within(editor).getByLabelText('Quantity')).toBeEnabled()
     expect(screen.getByRole('link', { name: 'Show in ABM' })).toBeInTheDocument()

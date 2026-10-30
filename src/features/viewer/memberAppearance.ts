@@ -46,6 +46,7 @@ export const WARNING_LABELS: Record<string, string> = {
   in_column_schedule: 'Counted on the column schedule',
   post_label: 'Post: height not on the plan',
   reference_view: 'Reference view: not counted',
+  outside_area: 'Outside the page area: not counted',
   beam_by_leader: 'Label tied to the beam by a leader',
   other_sheet: 'Past the match line: counted on the next sheet',
   typical_label: 'Column: named by a TYP label',
@@ -106,4 +107,11 @@ export function isColumnMember(member: { member_type?: string | null }): boolean
 export function sectionName(member: { designation: string; member_type?: string | null }): string {
   if (member.designation) return member.designation
   return member.member_type === 'column' ? 'Column, no label' : 'No label'
+}
+
+/** Studs and camber as printed with the label: (44) C=1 1/2". Empty when neither is. */
+export function labelExtras(member: { studs_text?: string; camber_display?: string }): string {
+  return [member.studs_text ? `(${member.studs_text})` : '', member.camber_display ? `C=${member.camber_display}` : '']
+    .filter(Boolean)
+    .join(' ')
 }

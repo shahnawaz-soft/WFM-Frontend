@@ -68,6 +68,11 @@ describe('Level set-up', () => {
     expect(within(panel).getByRole('heading', { name: 'Level' })).toBeInTheDocument()
     await userEvent.type(within(panel).getByLabelText('Level'), 'Level 2')
     await userEvent.type(within(panel).getByLabelText('Elevation (top of steel)'), "14'")
+    // Just the level and its elevation up front: the 3D reference point is folded away.
+    const reference = within(panel).getByText('Reference grid point: not set').closest('details')!
+    expect(reference).not.toHaveAttribute('open')
+    await userEvent.click(within(panel).getByText('Reference grid point: not set'))
+    expect(reference).toHaveAttribute('open')
     await userEvent.type(within(panel).getByLabelText('Grid label'), 'A/1')
     expect(within(panel).getByText('Not set')).toBeInTheDocument()
 
@@ -84,6 +89,7 @@ describe('Level set-up', () => {
     expect(saved.elevation_mm).toBe('4267.2')
     expect(saved.reference_point).not.toBeNull()
     expect(container.querySelector('.point-marker text')).toHaveTextContent('A/1')
+    expect(within(screen.getByRole('tabpanel')).getByText('Reference grid point: A/1')).toBeInTheDocument()
   })
 
   it('takes the reference point from a grid intersection found on the plan', async () => {
@@ -196,6 +202,85 @@ describe('Level set-up', () => {
     await userEvent.type(within(panel).getByLabelText('Elevation (top of steel)'), 'high')
     await userEvent.click(within(panel).getByRole('button', { name: 'Save level' }))
     expect(await within(panel).findByText(/feet and inches/)).toBeInTheDocument()
+  })
+})
+
+describe('Project grids', () => {
+  const card = () => screen.getByRole('region', { name: 'Grids' })
+
+  it('fills the grid table from the drawings and flags lines the plans disagree on', async () => {
+    const { project } = await addedPage()
+    renderApp(`/projects/${project.id}/wireframe`)
+    await screen.findByRole('region', { name: 'Grids' })
+    expect(await within(card()).findByText(/No grid table yet/)).toBeInTheDocument()
+    await userEvent.click(within(card()).getByRole('button', { name: 'Fill from the drawings' }))
+    expect(await screen.findByText(/Grids from the drawings: 3 added/)).toBeInTheDocument()
+    const table = await within(card()).findByRole('table', { name: 'The project’s grid lines' })
+    const row = within(table).getByRole('row', { name: /^2 / })
+    expect(within(row).getAllByText('30\'-0"')).toHaveLength(2) // from the origin, and from grid 1
+    expect(within(row).getByText('⚠ 1 of 2 agree')).toBeInTheDocument()
+    expect(within(card()).getByRole('button', { name: 'Refresh from the drawings' })).toBeInTheDocument()
+  })
+
+  it('corrects, adds, hides and deletes grid lines', async () => {
+    const { project } = await addedPage()
+    renderApp(`/projects/${project.id}/wireframe`)
+    await userEvent.click(await within(await screen.findByRole('region', { name: 'Grids' })).findByRole('button', { name: 'Fill from the drawings' }))
+    await within(card()).findByRole('table')
+
+    await userEvent.click(within(card()).getByRole('button', { name: 'Edit grid 2' }))
+    let dialog = await screen.findByRole('dialog', { name: 'Grid 2' })
+    await userEvent.clear(within(dialog).getByLabelText('From the origin'))
+    await userEvent.type(within(dialog).getByLabelText('From the origin'), 'far')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    expect(await within(dialog).findByText(/Use feet and inches/)).toBeInTheDocument()
+    await userEvent.clear(within(dialog).getByLabelText('From the origin'))
+    await userEvent.type(within(dialog).getByLabelText('From the origin'), "31'-6\"")
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    const row = within(card()).getByRole('row', { name: /^2 / })
+    // From the origin, and the spacing from grid 1 (at the origin): both 31'-6".
+    await waitFor(() => expect(within(row).getAllByText("31'-6\"")).toHaveLength(2))
+    expect(within(row).getByText('You')).toBeInTheDocument()
+
+    await userEvent.click(within(card()).getByRole('button', { name: 'Add grid' }))
+    dialog = await screen.findByRole('dialog', { name: 'Add a grid' })
+    await userEvent.type(within(dialog).getByLabelText('Label'), 'B')
+    await userEvent.selectOptions(within(dialog).getByLabelText('Direction'), 'y')
+    await userEvent.type(within(dialog).getByLabelText('From the origin'), "-12'-6\"")
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Add grid' }))
+    expect(await within(card()).findByRole('row', { name: /^B Along Y -12'-6"/ })).toBeInTheDocument()
+
+    await userEvent.click(within(card()).getByRole('checkbox', { name: 'Hide grid A' }))
+    await waitFor(() => expect(within(card()).getByRole('checkbox', { name: 'Hide grid A' })).toBeChecked())
+    await userEvent.click(within(card()).getByRole('button', { name: 'Delete grid B' }))
+    await userEvent.click(within(await screen.findByRole('dialog', { name: 'Delete grid B?' })).getByRole('button', { name: 'Delete grid' }))
+    await waitFor(() => expect(within(card()).queryByRole('row', { name: /^B / })).toBeNull())
+  })
+
+  it('previews a Tekla grids file against the drawings, then puts it in the table', async () => {
+    const { project } = await addedPage()
+    renderApp(`/projects/${project.id}/wireframe`)
+    await screen.findByRole('region', { name: 'Grids' })
+    await userEvent.upload(within(card()).getByLabelText('Grids file'), new File(['COORDINATES'], 'grids.txt', { type: 'text/plain' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Grids file: grids.txt' })
+    expect(within(dialog).getByText(/reference crossing is at the origin/)).toBeInTheDocument()
+    expect(within(dialog).getByText(/⚠ 1 more than 6" from where the drawings place them/)).toBeInTheDocument()
+    const row = within(dialog).getByRole('row', { name: /^2 / })
+    expect(within(row).getByText('⚠ -0\'-10"')).toBeInTheDocument()
+    expect(within(within(dialog).getByRole('row', { name: /^3 / })).getByText('Not on the drawings')).toBeInTheDocument()
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Put in the table' }))
+    expect(await screen.findByText('Grids from the file put in the table')).toBeInTheDocument()
+    const added = await within(card()).findByRole('row', { name: /^3 / })
+    expect(within(added).getByText('Grids file')).toBeInTheDocument()
+  })
+
+  it('lets viewers look but not change', async () => {
+    const { project } = await addedPage()
+    mockBackend.startSession('viewer@steelo.test')
+    renderApp(`/projects/${project.id}/wireframe`)
+    await screen.findByRole('region', { name: 'Grids' })
+    expect(within(card()).queryByRole('button', { name: 'Fill from the drawings' })).toBeNull()
   })
 })
 

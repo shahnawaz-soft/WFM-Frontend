@@ -13,8 +13,10 @@ import { Button } from '../../components/ui/Button'
 import { StatusBadge } from '../../components/ui/StatusBadge'
 import { isActiveJob, PAGE_STATUS } from '../drawings/status'
 import { ProjectLockedNotice } from '../finalize/ProjectLockedNotice'
+import { PickedPenDialog } from '../projects/ProjectPens'
 import { projectCan } from '../projects/useProjectPermissions'
 import { AddMemberForm } from '../review/AddMemberForm'
+import { BulkReviewBar } from '../review/BulkReviewBar'
 import { MemberEditor } from '../review/MemberEditor'
 import { ReviewBar } from '../review/ReviewBar'
 import { useMemberCache } from '../review/useMemberCache'
@@ -22,6 +24,7 @@ import { DrawingStage, type FocusRequest } from './DrawingStage'
 import { columnBreakdown } from './columnSymbols'
 import { nearestGridPoint } from './grids'
 import { memberKind, MEMBER_KINDS, type MemberKind } from './memberAppearance'
+import { PageAreaControls, type AreaBox } from './PageAreaControls'
 import { PageStrip } from './PageStrip'
 import { FlagsPanel } from './panels/FlagsPanel'
 import { LevelPanel } from './panels/LevelPanel'
@@ -48,10 +51,13 @@ export function PageViewerPage() {
   const [tab, setTab] = useState<ViewerTab>(() => (searchParams.get('tab') === 'level' ? 'level' : 'quantities'))
   const [panelOpen, setPanelOpen] = useState(true)
   const [stripOpen, setStripOpen] = useState(true)
+  // Full drawing: the app menu, the panel and the page strip out of the way (UX review).
+  const [full, setFull] = useState(false)
   const [family, setFamily] = useState<string>(ALL)
   const [showLabels, setShowLabels] = useState(true)
   const [showGrids, setShowGrids] = useState(true)
   const [selectedId, setSelectedId] = useState<string | null>(linkedMember)
+  const [editingId, setEditingId] = useState<string | null>(linkedMember)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [focus, setFocus] = useState<FocusRequest | null>(() => (linkedMember ? { memberId: linkedMember, nonce: 1 } : null))
   // Adding a missed member: null = not adding; location null = not picked yet.
@@ -64,6 +70,12 @@ export function PageViewerPage() {
   const [pickedLabel, setPickedLabel] = useState<string | null>(null)
   // Find similar: a click on a column symbol Steelo missed; its likes become columns.
   const [findingSimilar, setFindingSimilar] = useState(false)
+  // Drawing the box of the part of the sheet to count (the page's area).
+  const [drawingArea, setDrawingArea] = useState(false)
+  const [proposedArea, setProposedArea] = useState<{ area: AreaBox | null } | null>(null)
+  // Picking a pen: the next click on the drawing reads the pen of the line there.
+  const [pickingPen, setPickingPen] = useState(false)
+  const [penPoint, setPenPoint] = useState<[number, number] | null>(null)
   const [similarFound, setSimilar] = useState<{ pageId: string; point: [number, number]; result: FindSimilarResult } | null>(null)
   const similar = similarFound?.pageId === pageId ? similarFound : null  // shown on its own page only
   const queryClient = useQueryClient()
@@ -142,6 +154,8 @@ export function PageViewerPage() {
     setPlacing(false)
     setPickingReference(false)
     setFindingSimilar(false)
+    setDrawingArea(false)
+    setPickingPen(false)
   }, [])
   // After Find similar added columns: the pages' columns, their members (new ABM entries) and
   // the set's pages change. The set's PDF does not: invalidating it would download and parse
@@ -166,6 +180,15 @@ export function PageViewerPage() {
   const place = useCallback(
     (location: [number, number]) => {
       setPlacing(false)
+      if (drawingArea) {
+        setDrawingArea(false) // an area is a box: a plain click draws none
+        return
+      }
+      if (pickingPen) {
+        setPickingPen(false)
+        setPenPoint(location)
+        return
+      }
       if (findingSimilar) {
         setFindingSimilar(false)
         setSimilar(null)
@@ -185,17 +208,27 @@ export function PageViewerPage() {
       setTab('quantities')
       setPanelOpen(true)
     },
-    [pickingReference, gridPoints, findingSimilar, findSimilar],
+    [pickingReference, gridPoints, findingSimilar, findSimilar, drawingArea, pickingPen],
   )
 
   // Selecting in the list zooms the drawing to the member; selecting on the drawing opens
   // the Quantities list at that row.
   const selectFromList = useCallback((id: string) => {
     setSelectedId(id)
+    setEditingId((e) => (e === id ? e : null))
     setFocus((f) => ({ memberId: id, nonce: (f?.nonce ?? 0) + 1 }))
   }, [])
+  // The edit form opens only from a row's edit button (selecting just shows the member).
+  const editFromList = useCallback(
+    (id: string) => {
+      selectFromList(id)
+      setEditingId(id)
+    },
+    [selectFromList],
+  )
   const selectFromDrawing = useCallback((id: string | null) => {
     setSelectedId(id)
+    setEditingId((e) => (e === id ? e : null))
     if (id) {
       setTab('quantities')
       setPanelOpen(true)
@@ -255,7 +288,12 @@ export function PageViewerPage() {
   }
 
   return (
-    <div className="viewer workspace" data-panel={panelOpen ? 'open' : 'closed'} data-strip={stripOpen ? 'open' : 'closed'}>
+    <div
+      className="viewer workspace"
+      data-panel={panelOpen ? 'open' : 'closed'}
+      data-strip={stripOpen ? 'open' : 'closed'}
+      data-full={full ? 'on' : 'off'}
+    >
       <header className="workspace__header">
         <div>
           <nav aria-label="Breadcrumb" className="breadcrumb">
@@ -281,6 +319,12 @@ export function PageViewerPage() {
             )}
           </h1>
         </div>
+        <ViewerRail
+          active={tab}
+          open={panelOpen}
+          counts={{ quantities: allMembers.length, flags: issues.data?.length }}
+          onChange={onTab}
+        />
         <div className="workspace__nav" role="toolbar" aria-label="Page navigation">
           <Button disabled={!prev} onClick={() => prev && go(prev.id)}>
             ← Previous
@@ -291,6 +335,17 @@ export function PageViewerPage() {
           <Button aria-pressed={stripOpen} onClick={() => setStripOpen((o) => !o)}>
             Pages
           </Button>
+          <Button
+            aria-pressed={full}
+            title="Hide the menu, the panel and the page strip to give the drawing the whole window"
+            onClick={() => {
+              setFull((f) => !f)
+              setPanelOpen(full)
+              setStripOpen(full)
+            }}
+          >
+            {full ? 'Exit full drawing' : 'Full drawing'}
+          </Button>
           <Link className="button button--secondary" to={`/projects/${projectId}/abm`}>
             ABM
           </Link>
@@ -299,13 +354,6 @@ export function PageViewerPage() {
           </Link>
         </div>
       </header>
-
-      <ViewerRail
-        active={tab}
-        open={panelOpen}
-        counts={{ quantities: allMembers.length, flags: issues.data?.length }}
-        onChange={onTab}
-      />
 
       {panelOpen && (
         <aside id="viewer-panel" role="tabpanel" aria-labelledby={`tab-${tab}`} className="workspace__panel">
@@ -316,7 +364,21 @@ export function PageViewerPage() {
               selectedId={selectedId}
               hoveredId={hoveredId}
               onSelect={selectFromList}
+              onEdit={editFromList}
               onHover={setHoveredId}
+              bulkActions={
+                canRun && !reviewLocked && current.current_run
+                  ? (chosen, clear) => (
+                      <BulkReviewBar
+                        pageId={pageId}
+                        chosen={chosen}
+                        onSaved={(saved) => saved.forEach(cache.replace)}
+                        onStale={() => void cache.refetch()}
+                        onClear={clear}
+                      />
+                    )
+                  : undefined
+              }
               onAdd={
                 canAdd && !adding
                   ? () => {
@@ -339,7 +401,7 @@ export function PageViewerPage() {
                     cache.append(member)
                     setAdding(null)
                     setFamily(ALL)
-                    selectFromList(member.id)
+                    editFromList(member.id)
                   }}
                   onCancel={() => {
                     setAdding(null)
@@ -347,7 +409,7 @@ export function PageViewerPage() {
                   }}
                 />
               )}
-              {selected && !adding && (
+              {selected && editingId === selected.id && !adding && (
                 <MemberEditor
                   key={selected.id}
                   member={selected}
@@ -356,7 +418,7 @@ export function PageViewerPage() {
                   locked={reviewLocked}
                   onSaved={cache.replace}
                   onStale={() => void cache.refetch()}
-                  onClose={() => setSelectedId(null)}
+                  onClose={() => setEditingId(null)}
                 />
               )}
               {selected && !adding && current.status === 'added' && selected.review_status !== 'rejected' && (
@@ -375,7 +437,9 @@ export function PageViewerPage() {
               onShowMember={showMember}
             />
           )}
-          {tab === 'scale' && <ScalePanel run={current.current_run ? detailRun : null} />}
+          {tab === 'scale' && (
+            <ScalePanel run={current.current_run ? detailRun : null} page={detail} project={project.data} canEdit={canRun} />
+          )}
           {tab === 'level' && (
             <LevelPanel
               key={current.id}
@@ -428,7 +492,11 @@ export function PageViewerPage() {
           onHover={setHoveredId}
           placing={placing}
           placingHint={
-            findingSimilar
+            pickingPen
+              ? 'Click a line on the drawing to see its pen (line width and colour)'
+              : drawingArea
+              ? 'Drag a box around the part of the sheet to count: what is outside is not counted'
+              : findingSimilar
               ? 'Drag a box around a column symbol Steelo missed (or click on it): every mark drawn like it becomes a column'
               : pickingReference
               ? gridPoints?.length
@@ -440,9 +508,14 @@ export function PageViewerPage() {
           grids={detailRun?.grids ?? undefined}
           showGrids={showGrids}
           onPlace={place}
-          boxing={findingSimilar}
+          boxing={findingSimilar || drawingArea}
+          area={(current.area as AreaBox | null | undefined) ?? null}
           onBox={(box) => {
             setPlacing(false)
+            if (drawingArea) {
+              setDrawingArea(false)
+              return setProposedArea({ area: box })
+            }
             setFindingSimilar(false)
             setSimilar(null)
             findSimilar.mutate({ point: [(box[0] + box[2]) / 2, (box[1] + box[3]) / 2], box })
@@ -477,6 +550,39 @@ export function PageViewerPage() {
               )}
               {canRun && current.current_run && (
                 <Button
+                  aria-pressed={pickingPen}
+                  title="Click a line to see its pen, and read the project's members or grid lines by it"
+                  onClick={() => {
+                    if (pickingPen) return cancelPlace()
+                    setAdding(null)
+                    setPickingReference(false)
+                    setFindingSimilar(false)
+                    setDrawingArea(false)
+                    setPickingPen(true)
+                    setPlacing(true)
+                  }}
+                >
+                  Pens
+                </Button>
+              )}
+              <PageAreaControls
+                page={current}
+                canEdit={canRun}
+                drawing={drawingArea}
+                onDraw={() => {
+                  if (drawingArea) return cancelPlace()
+                  setAdding(null)
+                  setPickingReference(false)
+                  setFindingSimilar(false)
+                  setPickingPen(false)
+                  setDrawingArea(true)
+                  setPlacing(true)
+                }}
+                proposed={proposedArea}
+                onPropose={setProposedArea}
+              />
+              {canRun && current.current_run && (
+                <Button
                   aria-pressed={findingSimilar}
                   loading={findSimilar.isPending}
                   title="Point at a column symbol Steelo missed: every mark drawn like it becomes a column"
@@ -484,6 +590,8 @@ export function PageViewerPage() {
                     if (findingSimilar) return cancelPlace()
                     setAdding(null)
                     setPickingReference(false)
+                    setDrawingArea(false)
+                    setPickingPen(false)
                     setFindingSimilar(true)
                     setPlacing(true)
                   }}
@@ -574,6 +682,10 @@ export function PageViewerPage() {
           </p>
         )}
       </div>
+
+      {penPoint && project.data && (
+        <PickedPenDialog project={project.data} pageId={pageId} point={penPoint} onClose={() => setPenPoint(null)} />
+      )}
 
       {stripOpen && (
         <aside className="workspace__strip">
