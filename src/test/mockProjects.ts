@@ -28,7 +28,11 @@ interface StoredProject {
   target_completion_date?: string | null
   /** The project's scale, for pages whose own isn't clear ('' = none). */
   scale?: string
-  pens?: { member: { width: number | null; colour: string }[]; grid: { width: number | null; colour: string }[] }
+  pens?: {
+    member: { width: number | null; colour: string }[]
+    grid: { width: number | null; colour: string }[]
+    column?: { width: number | null; colour: string }[]
+  }
   /** Projects list only: page 1 of the first drawing set, and the reviewed ABM weight. */
   cover_page?: string | null
   tonnage?: { lb: string; kg: string; short_tons: string; tonnes: string }

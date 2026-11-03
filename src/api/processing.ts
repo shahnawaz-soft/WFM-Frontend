@@ -65,6 +65,8 @@ export interface Pen {
 export interface ProjectPens {
   member: Pen[]
   grid: Pen[]
+  /** The pens columns are drawn with: every column-size shape drawn with them is a column. */
+  column: Pen[]
 }
 
 export type PenAt = Schemas['PenAt']

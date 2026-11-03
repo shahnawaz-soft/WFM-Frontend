@@ -218,6 +218,28 @@ interface MockGrid {
   hidden: boolean
 }
 let gridTables: Record<string, MockGrid[]> = {}
+// Column sizes by mark a person entered, per project (the plans mark C2 ×95 and C5 ×19, and
+// send the schedule to sheet S1.9, which the upload doesn't hold).
+let columnMarkSizes: Record<string, Record<string, string>> = {}
+function columnMarks(projectId: string) {
+  const entered = columnMarkSizes[projectId] ?? {}
+  const marks = [
+    ['C2', 95],
+    ['C5', 19],
+  ] as const
+  return {
+    marks: marks.map(([mark, onPlans]) => ({
+      mark,
+      on_plans: onPlans,
+      schedule: '',
+      schedule_conflict: false,
+      entered: entered[mark] ?? '',
+      size: entered[mark] ?? '',
+    })),
+    schedule_sheets: ['S1.9'],
+    missing_sheets: ['S1.9'],
+  }
+}
 let removedColumns: Record<string, { x: number; y: number }[]> = {}
 
 /** What the mock plans' grids say (grid 1 and A cross at the reference point; 2 is 30'-0" on). */
@@ -607,6 +629,7 @@ export const mockDrawings = {
     connectionTemplates = []
     wireframes = []
     gridTables = {}
+    columnMarkSizes = {}
     removedColumns = {}
     versions = []
     failingPages = {}
@@ -1110,7 +1133,7 @@ export const drawingHandlers = [
   http.post('*/api/v1/projects/:id/pens/', async ({ params, request }) => {
     const body = (await request.json()) as { member?: { width: number | null; colour: string }[]; grid?: { width: number | null; colour: string }[]; run_again?: boolean }
     const project = mockProjects.all.find((p) => p.id === params.id)!
-    project.pens = { member: body.member ?? [], grid: body.grid ?? [] }
+    project.pens = { member: body.member ?? [], grid: body.grid ?? [], column: body.column ?? [] }
     const pages = sets.filter((s) => s.set.project === project.id).flatMap((s) => s.pages).filter((p) => p.current_run && !p.hidden)
     return HttpResponse.json({ pens: project.pens, queued: body.run_again === false ? [] : pages.map((p) => p.id), skipped: [] })
   }),
@@ -1523,6 +1546,22 @@ export const drawingHandlers = [
     return HttpResponse.json({ pages: rows, ready: rows.length > 0 && rows.every((r) => !r.missing.length) })
   }),
   // Level proposals: every processed page reads as LEVEL 2 at 14'-0", reference A/1 (150, 95).
+  http.get('*/api/v1/projects/:id/column-marks/', ({ params }) => HttpResponse.json(columnMarks(params.id as string))),
+  http.post('*/api/v1/projects/:id/column-marks/', async ({ params, request }) => {
+    const { sizes } = (await request.json()) as { sizes: Record<string, string> }
+    const bad = Object.entries(sizes).filter(([, v]) => v && !/^(W\d+X[\d.]+|HSS[\d./]+X[\d./]+X[\d./]+)$/i.test(v.trim()))
+    if (bad.length)
+      return HttpResponse.json(
+        { error: { code: 'validation_error', message: 'Invalid input.', details: { sizes: bad.map(([m, v]) => `${m}: '${v}' is not a section (W14X99, HSS6X6X3/8).`) } } },
+        { status: 400 },
+      )
+    const project = (columnMarkSizes[params.id as string] ??= {})
+    for (const [mark, value] of Object.entries(sizes)) {
+      if (value.trim()) project[mark] = value.trim().toUpperCase()
+      else delete project[mark]
+    }
+    return HttpResponse.json(columnMarks(params.id as string))
+  }),
   http.get('*/api/v1/projects/:id/grids/', ({ params }) => HttpResponse.json(gridTables[params.id as string] ?? [])),
   http.post('*/api/v1/projects/:id/grids/fill/', ({ params }) => {
     const table = (gridTables[params.id as string] ??= [])

@@ -124,7 +124,8 @@ describe('Project details', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Project settings' }))
     const pens = within(await screen.findByRole('dialog', { name: 'Project settings' })).getByRole('region', { name: 'Pens' })
     expect(within(pens).getByText('0.84 pt · any colour')).toBeInTheDocument()
-    expect(within(pens).getByText('any (as usual)')).toBeInTheDocument() // no grid pen
+    expect(within(pens).getAllByText('any (as usual)')).toHaveLength(2) // no grid pen, no column pen
+    expect(within(pens).getByText('Columns:')).toBeInTheDocument()
     await userEvent.click(within(pens).getByRole('button', { name: 'Remove pen 0.84 pt · any colour' }))
     expect(await screen.findByText(/Pens saved/)).toBeInTheDocument()
     expect(p.pens.member).toEqual([{ width: 1.08, colour: '#000000' }])

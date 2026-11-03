@@ -9,12 +9,12 @@ import { Button } from '../../components/ui/Button'
 import { Dialog } from '../../components/ui/Dialog'
 import { FormAlert } from '../../components/ui/Field'
 
-type Kind = 'member' | 'grid'
-const KINDS: Record<Kind, string> = { member: 'Member lines', grid: 'Grid lines' }
+type Kind = 'member' | 'grid' | 'column'
+const KINDS: Record<Kind, string> = { member: 'Member lines', grid: 'Grid lines', column: 'Columns' }
 
 function pensOf(project: Project): ProjectPens {
   const pens = (project.pens ?? {}) as Partial<ProjectPens>
-  return { member: pens.member ?? [], grid: pens.grid ?? [] }
+  return { member: pens.member ?? [], grid: pens.grid ?? [], column: pens.column ?? [] }
 }
 
 const samePen = (a: Pen, b: Pen) => a.width === b.width && (a.colour || '') === (b.colour || '')
@@ -54,21 +54,21 @@ function useSavePens(project: Project, onDone?: () => void) {
   })
 }
 
-/** The project's pens, in its settings: what is read as members and grid lines, removable. */
+/** The project's pens, in its settings: what is read as members, grid lines and columns, removable. */
 export function ProjectPensList({ project, canEdit }: { project: Project; canEdit: boolean }) {
   const pens = pensOf(project)
   const save = useSavePens(project)
-  const none = !pens.member.length && !pens.grid.length
+  const none = !pens.member.length && !pens.grid.length && !pens.column.length
   return (
     <section className="project-pens" aria-label="Pens">
       <h3>Pens</h3>
       {none ? (
         <p className="muted">
-          None set: members are the lines drawn 0.9 pt or heavier, grids every line with a bubble. To set them, choose Pens in
-          page review and click a line on the drawing.
+          None set: members are the lines drawn 0.9 pt or heavier, grids every line with a bubble, columns the symbols Steelo
+          recognises. To set them, choose Pens in page review and click a line on the drawing.
         </p>
       ) : (
-        (['member', 'grid'] as const).map((kind) => (
+        (['member', 'grid', 'column'] as const).map((kind) => (
           <p key={kind}>
             <strong>{KINDS[kind]}:</strong>{' '}
             {pens[kind].length === 0 ? (
@@ -92,8 +92,8 @@ export function ProjectPensList({ project, canEdit }: { project: Project; canEdi
   )
 }
 
-/** The pen of the line clicked on the drawing, and whether the project reads members or grid
- *  lines by it. */
+/** The pen of the line clicked on the drawing, and whether the project reads members, grid
+ *  lines or columns by it. */
 export function PickedPenDialog({
   project,
   pageId,
@@ -121,8 +121,9 @@ export function PickedPenDialog({
           </p>
           <p className="muted">
             Set it as the project’s member pen and only lines drawn with your member pens are read as members (on every page);
-            as a grid pen, grid lines are looked for only among lines drawn with your grid pens. The project’s pages run again
-            (pages with review work are left as they are).
+            as a grid pen, grid lines are looked for only among lines drawn with your grid pens; as a column pen, every
+            column-size square, circle or “I” drawn with it is a column (in a footing or on a beam), and no other shape is.
+            The project’s pages run again (pages with review work are left as they are).
           </p>
           {save.error && <FormAlert message={toApiError(save.error).message} />}
           {save.isPending && <LoadingState label="Saving the pens…" />}
@@ -132,6 +133,9 @@ export function PickedPenDialog({
             </Button>
             <Button disabled={save.isPending} onClick={() => use('grid')}>
               Grid lines are this pen
+            </Button>
+            <Button disabled={save.isPending} onClick={() => use('column')}>
+              Columns are this pen
             </Button>
             <Button onClick={onClose}>Cancel</Button>
           </div>

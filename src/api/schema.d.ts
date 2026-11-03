@@ -949,6 +949,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{id}/column-marks/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Column sizes by mark: the marks on the plans, a schedule's section for each, and the one
+         *     a person entered, which every column with the mark takes (for a schedule the set lacks).
+         */
+        get: operations["projects_column_marks_retrieve"];
+        put?: never;
+        /**
+         * @description Column sizes by mark: the marks on the plans, a schedule's section for each, and the one
+         *     a person entered, which every column with the mark takes (for a schedule the set lacks).
+         */
+        post: operations["projects_column_marks_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/column-schedule/": {
         parameters: {
             query?: never;
@@ -1351,7 +1375,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description The project's pens: only lines drawn with them are read as members, or grid lines. */
+        /**
+         * @description The project's pens: only lines drawn with them are read as members, or grid lines; the
+         *     shapes drawn with its column pens are its columns.
+         */
         post: operations["projects_pens_create"];
         delete?: never;
         options?: never;
@@ -2033,6 +2060,26 @@ export interface components {
             /** Format: decimal */
             elevation_mm: string;
             readonly elevation_display: string;
+        };
+        ColumnMark: {
+            mark: string;
+            /** @description Columns on the plans with this mark beside them */
+            on_plans: number;
+            /** @description The section a column schedule gives it; '' if none */
+            schedule: string;
+            /** @description The project's schedules give it different sections */
+            schedule_conflict: boolean;
+            /** @description The section a person entered; '' if none */
+            entered: string;
+            /** @description The section its columns take (entered, else schedule) */
+            size: string;
+        };
+        ColumnMarks: {
+            marks: components["schemas"]["ColumnMark"][];
+            /** @description Sheets the notes name for the column schedule */
+            schedule_sheets: string[];
+            /** @description Of those, the ones this project doesn't have */
+            missing_sheets: string[];
         };
         ColumnRow: {
             /** Format: uuid */
@@ -3421,6 +3468,8 @@ export interface components {
         ProjectPensRequest: {
             member?: components["schemas"]["PenRequest"][];
             grid?: components["schemas"]["PenRequest"][];
+            /** @description The pens columns are drawn with: every column-size shape drawn with them is a column, and no other */
+            column?: components["schemas"]["PenRequest"][];
             /**
              * @description Run the project's pages again with them (review work is kept)
              * @default true
@@ -3428,7 +3477,7 @@ export interface components {
             run_again: boolean;
         };
         ProjectPensResult: {
-            /** @description {"member": [pen…], "grid": [pen…]} */
+            /** @description {"member": [pen…], "grid": [pen…], "column": [pen…]} */
             pens: {
                 [key: string]: unknown;
             };
@@ -3727,6 +3776,12 @@ export interface components {
         Session: {
             access: string;
             user: components["schemas"]["CurrentUser"];
+        };
+        SetColumnMarksRequest: {
+            /** @description {"C2": "HSS6X6X3/8"}: each mark's section ("" clears it); others are kept */
+            sizes: {
+                [key: string]: string;
+            };
         };
         SetRevises: {
             /**
@@ -6070,6 +6125,52 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Project"];
+                };
+            };
+        };
+    };
+    projects_column_marks_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ColumnMarks"];
+                };
+            };
+        };
+    };
+    projects_column_marks_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetColumnMarksRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ColumnMarks"];
                 };
             };
         };

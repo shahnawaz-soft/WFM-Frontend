@@ -27,6 +27,7 @@ import { AddElementForm, ElementPanel } from './ElementPanel'
 import { describeColumn } from '../viewer/columnSymbols'
 import { ColumnScheduler } from './ColumnScheduler'
 import { IsometricPreview } from './IsometricPreview'
+import { ColumnMarksCard } from './ColumnMarksCard'
 import { LevelProposalsCard } from './LevelProposals'
 import { ProjectGridsCard } from './ProjectGridsCard'
 import type { CameraView } from './Wireframe3D'
@@ -227,6 +228,8 @@ export function WireframePage() {
       <LevelProposalsCard projectId={projectId} canEdit={canEdit} />
 
       <ProjectGridsCard projectId={projectId} canEdit={canEdit} />
+
+      <ColumnMarksCard projectId={projectId} canEdit={canEdit} />
 
       {current && (
         <RevisionSection

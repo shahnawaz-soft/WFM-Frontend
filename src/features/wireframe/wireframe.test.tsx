@@ -284,6 +284,35 @@ describe('Project grids', () => {
   })
 })
 
+describe('Column sizes by mark', () => {
+  const card = () => screen.getByRole('region', { name: 'Column sizes by mark' })
+
+  it('says the schedule sheet is missing and takes each mark’s section once', async () => {
+    const { project } = await addedPage()
+    renderApp(`/projects/${project.id}/wireframe`)
+    await screen.findByRole('region', { name: 'Column sizes by mark' })
+    expect(await within(card()).findByText(/sheet S1\.9, which this project doesn’t have/)).toBeInTheDocument()
+    const row = within(card()).getByRole('row', { name: /^C2 95/ })
+    await userEvent.type(within(row).getByLabelText('Section for C2'), 'W14')
+    await userEvent.click(within(card()).getByRole('button', { name: 'Save sizes' }))
+    expect(await within(card()).findByText(/'W14' is not a section/)).toBeInTheDocument()
+    await userEvent.clear(within(row).getByLabelText('Section for C2'))
+    await userEvent.type(within(row).getByLabelText('Section for C2'), 'hss6x6x3/8')
+    await userEvent.click(within(card()).getByRole('button', { name: 'Save sizes' }))
+    expect(await screen.findByText(/Column sizes saved: generate the wireframe again/)).toBeInTheDocument()
+    expect(within(row).getByLabelText('Section for C2')).toHaveValue('HSS6X6X3/8')
+  })
+
+  it('shows a viewer the sizes without inputs', async () => {
+    const { project } = await addedPage()
+    mockBackend.startSession('viewer@steelo.test')
+    renderApp(`/projects/${project.id}/wireframe`)
+    await screen.findByRole('region', { name: 'Column sizes by mark' })
+    expect(await within(card()).findByRole('row', { name: /^C2 95/ })).toBeInTheDocument()
+    expect(within(card()).queryByRole('button', { name: 'Save sizes' })).toBeNull()
+  })
+})
+
 describe('Wireframe', () => {
   it('shows what each page still needs before it can be placed', async () => {
     const { project, page } = await addedPage()

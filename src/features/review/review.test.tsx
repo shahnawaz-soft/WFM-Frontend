@@ -303,7 +303,18 @@ describe('Pens', () => {
     expect(within(dialog).getByText('1.08 pt · #000000')).toBeInTheDocument()
     await userEvent.click(within(dialog).getByRole('button', { name: 'Member lines are this pen' }))
     expect(await screen.findByText(/Pens saved: 1 page running again/)).toBeInTheDocument()
-    expect(mockProjects.all.find((p) => p.id === project.id)!.pens).toEqual({ member: [{ width: 1.08, colour: '#000000' }], grid: [] })
+    expect(mockProjects.all.find((p) => p.id === project.id)!.pens).toEqual({ member: [{ width: 1.08, colour: '#000000' }], grid: [], column: [] })
+  })
+
+  it('sets the pen of a column clicked as the project’s column pen, as the old Wireframer did', async () => {
+    const { project } = await openProcessedPage()
+    await screen.findByRole('table', { name: /Detected members/ })
+    await userEvent.click(screen.getByRole('button', { name: 'Pens' }))
+    await userEvent.click(screen.getByRole('img', { name: /Drawing/ }))
+    const dialog = await screen.findByRole('dialog', { name: 'Pen of this line' })
+    await userEvent.click(await within(dialog).findByRole('button', { name: 'Columns are this pen' }))
+    expect(await screen.findByText(/Pens saved: 1 page running again/)).toBeInTheDocument()
+    expect(mockProjects.all.find((p) => p.id === project.id)!.pens).toEqual({ member: [], grid: [], column: [{ width: 1.08, colour: '#000000' }] })
   })
 })
 
