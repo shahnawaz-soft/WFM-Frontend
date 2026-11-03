@@ -10,7 +10,8 @@ beforeAll(() => preloadRoutes('/connection-templates'))
 const OWNER = 'estimator@steelo.test'
 
 describe('Connection templates', () => {
-  it('is reached from the main navigation', async () => {
+  // The sidebar link is hidden for now (AppShell.tsx).
+  it.skip('is reached from the main navigation', async () => {
     mockBackend.startSession(OWNER)
     renderApp('/')
     await userEvent.click(await screen.findByRole('link', { name: 'Connection templates' }))

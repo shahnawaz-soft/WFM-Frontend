@@ -18,7 +18,8 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { to: '/projects', label: 'Projects', icon: 'projects' },
-  { to: '/connection-templates', label: 'Connection templates', icon: 'templates' },
+  // Hidden while existing features are made more accurate; the page is still at /connection-templates.
+  // { to: '/connection-templates', label: 'Connection templates', icon: 'templates' },
   { to: '/admin/users', label: 'Users', icon: 'users', requires: 'users.manage' },
   { to: '/admin/sections', label: 'Section data', icon: 'sections', requires: 'users.manage' },
   { to: '/ops', label: 'Operations', icon: 'operations', requires: 'ops.view' },
