@@ -1110,6 +1110,44 @@ export const drawingHandlers = [
     }
     return HttpResponse.json({ removed: removedColumns[page.id]!.length })
   }),
+  // Remove in box: columns whose centre is in it, members whose label is (unless reviewed).
+  http.post('*/api/v1/drawing-pages/:id/remove-in-box/', async ({ params, request }) => {
+    const page = pageById(params.id as string) as Mutable<DrawingPage>
+    const body = (await request.json()) as {
+      box: [number, number, number, number]
+      columns?: boolean
+      members?: boolean
+      undo?: { columns: [number, number][]; members: string[] }
+    }
+    const run = page.current_run as unknown as { columns: { x: number; y: number }[] }
+    const aside = (removedColumns[page.id] ??= [])
+    const list = (runMembers[page.id] ?? []) as MockMember[]
+    if (body.undo) {
+      const back = aside.filter((c) => body.undo!.columns.some(([x, y]) => x === c.x && y === c.y))
+      removedColumns[page.id] = aside.filter((c) => !back.includes(c))
+      run.columns = [...run.columns, ...back]
+      for (const m of list) if (body.undo.members.includes(m.id)) (m as { review_status: string }).review_status = 'unreviewed'
+      return HttpResponse.json({ columns: [], members: [], kept: [] })
+    }
+    const [l, b, r, t] = body.box
+    const inside = (x: number, y: number) => l <= x && x <= r && b <= y && y <= t
+    const columns = body.columns === false ? [] : run.columns.filter((c) => inside(c.x, c.y))
+    run.columns = run.columns.filter((c) => !columns.includes(c))
+    aside.push(...columns)
+    const removed: string[] = []
+    const kept: { id: string; designation: string; why: string }[] = []
+    for (const m of body.members === false ? [] : list) {
+      const [ml, mb, mr, mt] = m.label_bbox as number[]
+      if (!inside((ml! + mr!) / 2, (mb! + mt!) / 2) || m.review_status === 'rejected') continue
+      if (m.review_status === 'accepted' || m.is_corrected) kept.push({ id: m.id, designation: m.designation, why: m.is_corrected ? 'edited' : 'accepted' })
+      else {
+        ;(m as { review_status: string }).review_status = 'rejected'
+        removed.push(m.id)
+      }
+    }
+    if (!columns.length && !removed.length && !kept.length) return err(404, 'nothing_in_box', 'Nothing Steelo found is in that box.')
+    return HttpResponse.json({ columns: columns.map((c) => [c.x, c.y]), members: removed, kept })
+  }),
   // Remove all like this: the mock calls columns of the removed one's shape alike.
   http.post('*/api/v1/drawing-pages/:id/columns/remove-like/', async ({ params, request }) => {
     const page = pageById(params.id as string) as Mutable<DrawingPage>
@@ -1131,7 +1169,7 @@ export const drawingHandlers = [
     return HttpResponse.json({ width: 1.08, colour: '#000000', line: [150, 95, 450, 95], same_pen: 42 })
   }),
   http.post('*/api/v1/projects/:id/pens/', async ({ params, request }) => {
-    const body = (await request.json()) as { member?: { width: number | null; colour: string }[]; grid?: { width: number | null; colour: string }[]; run_again?: boolean }
+    const body = (await request.json()) as { member?: { width: number | null; colour: string }[]; grid?: { width: number | null; colour: string }[]; column?: { width: number | null; colour: string }[]; run_again?: boolean }
     const project = mockProjects.all.find((p) => p.id === params.id)!
     project.pens = { member: body.member ?? [], grid: body.grid ?? [], column: body.column ?? [] }
     const pages = sets.filter((s) => s.set.project === project.id).flatMap((s) => s.pages).filter((p) => p.current_run && !p.hidden)

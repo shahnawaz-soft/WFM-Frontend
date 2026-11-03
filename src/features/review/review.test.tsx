@@ -410,6 +410,41 @@ describe('Page area', () => {
   })
 })
 
+describe('Remove in box', () => {
+  async function dragBox([x1, y1]: [number, number], [x2, y2]: [number, number]) {
+    const drawing = screen.getByRole('img', { name: /Drawing/ })
+    const zoom = Number(drawing.dataset.zoom)
+    const screenPoint = (x: number, y: number) => ({ clientX: (x - 500) * zoom, clientY: (1684 - 400 - y) * zoom })
+    await userEvent.pointer([
+      { keys: '[MouseLeft>]', target: drawing, coords: screenPoint(x1, y1) },
+      { target: drawing, coords: screenPoint(x2, y2) },
+      { keys: '[/MouseLeft]', target: drawing, coords: screenPoint(x2, y2) },
+    ])
+  }
+
+  it('removes the columns and members in a box, and Undo brings them back', async () => {
+    await openProcessedPage()
+    await screen.findByRole('table', { name: /Detected members/ })
+    expect(screen.getByText('Column (3)')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Remove in box' }))
+    expect(screen.getByText(/Drag a box around the false finds to remove/)).toBeInTheDocument()
+    await dragBox([440, 120], [480, 80]) // round the "I" column at (460, 95)
+    const dialog = await screen.findByRole('dialog', { name: 'Remove what is in this box?' })
+    expect(within(dialog).getByLabelText(/1 column/)).toBeChecked()
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Remove' }))
+    expect(await screen.findByText(/Removed 1 column/)).toBeInTheDocument()
+    expect(await screen.findByText('Column (2)')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Undo box remove' }))
+    expect(await screen.findByText('Column (3)')).toBeInTheDocument()
+  })
+
+  it('offers no box removal to viewers', async () => {
+    await openProcessedPage('viewer')
+    await screen.findByRole('heading', { level: 1, name: /^Page 1/ })
+    expect(screen.queryByRole('button', { name: 'Remove in box' })).not.toBeInTheDocument()
+  })
+})
+
 describe('Find similar', () => {
   beforeEach(() => {
     similarSearchPolling.intervalMs = 20 // the job is polled every 2 s in the app

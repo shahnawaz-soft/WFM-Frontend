@@ -4,7 +4,15 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 
 import { fetchOriginalPdf, getDrawingSet, getPage, listPages } from '../../api/drawings'
 import { toApiError } from '../../api/errors'
-import { findSimilarColumns, removeColumn, removeLike, type FindSimilarResult } from '../../api/processing'
+import {
+  findSimilarColumns,
+  removeColumn,
+  removeInBox,
+  removeLike,
+  undoRemoveInBox,
+  type FindSimilarResult,
+  type RemovedInBox,
+} from '../../api/processing'
 import { listPageIssues, listPageMembers } from '../../api/members'
 import { getProject } from '../../api/projects'
 import type { ColumnSymbol, DrawingPageListItem } from '../../api/types'
@@ -75,6 +83,15 @@ export function PageViewerPage() {
   // Drawing the box of the part of the sheet to count (the page's area).
   const [drawingArea, setDrawingArea] = useState(false)
   const [proposedArea, setProposedArea] = useState<{ area: AreaBox | null } | null>(null)
+  // Remove in box: a box dragged round false finds; what is in it, to confirm; the last removed.
+  const [boxRemoving, setBoxRemoving] = useState(false)
+  const [boxFound, setBoxFound] = useState<{
+    box: [number, number, number, number]
+    columns: number
+    members: number
+    take: { columns: boolean; members: boolean }
+  } | null>(null)
+  const [lastBoxRemoved, setLastBoxRemoved] = useState<{ pageId: string; removed: RemovedInBox } | null>(null)
   // Picking a pen: the next click on the drawing reads the pen of the line there.
   const [pickingPen, setPickingPen] = useState(false)
   const [penPoint, setPenPoint] = useState<[number, number] | null>(null)
@@ -163,6 +180,7 @@ export function PageViewerPage() {
     setFindingSimilar(false)
     setDrawingArea(false)
     setPickingPen(false)
+    setBoxRemoving(false)
   }, [])
   // After Find similar added columns: the pages' columns, their members (new ABM entries) and
   // the set's pages change. The set's PDF does not: invalidating it would download and parse
@@ -186,6 +204,27 @@ export function PageViewerPage() {
     onSuccess: (_, { points, undo }) => {
       setRemovingColumn(null)
       setLastRemoved(undo ? null : { pageId, points })
+      refreshColumns()
+    },
+  })
+  const boxRemoval = useMutation({
+    mutationFn: ({ box, take }: { box: [number, number, number, number]; take: { columns: boolean; members: boolean } }) =>
+      removeInBox(pageId, box, take),
+    meta: { suppressErrorToast: true },
+    onSuccess: (removed) => {
+      setBoxFound(null)
+      const n = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`
+      const kept = removed.kept.length ? `; ${n(removed.kept.length, 'member')} you reviewed or added kept` : ''
+      notify.success(`Removed ${n(removed.columns.length, 'column')} and ${n(removed.members.length, 'member')}${kept}.`)
+      setLastBoxRemoved(removed.columns.length || removed.members.length ? { pageId, removed } : null)
+      refreshColumns()
+    },
+  })
+  const undoBoxRemoval = useMutation({
+    mutationFn: (removed: RemovedInBox) => undoRemoveInBox(pageId, removed),
+    meta: { successMessage: 'Brought back what the box removed' },
+    onSuccess: () => {
+      setLastBoxRemoved(null)
       refreshColumns()
     },
   })
@@ -215,8 +254,9 @@ export function PageViewerPage() {
   const place = useCallback(
     (location: [number, number]) => {
       setPlacing(false)
-      if (drawingArea) {
+      if (drawingArea || boxRemoving) {
         setDrawingArea(false) // an area is a box: a plain click draws none
+        setBoxRemoving(false)
         return
       }
       if (pickingPen) {
@@ -243,7 +283,7 @@ export function PageViewerPage() {
       setTab('quantities')
       setPanelOpen(true)
     },
-    [pickingReference, gridPoints, findingSimilar, findSimilar, drawingArea, pickingPen],
+    [pickingReference, gridPoints, findingSimilar, findSimilar, drawingArea, pickingPen, boxRemoving],
   )
 
   // Selecting in the list zooms the drawing to the member; selecting on the drawing opens
@@ -529,6 +569,8 @@ export function PageViewerPage() {
           placingHint={
             pickingPen
               ? 'Click a line on the drawing to see its pen (line width and colour)'
+              : boxRemoving
+              ? 'Drag a box around the false finds to remove: the columns and members inside it'
               : drawingArea
               ? 'Drag a box around the part of the sheet to count: what is outside is not counted'
               : findingSimilar
@@ -544,10 +586,24 @@ export function PageViewerPage() {
           grids={detailRun?.grids ?? undefined}
           showGrids={showGrids}
           onPlace={place}
-          boxing={findingSimilar || drawingArea}
+          boxing={findingSimilar || drawingArea || boxRemoving}
           area={(current.area as AreaBox | null | undefined) ?? null}
           onBox={(box) => {
             setPlacing(false)
+            if (boxRemoving) {
+              setBoxRemoving(false)
+              const [l, b, r, t] = box
+              const inside = (x: number, y: number) => l <= x && x <= r && b <= y && y <= t
+              const columns = (detailRun?.columns ?? []).filter((c) => inside(c.x, c.y)).length
+              const members = allMembers.filter((m) => {
+                if (!m.label_bbox || m.review_status === 'rejected' || m.review_status === 'unsupported') return false
+                if ((m.original as { source?: string } | null)?.source === 'column_symbol') return false
+                const [ml, mb, mr, mt] = m.label_bbox
+                return inside((ml! + mr!) / 2, (mb! + mt!) / 2)
+              }).length
+              boxRemoval.reset()
+              return setBoxFound({ box, columns, members, take: { columns: columns > 0, members: members > 0 } })
+            }
             if (drawingArea) {
               setDrawingArea(false)
               return setProposedArea({ area: box })
@@ -594,6 +650,7 @@ export function PageViewerPage() {
                     setPickingReference(false)
                     setFindingSimilar(false)
                     setDrawingArea(false)
+                    setBoxRemoving(false)
                     setPickingPen(true)
                     setPlacing(true)
                   }}
@@ -628,6 +685,7 @@ export function PageViewerPage() {
                   setPickingReference(false)
                   setFindingSimilar(false)
                   setPickingPen(false)
+                  setBoxRemoving(false)
                   setDrawingArea(true)
                   setPlacing(true)
                 }}
@@ -645,11 +703,35 @@ export function PageViewerPage() {
                     setPickingReference(false)
                     setDrawingArea(false)
                     setPickingPen(false)
+                    setBoxRemoving(false)
                     setFindingSimilar(true)
                     setPlacing(true)
                   }}
                 >
                   Find similar
+                </Button>
+              )}
+              {canRun && !reviewLocked && current.current_run && (
+                <Button
+                  aria-pressed={boxRemoving}
+                  title="Drag a box round columns or members Steelo found wrongly, to remove them together"
+                  onClick={() => {
+                    if (boxRemoving) return cancelPlace()
+                    setAdding(null)
+                    setPickingReference(false)
+                    setDrawingArea(false)
+                    setPickingPen(false)
+                    setFindingSimilar(false)
+                    setBoxRemoving(true)
+                    setPlacing(true)
+                  }}
+                >
+                  Remove in box
+                </Button>
+              )}
+              {lastBoxRemoved?.pageId === pageId && canRun && (
+                <Button loading={undoBoxRemoval.isPending} onClick={() => undoBoxRemoval.mutate(lastBoxRemoved.removed)}>
+                  Undo box remove
                 </Button>
               )}
               {findSimilar.error && (
@@ -752,6 +834,45 @@ export function PageViewerPage() {
           Steelo found a column here that isn’t one. It is taken off this page and stays off when the page runs again; if it
           has an ABM entry, that entry is rejected. Undo brings it back.
         </p>
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={boxFound !== null}
+        title="Remove what is in this box?"
+        confirmLabel="Remove"
+        pending={boxRemoval.isPending}
+        error={boxRemoval.error ? toApiError(boxRemoval.error).message : null}
+        onConfirm={() => {
+          if (boxFound && (boxFound.take.columns || boxFound.take.members)) boxRemoval.mutate({ box: boxFound.box, take: boxFound.take })
+        }}
+        onCancel={() => setBoxFound(null)}
+      >
+        {boxFound && (
+          <>
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                disabled={!boxFound.columns}
+                checked={boxFound.take.columns}
+                onChange={(e) => setBoxFound({ ...boxFound, take: { ...boxFound.take, columns: e.target.checked } })}
+              />{' '}
+              {boxFound.columns} column{boxFound.columns === 1 ? '' : 's'}
+            </label>
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                disabled={!boxFound.members}
+                checked={boxFound.take.members}
+                onChange={(e) => setBoxFound({ ...boxFound, take: { ...boxFound.take, members: e.target.checked } })}
+              />{' '}
+              {boxFound.members} member{boxFound.members === 1 ? '' : 's'}
+            </label>
+            <p className="muted">
+              Columns are taken off this page and stay off when it runs again; members are rejected. Members you accepted,
+              edited or added are kept. Undo box remove brings it all back.
+            </p>
+          </>
+        )}
       </ConfirmDialog>
 
       <ConfirmDialog

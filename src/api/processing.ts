@@ -101,6 +101,31 @@ export async function removeColumn(pageId: string, point: [number, number], undo
   return data
 }
 
+export interface RemovedInBox {
+  columns: [number, number][]
+  members: string[]
+  kept: { id: string; designation: string; why: string }[]
+}
+
+/** Remove the false finds inside a box on the sheet (PDF points: left, bottom, right, top):
+ *  columns whose centre is in it, members whose label is; what a person reviewed is kept. */
+export async function removeInBox(
+  pageId: string,
+  box: [number, number, number, number],
+  kinds: { columns: boolean; members: boolean },
+): Promise<RemovedInBox> {
+  const { data } = await apiClient.post<RemovedInBox>(`/api/v1/drawing-pages/${pageId}/remove-in-box/`, { box, ...kinds })
+  return data
+}
+
+/** Bring back what a box removed. */
+export async function undoRemoveInBox(pageId: string, removed: RemovedInBox): Promise<void> {
+  await apiClient.post(`/api/v1/drawing-pages/${pageId}/remove-in-box/`, {
+    box: [0, 0, 1, 1],
+    undo: { columns: removed.columns, members: removed.members },
+  })
+}
+
 /** The page's columns drawn like the one at (x, y): listed, or removed (``apply``). */
 export async function removeLike(
   pageId: string,

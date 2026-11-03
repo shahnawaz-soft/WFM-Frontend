@@ -424,6 +424,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/drawing-pages/{id}/remove-in-box/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Remove the false finds in a box dragged on the sheet (columns, members), or undo that. */
+        post: operations["drawing_pages_remove_in_box_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/drawing-pages/{id}/reopen-review/": {
         parameters: {
             query?: never;
@@ -2837,6 +2854,13 @@ export interface components {
          * @enum {string}
          */
         JobStatusEnum: "queued" | "processing" | "completed" | "needs_review" | "failed";
+        KeptMember: {
+            /** Format: uuid */
+            id: string;
+            designation: string;
+            /** @description accepted, edited, added by a person */
+            why: string;
+        };
         /**
          * @description * `leader` - leader
          *     * `tag` - tag
@@ -3558,6 +3582,34 @@ export interface components {
         RemoveColumnResult: {
             /** @description Columns the page has removed */
             removed: number;
+        };
+        RemoveInBoxRequest: {
+            /** @description PDF points: left, bottom, right, top */
+            box: number[];
+            /**
+             * @description Remove the columns in it
+             * @default true
+             */
+            columns: boolean;
+            /**
+             * @description Reject the members in it
+             * @default true
+             */
+            members: boolean;
+            /** @description Bring back what a removal returned (the box is not used) */
+            undo?: components["schemas"]["RemoveInBoxUndoRequest"];
+        };
+        RemoveInBoxResult: {
+            /** @description The columns removed, at [x, y] */
+            columns: number[][];
+            /** @description Members rejected */
+            members: string[];
+            /** @description In the box, but reviewed or added: kept */
+            kept: components["schemas"]["KeptMember"][];
+        };
+        RemoveInBoxUndoRequest: {
+            columns?: number[][];
+            members?: string[];
         };
         RemoveLikeRequest: {
             /**
@@ -5246,6 +5298,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DrawingPage"];
+                };
+            };
+        };
+    };
+    drawing_pages_remove_in_box_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RemoveInBoxRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RemoveInBoxResult"];
                 };
             };
         };
