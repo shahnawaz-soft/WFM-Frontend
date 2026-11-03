@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { describeColumn } from './columnSymbols'
-import { isColumnMember, lengthNote } from './memberAppearance'
+import { isColumnMember, lengthNote, WARNING_LABELS } from './memberAppearance'
 import type { ExtractedMember } from '../../api/types'
 
 describe('column descriptions', () => {
@@ -15,6 +15,12 @@ describe('column descriptions', () => {
   it('explains that a labelled column takes its height from the levels', () => {
     const member = { warnings: ['column_by_leader'] } as unknown as ExtractedMember
     expect(lengthNote(member)).toBe('Column: height from levels')
+  })
+
+  it('names every warning the engine gives in plain words', () => {
+    for (const code of ['spot_elevation_row', 'true_to_size', 'mark_only', 'same_beam']) expect(WARNING_LABELS[code]).toBeTruthy()
+    const girt = { warnings: ['spot_elevation_row', 'true_to_size'] } as unknown as ExtractedMember
+    expect(lengthNote(girt)).toBe('Measured column centre to centre, drawn to size')
   })
 
   it('knows column members, whatever case their type is typed in', () => {

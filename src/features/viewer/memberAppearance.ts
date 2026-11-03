@@ -55,10 +55,14 @@ export const WARNING_LABELS: Record<string, string> = {
   from_beam_legend: 'Beam: section from the beam legend, measured c/c',
   length_from_legend: 'Not measured: legend piece length, not c/c',
   measured_on_image: 'Measured c/c on the drawing image',
+  spot_elevation_row: 'On an elevation, at a height of its own: counted here',
+  true_to_size: 'Measured column centre to centre, drawn to size',
+  mark_only: 'Known by its mark: enter the section for the mark',
+  same_beam: 'Same beam as on another page: counted there',
 }
 
 /** Warnings that explain how (or whether) a length was measured, most important first. */
-const LENGTH_WARNINGS = ['same_column', 'in_column_schedule', 'from_column_schedule', 'length_from_legend', 'from_beam_legend', 'measured_on_image', 'length_from_levels', 'post_label', 'column_by_leader', 'column_by_mark', 'length_long', 'length_implausible', 'length_not_determined', 'support_not_found', 'member_line_ambiguous', 'scale_unconfirmed']
+const LENGTH_WARNINGS = ['same_column', 'same_beam', 'in_column_schedule', 'from_column_schedule', 'length_from_legend', 'from_beam_legend', 'measured_on_image', 'true_to_size', 'length_from_levels', 'post_label', 'column_by_leader', 'column_by_mark', 'length_long', 'length_implausible', 'length_not_determined', 'support_not_found', 'member_line_ambiguous', 'scale_unconfirmed']
 
 export function lengthNote(member: ExtractedMember): string | null {
   const code = LENGTH_WARNINGS.find((w) => member.warnings.includes(w))
