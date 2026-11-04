@@ -1287,6 +1287,11 @@ export const drawingHandlers = [
           : { checked: 3, agree: 3, implied_ratio: 96, implied_text: '1/8" = 1\'-0"', verdict: 'unknown' },
       grid_spacings:
         outcome === 'needs_review' ? null : [{ grids: ['1', '2'], text: "19'-0\"", value_mm: 5791.2, drawn_mm: 5791.2, agrees: true }],
+      // A wall 3'-0" west of grid 1, dimensioned from it: a reference line, not a grid.
+      dimension_lines:
+        outcome === 'needs_review'
+          ? []
+          : [{ label: 'DIM-X1', x1: 123, y1: 40, x2: 123, y2: 620, from_line: '1', text: "3'-0\"", offset_mm: -914.4, exact_mm: null }],
       created_at: new Date().toISOString(),
     }
     runMembers[page.id] =

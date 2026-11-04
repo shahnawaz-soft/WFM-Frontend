@@ -79,6 +79,8 @@ export type RunListItem = Schemas['RunListItem']
 export type DrawingPageListItem = Schemas['DrawingPageListItem']
 export type ColumnSymbol = Schemas['ColumnSymbol']
 export type GridLine = Schemas['GridLine']
+/** A reference line at the end of a dimension printed from a grid line: not a grid. */
+export type DimensionLine = Schemas['DimensionLine']
 export type GridPoint = Schemas['GridPoint']
 export type JobStatus = Schemas['JobStatusEnum']
 export type PageKind = Schemas['PageKindEnum']

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent, type ReactNode, type WheelEvent } from 'react'
 
-import type { ColumnSymbol, ExtractedMember, GridLine } from '../../api/types'
+import type { ColumnSymbol, DimensionLine, ExtractedMember, GridLine } from '../../api/types'
 import { ErrorState, LoadingState } from '../../components/feedback/States'
 import { Button } from '../../components/ui/Button'
 import { describeColumn } from './columnSymbols'
@@ -59,7 +59,10 @@ interface DrawingStageProps {
   onColumnClick?: (column: ColumnSymbol) => void
   /** Structural grid lines found on the plan, drawn when ``showGrids`` is on. */
   grids?: GridLine[] | null
+  /** Reference lines at the ends of dimensions printed from a grid line, drawn with the grids. */
+  dimensionLines?: DimensionLine[] | null
   showGrids?: boolean
+  showDimensionLines?: boolean
 }
 
 function downloadLabel(download: { loaded: number; total?: number } | null): string {
@@ -89,6 +92,8 @@ export function DrawingStage(props: DrawingStageProps) {
   const handledFocus = useRef<number | null>(null)
 
   const [displayW, displayH] = rotation === 90 || rotation === 270 ? [heightPt, widthPt] : [widthPt, heightPt]
+  const gridsShown = (props.showGrids && props.grids) || []
+  const dimensionLinesShown = (props.showDimensionLines && props.dimensionLines) || []
 
   const fitZoom = useCallback(
     (mode: Exclude<Fit, null>) => {
@@ -301,8 +306,8 @@ export function DrawingStage(props: DrawingStageProps) {
               label={label}
               onViewport={onViewport}
             />
-            {props.showGrids && props.grids && props.grids.length > 0 && viewport && Math.abs(viewport.scale - zoom) < 0.001 && (
-              <GridOverlay viewport={viewport} grids={props.grids} />
+            {(gridsShown.length > 0 || dimensionLinesShown.length > 0) && viewport && Math.abs(viewport.scale - zoom) < 0.001 && (
+              <GridOverlay viewport={viewport} grids={gridsShown} dimensionLines={dimensionLinesShown} />
             )}
             {showLabels && viewport && Math.abs(viewport.scale - zoom) < 0.001 && (
               <MemberOverlay
@@ -424,10 +429,22 @@ function ColumnOverlay({
 }
 
 /** Grid lines found on the plan, with their labels at each bubble. A line whose extent was
- *  inferred from a short stub is drawn fainter. */
-function GridOverlay({ viewport, grids }: { viewport: PageViewport; grids: GridLine[] }) {
+ *  inferred from a short stub is drawn fainter. Reference lines from printed dimensions are
+ *  drawn apart, named on hover only (a plan can have twenty: STRU S201). */
+function GridOverlay({ viewport, grids, dimensionLines }: { viewport: PageViewport; grids: GridLine[]; dimensionLines: DimensionLine[] }) {
   return (
     <svg className="grid-overlay" width={viewport.width} height={viewport.height} aria-hidden="true">
+      {dimensionLines.map((d) => {
+        const [x1, y1] = viewport.convertToViewportPoint(d.x1, d.y1) as [number, number]
+        const [x2, y2] = viewport.convertToViewportPoint(d.x2, d.y2) as [number, number]
+        return (
+          <g key={d.label} data-reference="true">
+            <line x1={x1} y1={y1} x2={x2} y2={y2}>
+              <title>{`Reference line ${d.label}: ${d.text} from grid ${d.from_line} (a printed dimension's end, not a grid)`}</title>
+            </line>
+          </g>
+        )
+      })}
       {grids.map((g, i) => {
         const [x1, y1] = viewport.convertToViewportPoint(g.x1, g.y1) as [number, number]
         const [x2, y2] = viewport.convertToViewportPoint(g.x2, g.y2) as [number, number]

@@ -66,6 +66,8 @@ export function PageViewerPage() {
   const [family, setFamily] = useState<string>(ALL)
   const [showLabels, setShowLabels] = useState(true)
   const [showGrids, setShowGrids] = useState(true)
+  // Reference lines from printed dimensions: off until a person asks (a plan can have twenty).
+  const [showDimensionLines, setShowDimensionLines] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(linkedMember)
   const [editingId, setEditingId] = useState<string | null>(linkedMember)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
@@ -584,7 +586,9 @@ export function PageViewerPage() {
           columns={detailRun?.columns ?? undefined}
           onColumnClick={canRun && !reviewLocked ? setRemovingColumn : undefined}
           grids={detailRun?.grids ?? undefined}
+          dimensionLines={detailRun?.dimension_lines}
           showGrids={showGrids}
+          showDimensionLines={showDimensionLines}
           onPlace={place}
           boxing={findingSimilar || drawingArea || boxRemoving}
           area={(current.area as AreaBox | null | undefined) ?? null}
@@ -780,6 +784,12 @@ export function PageViewerPage() {
                 <label className="checkbox">
                   <input type="checkbox" checked={showGrids} onChange={(e) => setShowGrids(e.target.checked)} /> Grids (
                   {detailRun!.grids!.filter((g) => !g.secondary).length})
+                </label>
+              )}
+              {Boolean(detailRun?.dimension_lines?.length) && (
+                <label className="checkbox" title="Lines at the ends of dimensions printed from a grid line. Shown only: they change no lengths.">
+                  <input type="checkbox" checked={showDimensionLines} onChange={(e) => setShowDimensionLines(e.target.checked)} /> Dimension lines (
+                  {detailRun!.dimension_lines.length})
                 </label>
               )}
               {showLabels && (kindsPresent.length > 0 || Boolean(detailRun?.columns?.length)) && (

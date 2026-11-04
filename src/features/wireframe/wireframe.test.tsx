@@ -125,7 +125,17 @@ describe('Level set-up', () => {
     const toggle = await screen.findByRole('checkbox', { name: /Grids \(2\)/ })
     await waitFor(() => expect(container.querySelectorAll('.grid-overlay line')).toHaveLength(2))
     expect(container.querySelector('.grid-overlay [data-drawn="false"] title')).toHaveTextContent(/Grid A \(only a stub is drawn/)
-    await userEvent.click(toggle)
+    // A dimension printed from grid 1 gives a reference line at its other end: hidden until asked
+    // for, then drawn apart from the grids and named only on hover.
+    expect(container.querySelector('.grid-overlay [data-reference="true"]')).toBeNull()
+    await userEvent.click(screen.getByRole('checkbox', { name: /Dimension lines \(1\)/ }))
+    expect(container.querySelector('.grid-overlay [data-reference="true"] title')).toHaveTextContent(
+      /Reference line DIM-X1: 3'-0" from grid 1 \(a printed dimension's end, not a grid\)/,
+    )
+    expect(container.querySelector('.grid-overlay [data-reference="true"] text')).toBeNull()
+    await userEvent.click(toggle) // grids off: the reference line stays on its own
+    expect(container.querySelectorAll('.grid-overlay line')).toHaveLength(1)
+    await userEvent.click(screen.getByRole('checkbox', { name: /Dimension lines \(1\)/ }))
     expect(container.querySelector('.grid-overlay')).toBeNull()
   })
 

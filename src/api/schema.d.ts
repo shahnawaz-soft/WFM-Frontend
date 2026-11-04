@@ -2347,6 +2347,35 @@ export interface components {
              */
             approve: boolean;
         };
+        DimensionLine: {
+            /** @description "DIM-X1" (a vertical line) or "DIM-Y1" (horizontal) */
+            label: string;
+            /**
+             * Format: double
+             * @description PDF points, across the plan like its grid lines
+             */
+            x1: number;
+            /** Format: double */
+            y1: number;
+            /** Format: double */
+            x2: number;
+            /** Format: double */
+            y2: number;
+            /** @description The grid (or reference) line the dimension is measured from */
+            from_line: string;
+            /** @description The dimension as printed */
+            text: string;
+            /**
+             * Format: double
+             * @description Printed distance from that line, signed
+             */
+            offset_mm: number;
+            /**
+             * Format: double
+             * @description Exact position on the plan's grid axis; null = none
+             */
+            exact_mm: number | null;
+        };
         /**
          * @description * `x` - Along X
          *     * `y` - Along Y
@@ -2583,6 +2612,8 @@ export interface components {
             readonly scale_check: components["schemas"]["ScaleCheck"] | null;
             /** @description Printed spacing between pairs of grid lines; null = dimensions not read */
             readonly grid_spacings: components["schemas"]["GridSpacing"][] | null;
+            /** @description Reference lines at the ends of dimensions drawn from a grid line (not grids) */
+            readonly dimension_lines: components["schemas"]["DimensionLine"][];
             /** Format: date-time */
             readonly created_at: string;
         };
