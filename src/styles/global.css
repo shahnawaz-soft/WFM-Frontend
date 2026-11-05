@@ -649,7 +649,10 @@ a.button { text-decoration: none; justify-content: center; }
 
 .workspace__stage { grid-area: stage; position: relative; min-width: 0; min-height: 0; padding: var(--space-2); }
 .stage { height: 100%; display: flex; flex-direction: column; border: 1px solid var(--color-border); border-radius: var(--radius); overflow: hidden; background: var(--color-surface); }
-.stage__toolbar { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; justify-content: space-between; padding: var(--space-2); border-bottom: 1px solid var(--color-border); }
+.stage__toolbar { display: flex; flex-wrap: nowrap; gap: var(--space-2); align-items: center; justify-content: space-between; padding: var(--space-2); border-bottom: 1px solid var(--color-border); overflow-x: auto; scrollbar-width: thin; }
+/* One row on every page: tools keep their size and the row scrolls sideways when it is too narrow. */
+.stage__toolbar > *, .stage__toolbar .button { flex-shrink: 0; white-space: nowrap; }
+.stage__toolbar .button { min-height: 34px; padding: var(--space-1) var(--space-3); }
 .stage__zoom { display: flex; gap: var(--space-1); align-items: center; margin-left: auto; }
 .stage__zoom .button { min-height: 34px; padding: var(--space-1) var(--space-3); }
 .stage__zoom .button[aria-pressed='true'] { border-color: var(--color-primary); color: var(--color-primary); }
