@@ -229,6 +229,12 @@ describe('Project grids', () => {
     const row = within(table).getByRole('row', { name: /^2 / })
     expect(within(row).getAllByText('30\'-0"')).toHaveLength(2) // from the origin, and from grid 1
     expect(within(row).getByText('⚠ 1 of 2 agree')).toBeInTheDocument()
+    // Listed above the table as a conflict, with the way to resolve it.
+    const conflicts = within(card()).getByRole('region', { name: 'Grid conflicts' })
+    expect(within(conflicts).getByText(/Grid 2: 1 of 2 plans agree on where it is/)).toBeInTheDocument()
+    await userEvent.click(within(conflicts).getByRole('button', { name: 'Edit 2' }))
+    expect(await screen.findByRole('dialog', { name: 'Grid 2' })).toBeInTheDocument()
+    await userEvent.click(within(screen.getByRole('dialog', { name: 'Grid 2' })).getByRole('button', { name: 'Cancel' }))
     expect(within(card()).getByRole('button', { name: 'Refresh from the drawings' })).toBeInTheDocument()
   })
 
@@ -442,8 +448,11 @@ describe('Wireframe', () => {
     await call('PATCH', `/drawing-pages/${page.id}/level/`, { level_label: 'Level 3', elevation: "28'" })
     renderApp(`/projects/${project.id}/wireframe`)
     const notice = await screen.findByRole('note', { name: 'Wireframe out of date' })
+    expect(notice).toHaveTextContent('The 3D model is out of date')
     expect(notice).toHaveTextContent('level set-up changed on 1 page (page 1 · GA.pdf)')
-    expect(notice).toHaveTextContent('Choose Generate again')
+    // The update is right there, beside the model, not only at the top of the page.
+    await userEvent.click(within(notice).getByRole('button', { name: 'Update the 3D model' }))
+    expect(await screen.findByRole('region', { name: /Revision 2/ })).toBeInTheDocument()
   })
 
   it.each([
@@ -589,6 +598,31 @@ describe('Editing the wireframe', () => {
     expect(await screen.findByRole('region', { name: /Revision 2/ })).toBeInTheDocument()
     expect(await screen.findByText(/Started from revision 1/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '+ Add element' })).toBeInTheDocument()
+  })
+
+  it('shows the model beside the page, the member chosen in the list highlighted', async () => {
+    const { project, page } = await openDraft()
+    const members = await call('GET', `/drawing-pages/${page.id}/members/`)
+    const measured = members.find((m: { geometry: unknown[] }) => m.geometry.length === 2)
+    renderApp(`/projects/${project.id}/pages/${page.id}?member=${measured.id}`)
+    await userEvent.click(await screen.findByRole('tab', { name: /3D/ }))
+    const panel = await screen.findByRole('tabpanel')
+    expect(await within(panel).findByRole('img', { name: /Wireframe view/ })).toBeInTheDocument()
+    expect(within(panel).getByText(/Revision 1/)).toBeInTheDocument()
+    expect(within(panel).getByText(/W12X26 highlighted/)).toBeInTheDocument()
+    expect(within(panel).getByRole('link', { name: 'Open the full 3D view' })).toHaveAttribute(
+      'href',
+      `/projects/${project.id}/wireframe?member=${measured.id}`,
+    )
+  })
+
+  it('says how to get a model when there is none yet', async () => {
+    const { project, page } = await addedPage()
+    renderApp(`/projects/${project.id}/pages/${page.id}`)
+    await userEvent.click(await screen.findByRole('tab', { name: /3D/ }))
+    const panel = await screen.findByRole('tabpanel')
+    expect(await within(panel).findByText(/No wireframe yet/)).toBeInTheDocument()
+    expect(within(panel).getByRole('link', { name: 'Go to the wireframe' })).toHaveAttribute('href', `/projects/${project.id}/wireframe`)
   })
 
   it('opens at a member linked from the plan', async () => {

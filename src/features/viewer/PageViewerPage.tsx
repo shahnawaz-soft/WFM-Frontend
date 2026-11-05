@@ -44,6 +44,7 @@ import { ScalePanel } from './panels/ScalePanel'
 import { SetSimilarSearchStatus } from './SetSimilarSearchStatus'
 import { useSetSimilarSearch } from './useSetSimilarSearch'
 import { loadPdf } from './pdf'
+import { ModelPanel } from './panels/ModelPanel'
 import { ViewerRail, type ViewerTab } from './ViewerRail'
 
 const POLL_MS = 2000
@@ -542,6 +543,7 @@ export function PageViewerPage() {
               }}
             />
           )}
+          {tab === 'model' && <ModelPanel projectId={projectId} memberId={selectedId} onPickMember={selectFromList} />}
           {tab === 'page' && (
             <>
               {finalised && project.data && <ProjectLockedNotice project={project.data} />}

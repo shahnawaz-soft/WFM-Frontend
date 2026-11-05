@@ -57,13 +57,14 @@ const WIREFRAME_LABELS: Record<string, string> = {
   failed: 'Last generation failed',
 }
 
-type StepKey = 'upload' | 'run' | 'review' | 'add' | 'finalise'
+type StepKey = 'upload' | 'run' | 'review' | 'add' | 'model' | 'finalise'
 
 const STEPS: { key: StepKey; label: string }[] = [
   { key: 'upload', label: 'Upload drawings' },
   { key: 'run', label: 'Run Plan' },
   { key: 'review', label: 'Review pages' },
   { key: 'add', label: 'Add to ABM' },
+  { key: 'model', label: 'Check the 3D model' },
   { key: 'finalise', label: 'Finalise & export' },
 ]
 
@@ -76,6 +77,9 @@ function stepsDone(s: ProjectSummary): Record<StepKey, boolean> {
     run: p.processed + p.reviewed + p.added > 0 && p.processing === 0,
     review: p.reviewed + p.added > 0 && p.processed === 0,
     add: p.added > 0 && p.reviewed === 0,
+    // Levels, grids and columns set, the 3D view checked and saved as reviewed (or a version
+    // finalised without a model: the step never holds a finalised project back).
+    model: s.outputs.wireframe === 'reviewed' || s.outputs.finalized,
     finalise: s.outputs.finalized,
   }
 }
@@ -161,6 +165,16 @@ export function ProjectReviewCard({ project }: { project: Project }) {
           action: to ? <Link className="button button--primary" to={to}>Open next page</Link> : null,
         }
       }
+      case 'model':
+        return {
+          title: 'Check the 3D model',
+          text: 'Set each plan’s level and the grid lines, check the columns, then look over the 3D view and save it as reviewed. A project that needs no model can be finalised as it is.',
+          action: (
+            <Link className="button button--primary" to={`/projects/${project.id}/wireframe`}>
+              Go to the 3D model
+            </Link>
+          ),
+        }
       case 'finalise':
         return exceptionCount
           ? {

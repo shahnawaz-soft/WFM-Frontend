@@ -31,6 +31,7 @@ import { ColumnMarksCard } from './ColumnMarksCard'
 import { LevelProposalsCard } from './LevelProposals'
 import { ProjectGridsCard } from './ProjectGridsCard'
 import type { CameraView } from './Wireframe3D'
+import { supportsWebGL } from './webgl'
 
 /** Built from every page that has been run, not only pages added to the project. */
 const isDraftBuild = (w: Wireframe) => Boolean((w as Wireframe & { draft?: boolean }).draft)
@@ -242,6 +243,8 @@ export function WireframePage() {
           openTab={openTab}
           datasetId={project.data.section_dataset?.id ?? null}
           onChoose={setChosen}
+          onUpdate={canEdit && pages.length ? () => generate.mutate(false) : undefined}
+          updating={generate.isPending || generating}
         />
       )}
     </>
@@ -255,15 +258,6 @@ const VIEWS: { id: CameraView; label: string }[] = [
   { id: 'side', label: 'Side' },
 ]
 
-function supportsWebGL(): boolean {
-  try {
-    const canvas = document.createElement('canvas')
-    return Boolean(canvas.getContext('webgl2') ?? canvas.getContext('webgl'))
-  } catch {
-    return false
-  }
-}
-
 function RevisionSection({
   projectId,
   current,
@@ -273,6 +267,8 @@ function RevisionSection({
   openTab,
   datasetId,
   onChoose,
+  onUpdate,
+  updating = false,
 }: {
   projectId: string
   current: Wireframe
@@ -283,6 +279,9 @@ function RevisionSection({
   openTab: 'elements' | 'columns'
   datasetId: string | null
   onChoose: (id: string) => void
+  /** Generate again (the page's own action), offered where the model is out of date. */
+  onUpdate?: () => void
+  updating?: boolean
 }) {
   const queryClient = useQueryClient()
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -398,7 +397,9 @@ function RevisionSection({
           />
         )}
       </div>
-      {current.changes_since && <OutOfDateNotice changes={current.changes_since} />}
+      {current.changes_since && (
+        <OutOfDateNotice changes={current.changes_since} onUpdate={current.is_latest ? onUpdate : undefined} updating={updating} />
+      )}
       <p className="muted">
         {current.copied_from_revision ? `Started from revision ${current.copied_from_revision}` : 'Generated'} by{' '}
         {current.created_by} on {new Date(current.created_at).toLocaleString()}.
@@ -791,14 +792,14 @@ function pageNames(pages: ChangesSince['pages_added']) {
 }
 
 /** The latest revision was generated before these page changes: say so, and what to do. */
-function OutOfDateNotice({ changes }: { changes: ChangesSince }) {
+function OutOfDateNotice({ changes, onUpdate, updating }: { changes: ChangesSince; onUpdate?: () => void; updating: boolean }) {
   const { pages_added: added, pages_removed: removed, set_up_changed: changed } = changes
   if (!added.length && !removed.length && !changed.length) return null
   const plural = (n: number) => (n === 1 ? '1 page' : `${n} pages`)
   return (
     <div className="notice notice--warning" role="note" aria-label="Wireframe out of date">
       <p>
-        <strong>This wireframe is out of date.</strong> Since it was generated:
+        <strong>The 3D model is out of date.</strong> Since it was generated:
       </p>
       <ul>
         {added.length > 0 && (
@@ -817,7 +818,13 @@ function OutOfDateNotice({ changes }: { changes: ChangesSince }) {
           </li>
         )}
       </ul>
-      <p>Choose Generate again at the top of the page to include these changes.</p>
+      {onUpdate ? (
+        <Button variant="primary" loading={updating} onClick={onUpdate}>
+          Update the 3D model
+        </Button>
+      ) : (
+        <p>Generate it again to include these changes.</p>
+      )}
     </div>
   )
 }

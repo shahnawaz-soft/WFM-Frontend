@@ -20,12 +20,20 @@ import { Dialog } from '../../components/ui/Dialog'
 import { FormAlert, SelectField, TextField } from '../../components/ui/Field'
 import { NO_ERRORS, toFormErrors, type FormErrors } from '../../lib/formErrors'
 import { signedFeetInches } from '../abm/format'
+import { gridConflicts, type GridConflictKind } from './gridConflicts'
 
 const DIRECTIONS: Record<ProjectGrid['direction'], string> = { x: 'Along X', y: 'Along Y', angled: 'Angled' }
 const SOURCES: Record<ProjectGrid['source'], string> = { found: 'Drawings', person: 'You', csv: 'Grids file' }
 
 /** The project's grid lines (the old Wireframer's grid table): filled from the drawings, put
  *  right by a person, and drawn in the 3D view when the wireframe is generated. */
+/** What each grid conflict means, in plain words. */
+const CONFLICTS: Record<GridConflictKind, (grids: ProjectGrid[]) => string> = {
+  same_label: (g) => `Grid ${g[0]!.label} is in the table ${g.length} times (${g.map((x) => x.position_display).join(', ')}): keep the right one.`,
+  overlapping: (g) => `Grids ${g[0]!.label} and ${g[1]!.label} are in the same place (${g[0]!.position_display}, ${g[1]!.position_display}): one line drawn twice?`,
+  plans_disagree: (g) => `Grid ${g[0]!.label}: ${g[0]!.plans_agreeing} of ${g[0]!.plans} plans agree on where it is. Check it, then lock it.`,
+}
+
 export function ProjectGridsCard({ projectId, canEdit }: { projectId: string; canEdit: boolean }) {
   const queryClient = useQueryClient()
   const key = ['project-grids', projectId]
@@ -65,6 +73,7 @@ export function ProjectGridsCard({ projectId, canEdit }: { projectId: string; ca
   })
 
   const rows = grids.data ?? []
+  const conflicts = gridConflicts(rows)
   // Spacing to the previous grid of the same direction, as the table is ordered.
   const spacing = new Map<string, string>()
   for (const direction of ['x', 'y'] as const) {
@@ -115,6 +124,38 @@ export function ProjectGridsCard({ projectId, canEdit }: { projectId: string; ca
       {grids.isPending && <LoadingState label="Loading the grids…" />}
       {grids.data && rows.length === 0 && (
         <p className="muted">No grid table yet: the 3D view draws the grid lines the drawings show. Fill it from the drawings to check and correct them.</p>
+      )}
+      {conflicts.length > 0 && (
+        <div className="notice notice--warning grid-conflicts" role="region" aria-label="Grid conflicts">
+          <p>
+            <strong>{conflicts.length === 1 ? '1 grid conflict' : `${conflicts.length} grid conflicts`}</strong> to resolve before the 3D view is
+            generated again:
+          </p>
+          <ul>
+            {conflicts.map((c) => (
+              <li key={`${c.kind}-${c.grids.map((g) => g.id).join('-')}`}>
+                {CONFLICTS[c.kind](c.grids)}
+                {canEdit &&
+                  c.grids.map((g) => (
+                    <span key={g.id} className="grid-conflicts__actions">
+                      {' '}
+                      <button type="button" className="link-button" onClick={() => setEditing(g)}>
+                        Edit {g.label}
+                      </button>
+                      {c.kind !== 'plans_disagree' && (
+                        <>
+                          {' · '}
+                          <button type="button" className="link-button" onClick={() => setDeleting(g)}>
+                            Delete {g.label} ({g.position_display})
+                          </button>
+                        </>
+                      )}
+                    </span>
+                  ))}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
       {rows.length > 0 && (
         <div className="table-wrap">

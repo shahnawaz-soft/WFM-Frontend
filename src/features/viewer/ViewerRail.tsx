@@ -1,4 +1,4 @@
-export type ViewerTab = 'quantities' | 'flags' | 'scale' | 'level' | 'page'
+export type ViewerTab = 'quantities' | 'flags' | 'scale' | 'level' | 'page' | 'model'
 
 const TABS: { id: ViewerTab; label: string; glyph: string }[] = [
   { id: 'quantities', label: 'Quantities', glyph: '▤' },
@@ -6,6 +6,7 @@ const TABS: { id: ViewerTab; label: string; glyph: string }[] = [
   { id: 'scale', label: 'Scale', glyph: '⇔' },
   { id: 'level', label: 'Level', glyph: '⊥' },
   { id: 'page', label: 'Page', glyph: '▢' },
+  { id: 'model', label: '3D', glyph: '◇' },
 ]
 
 interface ViewerRailProps {

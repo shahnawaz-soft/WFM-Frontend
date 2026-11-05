@@ -137,10 +137,30 @@ describe('Project review summary', () => {
     const card = await openCard(project.id)
     expect(within(card).getByText('ABM complete')).toBeInTheDocument()
     expect(within(card).getByText('none in the ABM')).toBeInTheDocument()
+    // The model comes before finalising: levels, grids, columns and the 3D view, saved as
+    // reviewed. Finalising is still offered for a project that needs no model.
+    const steps = within(card).getByRole('list', { name: 'Workflow' })
+    expect(within(steps).getByText('Check the 3D model')).toBeInTheDocument()
+    const next = within(card).getByRole('group', { name: 'Next step' })
+    expect(within(next).getByText('Check the 3D model')).toBeInTheDocument()
+    expect(within(next).getByRole('link', { name: 'Go to the 3D model' })).toHaveAttribute('href', `/projects/${project.id}/wireframe`)
+    expect(within(card).getByRole('button', { name: 'Finalise…' })).toBeInTheDocument()
+    expect(within(card).getByText(/· complete/)).toBeInTheDocument()
+  })
+
+  it('moves on to finalising once the wireframe is saved as reviewed', async () => {
+    const { project, page } = await setup({ add: true })
+    const members: Member[] = await call('GET', `/drawing-pages/${page.id}/members/`)
+    const unmeasured = members.find((m) => m.profile === 'W' && m.length_mm == null)!
+    await call('PATCH', `/members/${unmeasured.id}/`, { version: unmeasured.version, length: "10'" })
+    const hss = members.find((m) => m.profile === 'HSS')!
+    await call('POST', `/members/${hss.id}/review/`, { version: hss.version, status: 'rejected', reason: 'Not ours' })
+    const wireframe = await call('POST', `/projects/${project.id}/wireframes/`)
+    await call('POST', `/wireframes/${wireframe.id}/mark-reviewed/`)
+
+    const card = await openCard(project.id)
     const next = within(card).getByRole('group', { name: 'Next step' })
     expect(within(next).getByText('Ready to finalise')).toBeInTheDocument()
-    expect(within(next).getByRole('button', { name: 'Finalise…' })).toBeInTheDocument()
-    expect(within(card).getByText(/· complete/)).toBeInTheDocument()
   })
 })
 
