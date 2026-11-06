@@ -31,6 +31,8 @@ interface DrawingStageProps {
   label: string
   pdfState: { data?: Awaited<ReturnType<typeof loadPdf>>; error: Error | null; isPending: boolean; refetch: () => unknown }
   download: { loaded: number; total?: number } | null
+  /** The page as a picture (``usePagePreview``): shown at once, under the PDF as it is drawn. */
+  previewUrl?: string | null
   members: ExtractedMember[]
   showLabels: boolean
   selectedId: string | null
@@ -292,12 +294,28 @@ export function DrawingStage(props: DrawingStageProps) {
             {props.placingHint ?? 'Click the drawing where the member is'} · Esc to cancel
           </p>
         )}
-        {pdfState.isPending && <LoadingState label={downloadLabel(download)} />}
+        {pdfState.isPending && !props.previewUrl && <LoadingState label={downloadLabel(download)} />}
         {pdfState.error && (
           <ErrorState title="The drawing could not be loaded" error={pdfState.error} onRetry={() => void pdfState.refetch()} />
         )}
+        {pdfState.isPending && props.previewUrl && (
+          <div className="page-layer" style={{ width: Math.floor(displayW * zoom), height: Math.floor(displayH * zoom) }}>
+            <img className="page-preview" src={props.previewUrl} alt="" />
+            <p className="page-preview__status" role="status">
+              {downloadLabel(download)}
+            </p>
+          </div>
+        )}
         {pdfState.data && (
           <div ref={layerRef} className="page-layer">
+            {props.previewUrl && (
+              <img
+                className="page-preview"
+                src={props.previewUrl}
+                alt=""
+                style={{ width: Math.floor(displayW * zoom), height: Math.floor(displayH * zoom) }}
+              />
+            )}
             <PdfPageCanvas
               key={pageNumber}
               doc={pdfState.data}

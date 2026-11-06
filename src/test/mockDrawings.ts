@@ -2092,6 +2092,10 @@ export const drawingHandlers = [
     HttpResponse.json({ id: params.id, label: 'AISC Shapes Database v16.1', status: 'approved', is_default: true }),
   ),
 
+  http.get('*/api/v1/drawing-pages/:id/preview/', () =>
+    new HttpResponse(new Blob(['RIFF'], { type: 'image/webp' }), { headers: { 'Content-Type': 'image/webp' } }),
+  ),
+
   http.get('*/api/v1/drawing-pages/:id/thumbnail/', () =>
     new HttpResponse(new Blob(['RIFF'], { type: 'image/webp' }), { headers: { 'Content-Type': 'image/webp' } }),
   ),

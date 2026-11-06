@@ -23,6 +23,7 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { StatusBadge } from '../../components/ui/StatusBadge'
 import { isActiveJob, PAGE_STATUS } from '../drawings/status'
 import { groupLabel, kindGroup, tabFromParam } from '../drawings/sheets'
+import { usePagePreview } from './usePagePreview'
 import { ProjectLockedNotice } from '../finalize/ProjectLockedNotice'
 import { PickedPenDialog } from '../projects/ProjectPens'
 import { projectCan } from '../projects/useProjectPermissions'
@@ -128,6 +129,11 @@ export function PageViewerPage() {
     // Thumbnails keep their status current while any page is being processed.
     refetchInterval: (q) => (q.state.data?.some((p) => isActiveJob(p.latest_job)) ? POLL_MS : false),
   })
+  // The page's picture, shown at once while the PDF is drawn; the pages either side fetched ahead.
+  const strip = siblings.data ?? []
+  const at = strip.findIndex((p) => p.id === pageId)
+  const previewUrl = usePagePreview(pageId, at >= 0 ? [strip[at - 1]?.id, strip[at + 1]?.id] : [])
+
   // A run started or finished elsewhere (another tab, the drawing set page) shows up in the
   // page strip first: bring this page's own data up to date so its header agrees.
   const stripJob = siblings.data?.find((p) => p.id === pageId)?.latest_job
@@ -568,6 +574,7 @@ export function PageViewerPage() {
           rotation={current.rotation}
           pdfState={pdf}
           download={download}
+          previewUrl={previewUrl}
           pageNumber={current.page_number}
           label={`Drawing: page ${current.page_number} of ${drawingSet.data.original_filename}`}
           members={shown}

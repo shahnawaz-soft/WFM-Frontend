@@ -22,6 +22,9 @@ interface PdfPageCanvasProps {
 export function PdfPageCanvas({ doc, pageNumber, zoom, label, onRendered, onViewport }: PdfPageCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [error, setError] = useState<string | null>(null)
+  // Shown once drawn: until then the page's picture under it shows (``usePagePreview``), not a
+  // blank sheet (a resized canvas is cleared on every zoom step).
+  const [drawn, setDrawn] = useState<number | null>(null)
 
   useEffect(() => {
     let task: RenderTask | null = null
@@ -50,7 +53,9 @@ export function PdfPageCanvas({ doc, pageNumber, zoom, label, onRendered, onView
         canvas.style.height = `${Math.floor(cssViewport.height)}px`
         task = page.render({ canvas, viewport: renderViewport })
         return task.promise.then(() => {
-          if (!cancelled) onRendered?.()
+          if (cancelled) return
+          setDrawn(zoom)
+          onRendered?.()
         })
       })
       .catch((err: unknown) => {
@@ -66,5 +71,13 @@ export function PdfPageCanvas({ doc, pageNumber, zoom, label, onRendered, onView
   }, [doc, pageNumber, zoom, onRendered, onViewport])
 
   if (error) return <p className="field__error">{error}</p>
-  return <canvas ref={canvasRef} className="viewer__canvas" role="img" aria-label={label} />
+  return (
+    <canvas
+      ref={canvasRef}
+      className="viewer__canvas"
+      data-drawn={drawn === zoom || undefined}
+      role="img"
+      aria-label={label}
+    />
+  )
 }

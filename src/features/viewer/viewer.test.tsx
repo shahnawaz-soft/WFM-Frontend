@@ -99,6 +99,21 @@ describe('Page workspace', () => {
     await waitFor(() => expect(downloadStarted).toBe(true))
   })
 
+  it("shows the page's picture at once, while the drawing itself loads", async () => {
+    // High School's sheets (300,000+ shapes) took the browser seconds to draw (6 Nov 2026).
+    let releaseFile = () => {}
+    const fileHeld = new Promise<void>((resolve) => (releaseFile = resolve))
+    onTestFinished(() => releaseFile())
+    server.use(
+      http.get('*/api/v1/drawing-sets/:id/file/', async () => {
+        await fileHeld // then falls through to the default handler
+      }),
+    )
+    const { container } = await openViewer()
+    await waitFor(() => expect(container.querySelector('img.page-preview')).not.toBeNull())
+    expect(container.querySelector('.page-preview__status')).toHaveTextContent(/Loading drawing/)
+  })
+
   it('opens from a page thumbnail', async () => {
     const project = mockProjects.create('Warehouse', OWNER)
     mockBackend.startSession(OWNER)

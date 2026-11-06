@@ -49,6 +49,17 @@ export async function fetchThumbnail(pageId: string, signal?: AbortSignal): Prom
   return data
 }
 
+/** The page as a picture (WebP), shown while the browser draws the PDF: heavy sheets take it
+ *  seconds (High School: 300,000+ shapes a page). Kept by the browser; fetched with the token. */
+export async function fetchPagePreview(pageId: string, signal?: AbortSignal): Promise<Blob> {
+  const { data } = await apiClient.get<Blob>(`/api/v1/drawing-pages/${pageId}/preview/`, {
+    responseType: 'blob',
+    timeout: 0,
+    signal,
+  })
+  return data
+}
+
 export async function downloadOriginal(drawingSet: DrawingSet): Promise<void> {
   const { data } = await apiClient.get<Blob>(`/api/v1/drawing-sets/${drawingSet.id}/file/`, {
     responseType: 'blob',
