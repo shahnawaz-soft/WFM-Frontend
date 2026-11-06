@@ -121,6 +121,28 @@ describe('Page workspace', () => {
     expect(await screen.findByRole('heading', { level: 1, name: /^Page 3 of 3/ })).toBeInTheDocument()
   })
 
+  it('opened from a tab of the project page, goes through the pages of that tab only', async () => {
+    const project = mockProjects.create('Warehouse', OWNER)
+    mockBackend.startSession(OWNER)
+    await acceptUpload(project.id, new File(['%PDF-1.7 pages:3'], 'GA.pdf'))
+    const [first, second, third] = mockDrawings.sets[0]!.pages
+    Object.assign(second!, { sheet_kind: 'detail' })
+    Object.assign(first!, { sheet_kind: 'plan' })
+    Object.assign(third!, { sheet_kind: 'plan' })
+    renderApp(`/projects/${project.id}/pages/${first!.id}?sheets=plan`)
+    await screen.findByRole('heading', { level: 1, name: /^Page 1 of 3/ })
+    const strip = screen.getByRole('navigation', { name: 'Pages in this drawing set' })
+    await waitFor(() => expect(within(strip).getAllByRole('button')).toHaveLength(2))
+    expect(screen.getByText('Plans only')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Warehouse' })).toHaveAttribute('href', `/projects/${project.id}?tab=plan`)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Next →' }))
+    expect(await screen.findByRole('heading', { level: 1, name: /^Page 3 of 3/ })).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Show all pages' }))
+    await waitFor(() => expect(within(strip).getAllByRole('button')).toHaveLength(3))
+  })
+
   it('closes the review and returns to the project', async () => {
     await openViewer(2)
     await userEvent.click(screen.getByRole('link', { name: 'Close page review' }))

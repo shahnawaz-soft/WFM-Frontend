@@ -106,6 +106,15 @@ export async function hidePages(projectId: string, pageIds: string[], hidden: bo
   return data
 }
 
+/** Move pages to one of the project page's tabs; '' puts them back by the kind read. */
+export async function setPagesKind(projectId: string, pageIds: string[], kind: string): Promise<{ updated: number }> {
+  const { data } = await apiClient.post<{ updated: number }>(`/api/v1/projects/${projectId}/pages/kind/`, {
+    pages: pageIds,
+    kind,
+  })
+  return data
+}
+
 export async function removeDrawingSet(drawingSetId: string): Promise<void> {
   await apiClient.delete(`/api/v1/drawing-sets/${drawingSetId}/`)
 }

@@ -25,10 +25,29 @@ export const KIND_GROUPS = [
 
 export type KindGroup = (typeof KIND_GROUPS)[number]['key'] | 'all'
 
+/** The tabs a person can move a page to (every group but "Not run yet"). */
+export const MOVABLE_GROUPS = KIND_GROUPS.filter((g) => g.key !== 'unread')
+
+/** The tab a page is listed under: where a person moved it, else by the kind read from it. */
 export function kindGroup(page: DrawingPageListItem): Exclude<KindGroup, 'all'> {
+  if (page.sheet_kind) return page.sheet_kind as Exclude<KindGroup, 'all'>
+  return readGroup(page)
+}
+
+/** The tab of the kind Steelo read from the page (where "As read" puts it back). */
+export function readGroup(page: DrawingPageListItem): Exclude<KindGroup, 'all'> {
   const kind = page.current_run?.sheet_kind
   if (!page.current_run) return 'unread'
   return kind && kind in SHEET_KIND_LABELS && kind !== 'reference' ? (kind as Exclude<KindGroup, 'all'>) : 'other'
+}
+
+/** A tab named in the address (``?tab=plan``); 'all' for none or one that doesn't exist. */
+export function tabFromParam(value: string | null): KindGroup {
+  return KIND_GROUPS.some((g) => g.key === value) ? (value as KindGroup) : 'all'
+}
+
+export function groupLabel(key: KindGroup): string {
+  return key === 'all' ? 'All' : (KIND_GROUPS.find((g) => g.key === key)?.label ?? key)
 }
 
 /** Numbers read on more than one page of a file are a job or project code, not sheet numbers. */

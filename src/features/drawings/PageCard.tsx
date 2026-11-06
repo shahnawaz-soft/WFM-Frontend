@@ -11,7 +11,8 @@ import { FormAlert, TextField } from '../../components/ui/Field'
 import { StatusBadge } from '../../components/ui/StatusBadge'
 import { NO_ERRORS, toFormErrors, type FormErrors } from '../../lib/formErrors'
 import type { PageSelection } from './DrawingsSection'
-import { SHEET_KIND_LABELS } from './sheets'
+import { MoveToMenu } from './MoveToMenu'
+import { kindGroup, readGroup, SHEET_KIND_LABELS, type KindGroup } from './sheets'
 import { isActiveJob, JOB_STATUS, PAGE_STATUS } from './status'
 import { Thumbnail } from './Thumbnail'
 import { usePageRun } from './usePageRun'
@@ -27,11 +28,18 @@ interface PageCardProps {
   sheetName?: string
   /** In a batch: move the page one place earlier or later. */
   move?: { earlier?: () => void; later?: () => void; pending: boolean }
+  /** The project page's tab it is shown under: page review then goes through that tab's pages. */
+  tab?: KindGroup
 }
 
-export function PageCard({ page, projectId, setName, canRun, selection, move, sheetName = '' }: PageCardProps) {
+export function PageCard({ page, projectId, setName, canRun, selection, move, tab = 'all', sheetName = '' }: PageCardProps) {
   const [renaming, setRenaming] = useState(false)
-  const kind = page.current_run?.sheet_kind ? SHEET_KIND_LABELS[page.current_run.sheet_kind] : undefined
+  // A page a person moved shows the tab it is in; otherwise the kind read from it.
+  const kind = page.sheet_kind
+    ? (SHEET_KIND_LABELS[page.sheet_kind] ?? 'Other')
+    : page.current_run?.sheet_kind
+      ? SHEET_KIND_LABELS[page.current_run.sheet_kind]
+      : undefined
   const { action, mutation, confirmDialog } = usePageRun(page, canRun)
   const pageStatus = PAGE_STATUS[page.status]
 
@@ -48,7 +56,7 @@ export function PageCard({ page, projectId, setName, canRun, selection, move, sh
         </label>
       )}
       <Link
-        to={`/projects/${projectId}/pages/${page.id}`}
+        to={`/projects/${projectId}/pages/${page.id}${tab === 'all' ? '' : `?sheets=${tab}`}`}
         className="page-card__open"
         aria-label={`Open page ${page.page_number} of ${setName}`}
       >
@@ -74,7 +82,26 @@ export function PageCard({ page, projectId, setName, canRun, selection, move, sh
           </button>
         )}
         <StatusBadge tone={pageStatus.tone} label={pageStatus.label} />
-        {kind && <StatusBadge tone="info" label={kind} />}
+        {canRun && (kind || page.current_run) ? (
+          <MoveToMenu
+            projectId={projectId}
+            pageIds={[page.id]}
+            current={kindGroup(page)}
+            asRead={readGroup(page)}
+            moved={Boolean(page.sheet_kind)}
+            triggerClassName="page-card__kind"
+            triggerLabel={`Move page ${page.page_number} to another tab`}
+            trigger={
+              <>
+                <StatusBadge tone="info" label={kind ?? 'Other'} />
+                {page.sheet_kind && <span className="muted"> (moved)</span>}
+                <span aria-hidden="true"> ▾</span>
+              </>
+            }
+          />
+        ) : (
+          kind && <StatusBadge tone="info" label={kind} />
+        )}
         {page.hidden && <StatusBadge tone="neutral" label="Hidden" />}
         {move && (
           <span className="page-card__move">

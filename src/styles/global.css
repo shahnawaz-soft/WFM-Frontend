@@ -487,6 +487,9 @@ a.button { text-decoration: none; justify-content: center; }
 .kind-filter .button[aria-pressed='true'] { border-color: var(--color-primary); color: var(--color-primary); font-weight: 600; }
 .page-card__sheet { margin: 0; padding: var(--space-2) var(--space-3) 0; font-weight: 600; font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .page-card__rename { flex: none; }
+/* The kind badge opens "Move to tab": a plain button around the badge. */
+.page-card__kind { padding: 0; border: none; background: none; font: inherit; cursor: pointer; }
+.page-card__kind:hover .status-badge { outline: 1px solid var(--color-primary); }
 .selection-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin: 0 0 var(--space-4); padding: var(--space-2) var(--space-3); border: 1px solid var(--color-primary); border-radius: var(--radius); }
 .page-card { position: relative; }
 .page-card__members { margin: 0 0 var(--space-2); font-weight: 600; display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
@@ -680,6 +683,7 @@ a.button { text-decoration: none; justify-content: center; }
 .member-shape[data-selected] { stroke: #7c3aed; stroke-width: 3; stroke-dasharray: none; fill: rgb(124 58 237 / 25%); }
 
 .workspace__strip { grid-area: strip; overflow-y: auto; background: var(--color-surface); border-left: 1px solid var(--color-border); }
+.page-strip__filter { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-2); align-items: baseline; justify-content: space-between; padding: var(--space-2) var(--space-2) 0; font-size: 0.8rem; font-weight: 700; }
 .page-strip ol { list-style: none; margin: 0; padding: var(--space-2); display: flex; flex-direction: column; gap: var(--space-2); }
 .page-strip__item { display: block; width: 100%; padding: var(--space-1); font: inherit; text-align: left; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius); cursor: pointer; color: var(--color-text); }
 .page-strip__item:hover { border-color: var(--color-text-muted); }

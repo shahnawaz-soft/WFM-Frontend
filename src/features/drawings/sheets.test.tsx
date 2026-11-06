@@ -54,6 +54,21 @@ describe('Sheet names and kinds', () => {
     expect(await screen.findByRole('listitem', { name: 'Page 1' })).toBeInTheDocument()
   })
 
+  it('moves a page to another tab, keeps the tab open and puts it back as read', async () => {
+    await openProject()
+    await within(card(3)).findByText('DETAILS')
+    await userEvent.click(within(card(3)).getByRole('button', { name: 'Move page 3 to another tab' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Plans' }))
+    expect(await within(card(3)).findByText('(moved)')).toBeInTheDocument()
+    expect(within(card(3)).getByText('Plan')).toBeInTheDocument()
+    // Every page is a plan now: no tabs to choose from.
+    expect(screen.queryByRole('button', { name: 'Details (1)' })).not.toBeInTheDocument()
+
+    await userEvent.click(within(card(3)).getByRole('button', { name: 'Move page 3 to another tab' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'As read (Details)' }))
+    expect(await screen.findByRole('button', { name: 'Details (1)' })).toBeInTheDocument()
+  })
+
   it('lets a person correct a sheet name', async () => {
     await openProject()
     await within(card(1)).findByText('S302 · THIRD FLOOR FRAMING PLAN')

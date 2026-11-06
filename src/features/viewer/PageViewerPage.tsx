@@ -22,6 +22,7 @@ import { Button } from '../../components/ui/Button'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { StatusBadge } from '../../components/ui/StatusBadge'
 import { isActiveJob, PAGE_STATUS } from '../drawings/status'
+import { groupLabel, kindGroup, tabFromParam } from '../drawings/sheets'
 import { ProjectLockedNotice } from '../finalize/ProjectLockedNotice'
 import { PickedPenDialog } from '../projects/ProjectPens'
 import { projectCan } from '../projects/useProjectPermissions'
@@ -56,6 +57,9 @@ export function PageViewerPage() {
   // ?member=<id>: open with that member selected and in view (links from the ABM).
   const [searchParams] = useSearchParams()
   const linkedMember = searchParams.get('member')
+  // ?sheets=plan: opened from that tab of the project page: the strip and Previous / Next go
+  // through that tab's pages only (until "Show all pages").
+  const sheets = tabFromParam(searchParams.get('sheets'))
   const [download, setDownload] = useState<{ loaded: number; total?: number } | null>(null)
 
   // Workspace state: shared by the drawing, the panels and the toolbar.
@@ -335,8 +339,11 @@ export function PageViewerPage() {
   }
   if (!project.data || !drawingSet.data || !current) return <LoadingState label="Opening page…" />
 
-  // Hidden pages are left out of review (the open page stays, even if it is hidden).
-  const pages = (siblings.data ?? []).filter((p) => !p.hidden || p.id === pageId)
+  // Hidden pages are left out of review (the open page stays, even if it is hidden), and so are
+  // pages of other tabs when it was opened from one.
+  const pages = (siblings.data ?? []).filter(
+    (p) => p.id === pageId || (!p.hidden && (sheets === 'all' || kindGroup(p) === sheets)),
+  )
   const index = pages.findIndex((p) => p.id === pageId)
   const prev = index > 0 ? pages[index - 1] : undefined
   const next = index >= 0 && index < pages.length - 1 ? pages[index + 1] : undefined
@@ -348,7 +355,7 @@ export function PageViewerPage() {
     setPickingReference(false)
     setPickedReference(null)
     setPickedLabel(null)
-    navigate(`/projects/${projectId}/pages/${id}`)
+    navigate(`/projects/${projectId}/pages/${id}${sheets === 'all' ? '' : `?sheets=${sheets}`}`)
   }
   const status = PAGE_STATUS[current.status]
   const canRun = projectCan(project.data, 'project.edit')
@@ -376,7 +383,8 @@ export function PageViewerPage() {
         <div>
           <nav aria-label="Breadcrumb" className="breadcrumb">
             <Link to="/projects">Projects</Link> <span aria-hidden="true">/</span>{' '}
-            <Link to={`/projects/${projectId}`}>{project.data.name}</Link> <span aria-hidden="true">/</span>{' '}
+            <Link to={`/projects/${projectId}${sheets === 'all' ? '' : `?tab=${sheets}`}`}>{project.data.name}</Link>{' '}
+            <span aria-hidden="true">/</span>{' '}
             <span>{drawingSet.data.original_filename}</span>
           </nav>
           <h1 className="viewer__title">
@@ -909,6 +917,18 @@ export function PageViewerPage() {
 
       {stripOpen && (
         <aside className="workspace__strip">
+          {sheets !== 'all' && (
+            <div className="page-strip__filter" role="group" aria-label="Pages shown">
+              <span>{groupLabel(sheets)} only</span>
+              <button
+                type="button"
+                className="link-button"
+                onClick={() => navigate(`/projects/${projectId}/pages/${pageId}`, { replace: true })}
+              >
+                Show all pages
+              </button>
+            </div>
+          )}
           <PageStrip pages={pages} currentId={pageId} setName={drawingSet.data.original_filename} onOpen={go} />
         </aside>
       )}

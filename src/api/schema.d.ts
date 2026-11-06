@@ -1383,6 +1383,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_pk}/pages/kind/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Move selected pages to one of the project page's tabs (``kind: ""`` puts them back). */
+        post: operations["projects_pages_kind_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{project_pk}/pens/": {
         parameters: {
             query?: never;
@@ -2403,6 +2420,7 @@ export interface components {
             readonly batch: string | null;
             readonly batch_position: number;
             readonly sheet_name: string;
+            readonly sheet_kind: string;
             readonly scale: string;
             /** @description Part of the sheet counted [left, bottom, right, top], PDF points; null = all */
             readonly area: number[] | null;
@@ -2441,6 +2459,7 @@ export interface components {
             readonly batch: string | null;
             readonly batch_position: number;
             readonly sheet_name: string;
+            readonly sheet_kind: string;
             readonly scale: string;
             /** @description Part of the sheet counted [left, bottom, right, top], PDF points; null = all */
             readonly area: number[] | null;
@@ -3187,6 +3206,34 @@ export interface components {
          * @enum {string}
          */
         PageStatusEnum: "pending" | "processing" | "processed" | "reviewed" | "added" | "failed";
+        /**
+         * @description * `plan` - plan
+         *     * `elevation` - elevation
+         *     * `section` - section
+         *     * `detail` - detail
+         *     * `schedule` - schedule
+         *     * `notes` - notes
+         *     * `other` - other
+         *     * `` -
+         * @enum {string}
+         */
+        PagesKindKindEnum: "plan" | "elevation" | "section" | "detail" | "schedule" | "notes" | "other";
+        PagesKindRequest: {
+            pages: string[];
+            /**
+             * @description The project page's tab to list the pages under; empty: by the kind read
+             *
+             *     * `plan` - plan
+             *     * `elevation` - elevation
+             *     * `section` - section
+             *     * `detail` - detail
+             *     * `schedule` - schedule
+             *     * `notes` - notes
+             *     * `other` - other
+             *     * `` -
+             */
+            kind: components["schemas"]["PagesKindKindEnum"] | components["schemas"]["BlankEnum"];
+        };
         PaginatedAbmEntryList: {
             /** @example 123 */
             count: number;
@@ -7020,6 +7067,31 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["HidePagesRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HidePagesResult"];
+                };
+            };
+        };
+    };
+    projects_pages_kind_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PagesKindRequest"];
             };
         };
         responses: {

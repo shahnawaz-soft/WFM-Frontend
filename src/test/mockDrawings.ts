@@ -730,6 +730,7 @@ export async function acceptUpload(
       batch: null,
       batch_position: 0,
       sheet_name: '',
+      sheet_kind: '',
       scale: '',
       area: null,
       latest_job: null,
@@ -1038,6 +1039,13 @@ export const drawingHandlers = [
     const all = sets.flatMap((s) => s.pages)
     const changed = all.filter((p) => pages.includes(p.id) && p.hidden !== hidden)
     changed.forEach((p) => Object.assign(p, { hidden }))
+    return HttpResponse.json({ updated: changed.length })
+  }),
+
+  http.post('*/api/v1/projects/:id/pages/kind/', async ({ request }) => {
+    const { pages, kind } = (await request.json()) as { pages: string[]; kind: string }
+    const changed = sets.flatMap((s) => s.pages).filter((p) => pages.includes(p.id) && p.sheet_kind !== kind)
+    changed.forEach((p) => Object.assign(p, { sheet_kind: kind }))
     return HttpResponse.json({ updated: changed.length })
   }),
 

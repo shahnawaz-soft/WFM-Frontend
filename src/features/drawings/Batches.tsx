@@ -54,6 +54,7 @@ export function BatchSections({
         <BatchSection
           key={batch.id}
           projectId={projectId}
+          kind={kind}
           batch={batch}
           pages={batch.pages
             .flatMap((id) => pages.get(id) ?? [])
@@ -71,12 +72,14 @@ function BatchSection({
   batch,
   pages,
   canEdit,
+  kind,
   selection,
 }: {
   projectId: string
   batch: PageBatch
   pages: { page: DrawingPageListItem; set: DrawingSet; name: string }[]
   canEdit: boolean
+  kind: KindGroup
   selection?: PageSelection
 }) {
   const refresh = useRefresh(projectId)
@@ -131,6 +134,7 @@ function BatchSection({
               canRun={canEdit}
               selection={selection}
               sheetName={name}
+              tab={kind}
               move={
                 canEdit
                   ? {

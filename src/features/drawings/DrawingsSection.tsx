@@ -1,7 +1,7 @@
 import * as Menu from '@radix-ui/react-dropdown-menu'
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 
 import { downloadOriginal, hidePages, removeDrawingSet, retryDrawingSet } from '../../api/drawings'
 import { toApiError } from '../../api/errors'
@@ -18,7 +18,8 @@ import { StatusBadge } from '../../components/ui/StatusBadge'
 import { projectCan } from '../projects/useProjectPermissions'
 import { PageCard } from './PageCard'
 import { AddToBatchDialog, BatchSections } from './Batches'
-import { KIND_GROUPS, kindGroup, repeatedNumbers, sheetLabel, type KindGroup } from './sheets'
+import { MoveToMenu } from './MoveToMenu'
+import { KIND_GROUPS, kindGroup, repeatedNumbers, sheetLabel, tabFromParam, type KindGroup } from './sheets'
 import { drawingSetStatus, formatBytes } from './status'
 import { batchesQuery, drawingSetsQuery, pagesQuery } from './queries'
 import { UploadPanel } from './UploadPanel'
@@ -52,12 +53,25 @@ export function DrawingsSection({ project }: { project: Project }) {
     setSelected(new Set())
   }
   const batches = useQuery(batchesQuery(project.id))
-  // Plans, elevations, details …: what the engine classified each run page as.
-  const [kind, setKind] = useState<KindGroup>('all')
+  // Plans, elevations, details …: what the engine classified each run page as, or where a person
+  // moved it. Kept in the address, so coming back from page review opens the same tab.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tab = tabFromParam(searchParams.get('tab'))
+  const setKind = (next: KindGroup) =>
+    setSearchParams(
+      (params) => {
+        if (next === 'all') params.delete('tab')
+        else params.set('tab', next)
+        return params
+      },
+      { replace: true },
+    )
   const lists = useQueries({ queries: (sets ?? []).map((set) => pagesQuery(set)) })
   const visiblePages = lists.flatMap((l) => l.data ?? []).filter((p) => showHidden || !p.hidden)
   const kindCounts = new Map<string, number>()
   for (const page of visiblePages) kindCounts.set(kindGroup(page), (kindCounts.get(kindGroup(page)) ?? 0) + 1)
+  // A tab with no pages left (all moved out) is not shown: show every page instead.
+  const kind = tab !== 'all' && visiblePages.length > 0 && !kindCounts.has(tab) ? 'all' : tab
   const [batching, setBatching] = useState(false)
   const hide = useMutation({
     mutationFn: (hidden: boolean) => hidePages(project.id, [...selected], hidden),
@@ -137,6 +151,15 @@ export function DrawingsSection({ project }: { project: Project }) {
           <Button disabled={!selected.size} onClick={() => setBatching(true)}>
             Add to batch… ({selected.size})
           </Button>
+          <MoveToMenu
+            projectId={project.id}
+            pageIds={[...selected]}
+            disabled={!selected.size}
+            triggerClassName="button button--secondary"
+            triggerLabel={`Move the ${selected.size} selected pages to another tab`}
+            trigger={`Move to… (${selected.size})`}
+            onDone={stopSelecting}
+          />
           <Button onClick={stopSelecting}>Cancel</Button>
         </div>
       )}
@@ -401,6 +424,7 @@ function PageGrid({
           canRun={canRun}
           selection={selection}
           sheetName={sheetLabel(page, repeated)}
+          tab={kind}
         />
       ))}
     </ol>
