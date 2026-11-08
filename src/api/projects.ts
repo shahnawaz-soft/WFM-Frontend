@@ -41,6 +41,11 @@ export async function setArchived(id: string, archived: boolean, version: number
   return data
 }
 
+/** Deletes the project for everyone (owners): it leaves every list and link; its data is kept. */
+export async function deleteProject(id: string, name: string): Promise<void> {
+  await apiClient.post(`${base}${id}/delete/`, { name })
+}
+
 export async function listMembers(projectId: string): Promise<Membership[]> {
   const { data } = await apiClient.get<Membership[]>(`${base}${projectId}/members/`)
   return data

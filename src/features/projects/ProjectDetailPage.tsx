@@ -1,8 +1,8 @@
 import { useMutation, usePrefetchQuery, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { Link, useParams } from 'react-router'
+import { Link, useNavigate, useParams } from 'react-router'
 
-import { getProject, setArchived, updateProject } from '../../api/projects'
+import { deleteProject, getProject, setArchived, updateProject } from '../../api/projects'
 import { toApiError } from '../../api/errors'
 import { PROJECT_STATUS_LABELS, type Project } from '../../api/types'
 import { ErrorState, LoadingState } from '../../components/feedback/States'
@@ -117,6 +117,7 @@ function ProjectActions({ project }: { project: Project }) {
   const queryClient = useQueryClient()
   const [renaming, setRenaming] = useState(false)
   const [confirmArchive, setConfirmArchive] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const archived = project.status === 'archived'
 
   const archive = useMutation({
@@ -140,6 +141,12 @@ function ProjectActions({ project }: { project: Project }) {
         ) : (
           <Button onClick={() => setConfirmArchive(true)}>Archive</Button>
         ))}
+      {projectCan(project, 'project.archive') && (
+        <Button variant="danger" onClick={() => setDeleting(true)}>
+          Delete
+        </Button>
+      )}
+      {deleting && <DeleteProjectDialog project={project} onClose={() => setDeleting(false)} />}
 
       {renaming && <SettingsDialog project={project} onClose={() => setRenaming(false)} />}
       <ConfirmDialog
@@ -157,6 +164,51 @@ function ProjectActions({ project }: { project: Project }) {
         </p>
       </ConfirmDialog>
     </div>
+  )
+}
+
+/** Delete the project for everyone, typing its name to be sure (owners). Its data is kept. */
+function DeleteProjectDialog({ project, onClose }: { project: Project; onClose: () => void }) {
+  const queryClient = useQueryClient()
+  const navigate = useNavigate()
+  const [name, setName] = useState('')
+  const matches = name.trim() === project.name.trim()
+  const remove = useMutation({
+    mutationFn: () => deleteProject(project.id, name),
+    meta: { suppressErrorToast: true, successMessage: `Deleted “${project.name}”` },
+    onSuccess: async () => {
+      queryClient.removeQueries({ queryKey: ['project', project.id] })
+      await queryClient.invalidateQueries({ queryKey: ['projects'] })
+      navigate('/projects')
+    },
+  })
+  function submit(event: FormEvent) {
+    event.preventDefault()
+    if (matches) remove.mutate()
+  }
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()} title={`Delete “${project.name}”?`}>
+      <FormAlert message={remove.error ? toApiError(remove.error).message : null} />
+      <p>
+        The project, its drawings, ABM and 3D model leave Steelo for everyone on it. They are not erased: if it was
+        deleted by mistake, an administrator can bring it back.
+      </p>
+      <form onSubmit={submit} noValidate>
+        <TextField
+          label={`Type the project's name to confirm: ${project.name}`}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          autoComplete="off"
+          autoFocus
+        />
+        <div className="button-row">
+          <Button type="submit" variant="danger" disabled={!matches} loading={remove.isPending}>
+            Delete project
+          </Button>
+          <Button onClick={onClose}>Cancel</Button>
+        </div>
+      </form>
+    </Dialog>
   )
 }
 

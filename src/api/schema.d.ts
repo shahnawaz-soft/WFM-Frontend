@@ -1057,6 +1057,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{id}/delete/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Delete the project (owners, typing its name): gone from every list, data kept. */
+        post: operations["projects_delete_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/finalize/": {
         parameters: {
             query?: never;
@@ -3505,6 +3522,10 @@ export interface components {
         ProjectDatasetRequest: {
             /** Format: uuid */
             dataset_id: string;
+        };
+        ProjectDeleteRequest: {
+            /** @description The project's name, typed to confirm */
+            name: string;
         };
         ProjectGrid: {
             /** Format: uuid */
@@ -6458,6 +6479,30 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ConnectionMaterialLine"][];
                 };
+            };
+        };
+    };
+    projects_delete_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectDeleteRequest"];
+            };
+        };
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

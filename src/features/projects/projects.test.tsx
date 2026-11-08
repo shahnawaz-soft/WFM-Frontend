@@ -163,6 +163,27 @@ describe('Project details', () => {
   })
 })
 
+describe('Deleting a project', () => {
+  it('deletes only once its name is typed, and it leaves the list', async () => {
+    const p = mockProjects.create('Warehouse', OWNER)
+    mockProjects.create('Depot', OWNER)
+    signedInAs(OWNER)
+    renderApp(`/projects/${p.id}`)
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete' }))
+    const dialog = await screen.findByRole('dialog', { name: /Delete “Warehouse”/ })
+    const confirm = within(dialog).getByRole('button', { name: 'Delete project' })
+    expect(confirm).toBeDisabled()
+    await userEvent.type(within(dialog).getByLabelText(/Type the project's name/), 'Wareh')
+    expect(confirm).toBeDisabled()
+    await userEvent.type(within(dialog).getByLabelText(/Type the project's name/), 'ouse')
+    await userEvent.click(confirm)
+
+    expect(await screen.findByRole('heading', { name: 'Projects' })).toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: 'Depot' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Warehouse' })).not.toBeInTheDocument()
+  })
+})
+
 describe('Project page requests', () => {
   it('loads the drawing sets in parallel with the project, not after it', async () => {
     const project = mockProjects.create('Warehouse', OWNER)

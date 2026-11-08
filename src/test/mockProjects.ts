@@ -236,6 +236,19 @@ export const projectHandlers = [
     http.post(`*/api/v1/projects/:id/${action}/`, ({ request, params }) => setArchived(request, params.id as string, action === 'archive')),
   ),
 
+  http.post('*/api/v1/projects/:id/delete/', async ({ request, params }) => {
+    const r = find(request, params.id as string)
+    if (r.error) return r.error
+    const denied = requireCap(r.p, r.user, 'project.archive')
+    if (denied) return denied
+    const { name } = (await request.json()) as { name: string }
+    if (name.trim() !== r.p.name.trim()) {
+      return envelope(400, 'validation_error', 'Some fields are invalid.', { name: ["Type the project's name exactly to delete it."] })
+    }
+    projects = projects.filter((p) => p.id !== r.p.id) // gone from every list (the backend keeps its data)
+    return new HttpResponse(null, { status: 204 })
+  }),
+
   http.get('*/api/v1/projects/:id/members/', ({ request, params }) => {
     const r = find(request, params.id as string)
     return r.error ?? HttpResponse.json(r.p.members.map(serializeMember))
