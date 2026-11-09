@@ -6,6 +6,10 @@ const PATHS = {
   sections: 'M5 4h14M5 20h14M12 4v16', // a steel I-section
   templates: 'M4 6h16v4H4zM4 14h10v4H4zM18 14v4M16 16h4', // stacked plates, one more to add
   operations: 'M3 12h4l3-8 4 16 3-8h4',
+  search: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14M20 20l-4-4',
+  plus: 'M12 5v14M5 12h14',
+  drawing: 'M5 3h10l4 4v14H5zM15 3v4h4M8 12h8M8 16h5', // a sheet with a folded corner
+  chevron: 'M9 6l6 6-6 6',
 } as const
 
 export type IconName = keyof typeof PATHS

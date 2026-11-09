@@ -8,6 +8,7 @@ import { useAuth } from '../../auth/AuthContext'
 import { EmptyState, ErrorState, LoadingState } from '../../components/feedback/States'
 import { Button } from '../../components/ui/Button'
 import { SelectField, TextField } from '../../components/ui/Field'
+import { Icon } from '../../components/ui/Icon'
 import { StatusBadge } from '../../components/ui/StatusBadge'
 import { useDebouncedValue } from '../../lib/useDebouncedValue'
 import { formatTonnes, formatTons } from '../abm/format'
@@ -22,6 +23,30 @@ const STATUS_OPTIONS = [
   { value: 'archived', label: 'Archived' },
   { value: 'all', label: 'All' },
 ]
+
+const RELATIVE = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' })
+const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
+  ['year', 31_557_600],
+  ['month', 2_629_800],
+  ['week', 604_800],
+  ['day', 86_400],
+  ['hour', 3_600],
+  ['minute', 60],
+]
+
+/** "5 minutes ago", "yesterday", "3 weeks ago". */
+function timeAgo(iso: string, now = Date.now()) {
+  const seconds = (new Date(iso).getTime() - now) / 1000
+  const found = UNITS.find(([, size]) => Math.abs(seconds) >= size)
+  return found ? RELATIVE.format(Math.round(seconds / found[1]), found[0]) : 'just now'
+}
+
+/** Client, team and people on the project, whichever are known. */
+function projectMeta(project: { client_name: string; team_name: string; member_count: number }) {
+  const parts = [project.client_name, project.team_name].filter(Boolean)
+  if (project.member_count) parts.push(`${project.member_count} ${project.member_count === 1 ? 'member' : 'members'}`)
+  return parts.join(' · ')
+}
 
 export function ProjectsPage() {
   const { can } = useAuth()
@@ -42,16 +67,22 @@ export function ProjectsPage() {
 
   return (
     <>
-      <div className="page-header">
-        <h1>Projects</h1>
+      <div className="page-header projects-header">
+        <div>
+          <h1>Projects</h1>
+          <p className="projects-header__count muted">
+            {query.data ? `${total} ${total === 1 ? 'project' : 'projects'}` : '\u00a0'}
+          </p>
+        </div>
         {can('projects.create') && (
           <Button variant="primary" onClick={() => setCreating(true)}>
+            <Icon name="plus" size={18} />
             New project
           </Button>
         )}
       </div>
 
-      <div className="filters" role="search" aria-label="Filter projects">
+      <div className="filters projects-filters" role="search" aria-label="Filter projects">
         <TextField
           label="Search"
           type="search"
@@ -96,8 +127,8 @@ export function ProjectsPage() {
 
       {query.data && query.data.results.length > 0 && (
         <>
-          <div className="table-wrap">
-            <table className="table">
+          <div className="table-wrap projects-table-wrap">
+            <table className="table projects-table">
               <caption className="visually-hidden">Projects, {total} total</caption>
               <thead>
                 <tr>
@@ -121,13 +152,17 @@ export function ProjectsPage() {
                           </div>
                         </Link>
                       ) : (
-                        <span className="projects__thumb-empty muted">No drawings</span>
+                        <span className="projects__thumb-empty muted">
+                          <Icon name="drawing" size={22} />
+                          No drawings
+                        </span>
                       )}
                     </td>
-                    <td>
-                      <Link to={`/projects/${project.id}`} className="table__primary-link">
+                    <td className="projects__name">
+                      <Link to={`/projects/${project.id}`} className="table__primary-link projects__link">
                         {project.name}
                       </Link>
+                      {projectMeta(project) && <div className="projects__meta muted">{projectMeta(project)}</div>}
                     </td>
                     <td>
                       <StatusBadge
@@ -145,7 +180,21 @@ export function ProjectsPage() {
                         <span className="muted">—</span>
                       )}
                     </td>
-                    <td>{new Date(project.updated_at).toLocaleString()}</td>
+                    <td className="projects__updated">
+                      <time dateTime={project.updated_at} title={new Date(project.updated_at).toLocaleString()}>
+                        {timeAgo(project.updated_at)}
+                      </time>
+                      <div className="muted">
+                        {new Date(project.updated_at).toLocaleDateString(undefined, {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                        })}
+                      </div>
+                      <span className="projects__chevron" aria-hidden="true">
+                        <Icon name="chevron" size={18} />
+                      </span>
+                    </td>
                   </tr>
                 ))}
               </tbody>
