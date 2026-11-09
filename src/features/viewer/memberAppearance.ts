@@ -61,6 +61,7 @@ export const WARNING_LABELS: Record<string, string> = {
   true_to_size: 'Measured column centre to centre, drawn to size',
   mark_only: 'Known by its mark: enter the section for the mark',
   same_beam: 'Same beam as on another page: counted there',
+  ditto: 'Written "DO": as the member labelled before it',
 }
 
 /** Warnings that explain how (or whether) a length was measured, most important first. */
