@@ -16,6 +16,8 @@ interface AbmTableProps {
   onSort: (ordering: string) => void
   onSelect: (entry: AbmEntry) => void
   onHover: (id: string | null) => void
+  /** Show each entry's file beside its page (a project with more than one PDF). */
+  showFile?: boolean
 }
 
 const SORTABLE: { key: string; label: string; numeric?: boolean }[] = [
@@ -25,7 +27,7 @@ const SORTABLE: { key: string; label: string; numeric?: boolean }[] = [
   { key: 'quantity', label: 'Qty', numeric: true },
 ]
 
-function flags(entry: AbmEntry): string {
+function flags(entry: AbmEntry): string[] {
   const out: string[] = []
   const kind = memberKind(entry)
   if (entry.warnings.includes('unsupported_profile')) out.push(MEMBER_KINDS.unsupported.label)
@@ -38,12 +40,25 @@ function flags(entry: AbmEntry): string {
   } else if (entry.length_mm == null) {
     out.push('No length')
   }
-  return out.join(' · ')
+  return out
 }
 
 /** ABM rows. Selecting a row shows the member on its drawing (and the drawing selects rows). */
-export function AbmTable({ entries, firstNumber, selectedId, hoveredId, ordering, onSort, onSelect, onHover }: AbmTableProps) {
+export function AbmTable({
+  entries,
+  firstNumber,
+  selectedId,
+  hoveredId,
+  ordering,
+  onSort,
+  onSelect,
+  onHover,
+  showFile = false,
+}: AbmTableProps) {
   const rowRefs = useRef(new Map<string, HTMLTableRowElement>())
+  // Studs and camber only when an entry in view has them: most lists have neither.
+  const studs = entries.some((e) => e.studs_text)
+  const camber = entries.some((e) => e.camber_display)
 
   // Selected on the drawing → bring its row into view.
   useEffect(() => {
@@ -79,12 +94,16 @@ export function AbmTable({ entries, firstNumber, selectedId, hoveredId, ordering
             #
           </th>
           {SORTABLE.map((c) => header(c.key, c.label, c.numeric))}
-          <th scope="col" className="num">
-            Studs
-          </th>
-          <th scope="col" className="num">
-            Camber
-          </th>
+          {studs && (
+            <th scope="col" className="num">
+              Studs
+            </th>
+          )}
+          {camber && (
+            <th scope="col" className="num">
+              Camber
+            </th>
+          )}
           <th scope="col" className="num">
             Wt/ft
           </th>
@@ -161,10 +180,12 @@ export function AbmTable({ entries, firstNumber, selectedId, hoveredId, ordering
                 )}
               </td>
               <td className="num">{entry.quantity}</td>
-              <td className="num nowrap" title={entry.studs == null && entry.studs_text ? 'Studs by segment, as printed' : undefined}>
-                {entry.studs_text || <span className="muted">—</span>}
-              </td>
-              <td className="num nowrap">{entry.camber_display || <span className="muted">—</span>}</td>
+              {studs && (
+                <td className="num nowrap" title={entry.studs == null && entry.studs_text ? 'Studs by segment, as printed' : undefined}>
+                  {entry.studs_text || <span className="muted">—</span>}
+                </td>
+              )}
+              {camber && <td className="num nowrap">{entry.camber_display || <span className="muted">—</span>}</td>}
               <td className="num nowrap">
                 {weightPerFoot(entry)?.replace(' lb/ft', '') ?? <span className="muted" aria-label="No weight">—</span>}
               </td>
@@ -172,12 +193,23 @@ export function AbmTable({ entries, firstNumber, selectedId, hoveredId, ordering
                 {lbValue(entry.weight) ?? <span className="muted" aria-label="Not weighed">—</span>}
               </td>
               <td className="nowrap" title={entry.drawing_set.original_filename}>
-                p.{entry.page_number} <span className="muted abm-table__file">{entry.drawing_set.original_filename}</span>
+                p.{entry.page_number}
+                {showFile && <span className="muted abm-table__file">{entry.drawing_set.original_filename}</span>}
               </td>
-              <td className="nowrap">{REVIEW_STATUS[entry.review_status].label}</td>
-              <td className="nowrap">{SOURCE_LABELS[entry.source as AbmSource] ?? entry.source}</td>
-              <td className="num">{Math.round(entry.confidence * 100)}%</td>
-              <td className="abm-table__flags">{flags(entry)}</td>
+              <td className="nowrap">
+                <span className={`status-badge status-badge--${REVIEW_STATUS[entry.review_status].tone} abm-table__status`}>
+                  {REVIEW_STATUS[entry.review_status].label}
+                </span>
+              </td>
+              <td className="nowrap muted">{SOURCE_LABELS[entry.source as AbmSource] ?? entry.source}</td>
+              <td className="num muted">{Math.round(entry.confidence * 100)}%</td>
+              <td className="abm-table__flags">
+                {flags(entry).map((flag) => (
+                  <span key={flag} className="abm-table__flag">
+                    {flag}
+                  </span>
+                ))}
+              </td>
             </tr>
           )
         })}

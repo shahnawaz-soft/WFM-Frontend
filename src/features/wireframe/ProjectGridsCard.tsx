@@ -73,6 +73,31 @@ export function ProjectGridsCard({ projectId, canEdit }: { projectId: string; ca
   })
 
   const rows = grids.data ?? []
+  // The table can be folded away (it runs to dozens of rows); the choice is remembered.
+  const shownKey = `steelo.grids-table-shown.${projectId}`
+  const [shown, setShown] = useState(() => {
+    try {
+      return localStorage.getItem(shownKey) !== '0'
+    } catch {
+      return true
+    }
+  })
+  const toggleShown = () =>
+    setShown((was) => {
+      try {
+        localStorage.setItem(shownKey, was ? '0' : '1')
+      } catch {
+        // storage unavailable: the choice lasts this visit
+      }
+      return !was
+    })
+  const counts = {
+    x: rows.filter((g) => g.direction === 'x').length,
+    y: rows.filter((g) => g.direction === 'y').length,
+    angled: rows.filter((g) => g.direction === 'angled').length,
+    locked: rows.filter((g) => g.locked).length,
+    hidden: rows.filter((g) => g.hidden).length,
+  }
   const conflicts = gridConflicts(rows)
   // Spacing to the previous grid of the same direction, as the table is ordered.
   const spacing = new Map<string, string>()
@@ -158,7 +183,18 @@ export function ProjectGridsCard({ projectId, canEdit }: { projectId: string; ca
         </div>
       )}
       {rows.length > 0 && (
-        <div className="table-wrap">
+        <div className="grids-fold">
+          <p className="grids-fold__summary">
+            <strong>{rows.length} grid lines</strong>: {counts.x} along X, {counts.y} along Y
+            {counts.angled > 0 && `, ${counts.angled} angled`} · {counts.locked} locked · {counts.hidden} hidden
+          </p>
+          <Button aria-expanded={shown} aria-controls="grids-table" onClick={toggleShown}>
+            {shown ? 'Hide table' : 'Show table'} <span aria-hidden="true">{shown ? '▴' : '▾'}</span>
+          </Button>
+        </div>
+      )}
+      {rows.length > 0 && shown && (
+        <div className="table-wrap" id="grids-table">
           <table className="table table--compact">
             <caption className="visually-hidden">The project’s grid lines</caption>
             <thead>

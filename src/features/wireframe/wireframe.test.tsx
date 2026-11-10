@@ -238,6 +238,20 @@ describe('Project grids', () => {
     expect(within(card()).getByRole('button', { name: 'Refresh from the drawings' })).toBeInTheDocument()
   })
 
+  it('folds the grid table away behind a summary, and remembers it', async () => {
+    const { project } = await addedPage()
+    renderApp(`/projects/${project.id}/wireframe`)
+    await screen.findByRole('region', { name: 'Grids' })
+    await userEvent.click(await within(card()).findByRole('button', { name: 'Fill from the drawings' }))
+    await within(card()).findByRole('table', { name: 'The project’s grid lines' })
+    expect(within(card()).getByText('3 grid lines')).toBeInTheDocument()
+    await userEvent.click(within(card()).getByRole('button', { name: 'Hide table' }))
+    expect(within(card()).queryByRole('table', { name: 'The project’s grid lines' })).not.toBeInTheDocument()
+    expect(localStorage.getItem(`steelo.grids-table-shown.${project.id}`)).toBe('0')
+    await userEvent.click(within(card()).getByRole('button', { name: 'Show table' }))
+    expect(within(card()).getByRole('table', { name: 'The project’s grid lines' })).toBeInTheDocument()
+  })
+
   it('corrects, adds, hides and deletes grid lines', async () => {
     const { project } = await addedPage()
     renderApp(`/projects/${project.id}/wireframe`)

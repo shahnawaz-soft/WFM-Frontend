@@ -1,6 +1,6 @@
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useParams, useSearchParams } from 'react-router'
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
 
 import { downloadDraftAbm, getAbmSummary, getAbmTotals, listAbm, listBeamMarks } from '../../api/abm'
 import { getPage } from '../../api/drawings'
@@ -9,7 +9,6 @@ import { getMember } from '../../api/members'
 import { getProject } from '../../api/projects'
 import type { AbmEntry, AbmSummary, AbmTotals, ExtractedMember, PageBatch } from '../../api/types'
 import { ErrorState, LoadingState } from '../../components/feedback/States'
-import { BackLink } from '../../components/ui/BackLink'
 import { Button } from '../../components/ui/Button'
 import { FormAlert, SelectField, TextField } from '../../components/ui/Field'
 import { AbmExport } from '../finalize/AbmExport'
@@ -59,6 +58,9 @@ export function AbmPage() {
   const [focus, setFocus] = useState<FocusRequest | null>(() => (selectedId ? { memberId: selectedId, nonce: 1 } : null))
   const [adding, setAdding] = useState<{ pageId: string; location: [number, number] | null } | null>(null)
   const [placing, setPlacing] = useState(false)
+  const navigate = useNavigate()
+  // Opened from another screen of the app: Back returns there; opened directly, to the project.
+  const cameFromApp = useLocation().key !== 'default'
 
   const project = useQuery({ queryKey: ['project', projectId], queryFn: () => getProject(projectId) })
   const summary = useQuery({ queryKey: ['abm', projectId, 'summary', draft], queryFn: () => getAbmSummary(projectId, draft) })
@@ -195,29 +197,23 @@ export function AbmPage() {
   return (
     <div className="abm">
       <header className="abm__header">
-        <div>
-          <BackLink to={`/projects/${projectId}`} label="Back to project" />
+        <Link
+          className="button button--secondary abm__back"
+          to={`/projects/${projectId}`}
+          onClick={(event) => {
+            if (!cameFromApp) return
+            event.preventDefault()
+            void navigate(-1)
+          }}
+        >
+          <span aria-hidden="true">←</span> Back
+        </Link>
+        <div className="abm__title">
           <nav aria-label="Breadcrumb" className="breadcrumb">
             <Link to="/projects">Projects</Link> <span aria-hidden="true">/</span>{' '}
             <Link to={`/projects/${projectId}`}>{project.data.name}</Link>
           </nav>
           <h1>ABM</h1>
-          {project.data.status === 'finalized' && (
-            <p className="notice notice--compact" role="status">
-              Finalised and read-only. Reopen the project from its page to make changes.
-            </p>
-          )}
-          <label className="checkbox abm__draft-toggle">
-            <input type="checkbox" checked={draft} onChange={(e) => setDraft(e.target.checked)} /> Show every processed page
-            (draft, before review)
-          </label>
-          {draft && (
-            <p className="notice notice--compact" role="status">
-              Draft ABM: every page that has been run, reviewed or not. It is not a final figure; finalising uses the pages
-              added to the project.
-            </p>
-          )}
-          <SummaryStats summary={summary.data} totals={totals.data} draft={draft} />
         </div>
         <div className="button-row button-row--tight abm__actions">
           {draft && pages.length > 0 && (
@@ -241,22 +237,51 @@ export function AbmPage() {
         </div>
       </header>
 
+      <div className="abm__overview">
+        {project.data.status === 'finalized' && (
+          <p className="notice notice--compact" role="status">
+            Finalised and read-only. Reopen the project from its page to make changes.
+          </p>
+        )}
+        <div className="abm__mode">
+          <label className="abm-switch">
+            <input type="checkbox" checked={draft} onChange={(e) => setDraft(e.target.checked)} />
+            <span className="abm-switch__track" aria-hidden="true" />
+            <span>Show every processed page (draft, before review)</span>
+          </label>
+          {draft && (
+            <p className="abm__mode-hint" role="status">
+              Draft ABM: every page that has been run, reviewed or not. It is not a final figure; finalising uses the pages
+              added to the project.
+            </p>
+          )}
+        </div>
+        <SummaryStats summary={summary.data} totals={totals.data} draft={draft} />
+      </div>
+
       {pages.length === 0 ? (
         <NoPagesYet projectId={projectId} summary={summary.data} />
       ) : (
         <div className="abm__body">
           <section className="abm__list" aria-label={view === 'totals' ? 'Totals' : 'Entries'}>
-            <div className="family-tabs abm__views" role="group" aria-label="Show">
-              <button type="button" aria-pressed={view === 'entries'} onClick={() => setView('entries')}>
-                Entries
-              </button>
-              <button type="button" aria-pressed={view === 'totals'} onClick={() => setView('totals')}>
-                Totals by section
-              </button>
-              {(beamMarks.data?.length ?? 0) > 0 && (
-                <button type="button" aria-pressed={view === 'marks'} onClick={() => setView('marks')}>
-                  Beam marks <span className="family-tabs__count">{beamMarks.data!.length}</span>
+            <div className="abm__toolbar">
+              <div className="family-tabs abm__views" role="group" aria-label="Show">
+                <button type="button" aria-pressed={view === 'entries'} onClick={() => setView('entries')}>
+                  Entries
                 </button>
+                <button type="button" aria-pressed={view === 'totals'} onClick={() => setView('totals')}>
+                  Totals by section
+                </button>
+                {(beamMarks.data?.length ?? 0) > 0 && (
+                  <button type="button" aria-pressed={view === 'marks'} onClick={() => setView('marks')}>
+                    Beam marks <span className="family-tabs__count">{beamMarks.data!.length}</span>
+                  </button>
+                )}
+              </div>
+              {view === 'entries' && entries.isSuccess && (
+                <span className="abm__count" aria-hidden="true">
+                  {count.toLocaleString()} {count === 1 ? 'entry' : 'entries'}
+                </span>
               )}
             </div>
             {view === 'marks' && beamMarks.data ? (
@@ -293,6 +318,7 @@ export function AbmPage() {
                       selectedId={selectedId}
                       hoveredId={hoveredId}
                       ordering={filters.ordering}
+                      showFile={new Set(pages.map((p) => p.drawing_set.id)).size > 1}
                       onSort={(ordering) => update({ ordering })}
                       onSelect={(entry: AbmEntry) => select(entry.id, true)}
                       onHover={setHoveredId}
@@ -402,51 +428,68 @@ function draftWeight(totals: AbmTotals): Amounts {
 }
 
 function SummaryStats({ summary, totals, draft = false }: { summary: AbmSummary; totals?: AbmTotals; draft?: boolean }) {
-  const stats: [string, number][] = [
+  const counts: [string, number][] = [
     ['Entries', summary.entries],
     ['Quantity', summary.quantity],
-    ['Accepted', summary.accepted],
-    ['Awaiting review', summary.open],
-    ['Unsupported', summary.unsupported],
+  ]
+  const review: [string, number, string?][] = [
+    ['Accepted', summary.accepted, 'success'],
+    ['Awaiting review', summary.open, 'warning'],
+    ['Unsupported', summary.unsupported, 'warning'],
     ['Corrected', summary.corrected],
     ['Manual', summary.manual],
     ['Removed', summary.rejected],
   ]
+  const weight = totals ? (draft ? draftWeight(totals) : totals.reviewed.weight) : null
+  const accepted = summary.entries ? Math.round((summary.accepted / summary.entries) * 100) : 0
+  const pages = `${summary.pages.length} ${summary.pages.length === 1 ? 'page' : 'pages'}`
   return (
-    <>
+    <div className="abm-summary">
       <dl className="abm-stats" aria-label="ABM summary">
-        {totals && draft && (
-          <div className="abm-stats__tonnage" title={formatTonnes(draftWeight(totals))}>
-            <dt>Draft tonnage</dt>
+        {weight && totals && (
+          <div className="abm-stats__tonnage" title={formatTonnes(weight)}>
+            <dt>{draft ? 'Draft tonnage' : 'Reviewed tonnage'}</dt>
             <dd>
-              {formatTons(draftWeight(totals))}
-              <span className="abm-stats__flag"> · not reviewed</span>
+              {formatTons(weight)}
+              {draft ? (
+                <span className="abm-stats__flag"> · not reviewed</span>
+              ) : (
+                !totals.complete && <span className="abm-stats__flag"> · not complete</span>
+              )}
             </dd>
           </div>
         )}
-        {totals && !draft && (
-          <div className="abm-stats__tonnage" title={formatTonnes(totals.reviewed.weight)}>
-            <dt>Reviewed tonnage</dt>
-            <dd>
-              {formatTons(totals.reviewed.weight)}
-              {!totals.complete && <span className="abm-stats__flag"> · not complete</span>}
-            </dd>
+        {counts.map(([label, value]) => (
+          <div key={label} className="abm-stats__count">
+            <dt>{label}</dt>
+            <dd>{value.toLocaleString()}</dd>
           </div>
-        )}
-        {stats.map(([label, value]) => (
-          <div key={label} data-attention={(label === 'Awaiting review' || label === 'Unsupported') && value > 0 ? true : undefined}>
+        ))}
+        {review.map(([label, value, tone]) => (
+          <div
+            key={label}
+            className="abm-stats__review"
+            data-tone={value > 0 ? tone : undefined}
+            data-zero={value === 0 || undefined}
+            data-attention={(label === 'Awaiting review' || label === 'Unsupported') && value > 0 ? true : undefined}
+          >
             <dt>{label}</dt>
             <dd>{value.toLocaleString()}</dd>
           </div>
         ))}
       </dl>
-      <p className="muted abm__note">
-        From {summary.pages.length} {summary.pages.length === 1 ? 'page' : 'pages'} added to the project. Tonnage counts
-        accepted entries only; see Totals by section for what is not final yet.
-        {summary.pages_reviewed > 0 &&
-          ` ${summary.pages_reviewed} reviewed ${summary.pages_reviewed === 1 ? 'page is' : 'pages are'} not added yet.`}
-      </p>
-    </>
+      <div className="abm-progress">
+        <div className="abm-progress__bar" aria-hidden="true">
+          <span style={{ width: `${accepted}%` }} />
+        </div>
+        <p className="muted abm__note">
+          <strong>{accepted}% accepted</strong> · from {pages} added to the project. Tonnage counts accepted entries only;
+          see Totals by section for what is not final yet.
+          {summary.pages_reviewed > 0 &&
+            ` ${summary.pages_reviewed} reviewed ${summary.pages_reviewed === 1 ? 'page is' : 'pages are'} not added yet.`}
+        </p>
+      </div>
+    </div>
   )
 }
 
@@ -529,15 +572,25 @@ function Filters({
         )}
         <SelectField label="Status" value={filters.status} onChange={(e) => onChange({ status: e.target.value })} options={STATUS_OPTIONS} />
         <SelectField label="Values" value={filters.source} onChange={(e) => onChange({ source: e.target.value })} options={SOURCE_OPTIONS} />
+      </div>
+      <div className="abm-filters__bar">
         <label
-          className="checkbox"
+          className="abm-filters__toggle"
           title="Entries to look at before sending the ABM: no length, a length flagged as doubtful, or a column without its section"
         >
           <input type="checkbox" checked={filters.to_check} onChange={(e) => onChange({ to_check: e.target.checked })} /> To check
         </label>
+        {filters.designation && (
+          <p className="abm-filters__chip">
+            Section <strong>{filters.designation}</strong>{' '}
+            <Button aria-label={`Stop showing only ${filters.designation}`} onClick={() => onChange({ designation: '' })}>
+              ×
+            </Button>
+          </p>
+        )}
         <div className="abm-filters__buttons">
           <Button aria-expanded={more} aria-controls="abm-more-filters" onClick={() => setMore((m) => !m)}>
-            More filters
+            More filters <span aria-hidden="true">{more ? '▴' : '▾'}</span>
           </Button>
           {active > 0 && (
             <Button
@@ -551,17 +604,9 @@ function Filters({
           )}
         </div>
       </div>
-      {filters.designation && (
-        <p className="abm-filters__chip">
-          Section <strong>{filters.designation}</strong>{' '}
-          <Button aria-label={`Stop showing only ${filters.designation}`} onClick={() => onChange({ designation: '' })}>
-            ×
-          </Button>
-        </p>
-      )}
       {more && (
         <div
-          className="abm-filters__row"
+          className="abm-filters__row abm-filters__more"
           id="abm-more-filters"
           // Typed fields apply on blur; remount them when the filters are cleared elsewhere.
           key={[filters.length_min, filters.length_max, filters.quantity_min, filters.quantity_max].join('|')}
