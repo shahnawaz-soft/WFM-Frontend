@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type PointerEvent, type ReactNode, type WheelEvent } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react'
 
 import type { ColumnSymbol, DimensionLine, ExtractedMember, GridLine } from '../../api/types'
 import { ErrorState, LoadingState } from '../../components/feedback/States'
@@ -15,6 +15,13 @@ const MAX_ZOOM = ZOOM_STEPS[ZOOM_STEPS.length - 1]!
 /** Zoom used when jumping to a member if the drawing is shown smaller than this. */
 const FOCUS_ZOOM = 1.5
 const DRAG_THRESHOLD = 4 // px of movement before a press counts as panning, not clicking
+/** Wheel movement (px) per zoom step: one notch of a mouse wheel; a touchpad's small moves add up. */
+const WHEEL_STEP = 50
+
+function nextZoom(z: number, direction: 1 | -1) {
+  const candidates = direction === 1 ? ZOOM_STEPS.filter((s) => s > z + 0.001) : ZOOM_STEPS.filter((s) => s < z - 0.001)
+  return direction === 1 ? (candidates[0] ?? MAX_ZOOM) : (candidates[candidates.length - 1] ?? MIN_ZOOM)
+}
 
 type Fit = 'width' | 'page' | null
 
@@ -172,17 +179,56 @@ export function DrawingStage(props: DrawingStageProps) {
 
   const step = (direction: 1 | -1) => {
     setFit(null)
-    setZoom((z) => {
-      const candidates = direction === 1 ? ZOOM_STEPS.filter((s) => s > z + 0.001) : ZOOM_STEPS.filter((s) => s < z - 0.001)
-      return direction === 1 ? (candidates[0] ?? MAX_ZOOM) : (candidates[candidates.length - 1] ?? MIN_ZOOM)
-    })
+    setZoom((z) => nextZoom(z, direction))
   }
 
-  const onWheel = (event: WheelEvent) => {
-    if (!event.ctrlKey && !event.metaKey) return
-    event.preventDefault()
-    step(event.deltaY < 0 ? 1 : -1)
-  }
+  // The mouse wheel zooms about the point under the pointer (Shift + wheel scrolls). A native
+  // listener, because React's wheel listener is passive and cannot stop the page scrolling.
+  const zoomNow = useRef(zoom)
+  const wheelSum = useRef(0)
+  // The drawing point (at zoom 1) to keep under the pointer, and where the pointer is in the box.
+  const anchor = useRef<{ x: number; y: number; px: number; py: number } | null>(null)
+  useEffect(() => {
+    const box = scrollRef.current
+    if (!box) return
+    const onWheel = (event: globalThis.WheelEvent) => {
+      if (event.shiftKey) return
+      event.preventDefault()
+      const lines = event.deltaMode === 1 ? 40 : event.deltaMode === 2 ? box.clientHeight : 1
+      wheelSum.current += event.deltaY * lines
+      if (Math.abs(wheelSum.current) < WHEEL_STEP || anchor.current) return
+      const direction = wheelSum.current < 0 ? 1 : -1
+      wheelSum.current = 0
+      const z = zoomNow.current
+      const next = nextZoom(z, direction)
+      if (next === z) return
+      const at = box.getBoundingClientRect()
+      const layer = layerRef.current
+      const px = event.clientX - at.left
+      const py = event.clientY - at.top
+      anchor.current = {
+        x: (box.scrollLeft + px - (layer?.offsetLeft ?? 0)) / z,
+        y: (box.scrollTop + py - (layer?.offsetTop ?? 0)) / z,
+        px,
+        py,
+      }
+      setFit(null)
+      setZoom(next)
+    }
+    box.addEventListener('wheel', onWheel, { passive: false })
+    return () => box.removeEventListener('wheel', onWheel)
+  }, [])
+
+  useLayoutEffect(() => {
+    zoomNow.current = zoom
+    const a = anchor.current
+    anchor.current = null
+    const box = scrollRef.current
+    const layer = layerRef.current
+    if (!a || !box || !layer) return
+    box.scrollLeft = layer.offsetLeft + a.x * zoom - a.px
+    box.scrollTop = layer.offsetTop + a.y * zoom - a.py
+  }, [zoom])
 
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (event.pointerType !== 'mouse' || event.button !== 0 || !scrollRef.current) return
@@ -274,8 +320,8 @@ export function DrawingStage(props: DrawingStageProps) {
         ref={scrollRef}
         className="viewer__scroll stage__scroll"
         tabIndex={0}
-        aria-label="Drawing area. Use arrow keys or drag to move around; Ctrl and mouse wheel to zoom."
-        onWheel={onWheel}
+        aria-label="Drawing area. Use arrow keys or drag to move around; mouse wheel to zoom, Shift and mouse wheel to scroll."
+        title="Mouse wheel: zoom · Shift + wheel: scroll · drag: move around"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -307,7 +353,7 @@ export function DrawingStage(props: DrawingStageProps) {
           </div>
         )}
         {pdfState.data && (
-          <div ref={layerRef} className="page-layer">
+          <div ref={layerRef} className="page-layer" style={{ width: Math.floor(displayW * zoom), height: Math.floor(displayH * zoom) }}>
             {props.previewUrl && (
               <img
                 className="page-preview"

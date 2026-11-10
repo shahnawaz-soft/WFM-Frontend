@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { beforeAll, describe, expect, it, onTestFinished, vi } from 'vitest'
@@ -189,6 +189,30 @@ describe('Page workspace', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Zoom out' }))
     await userEvent.click(screen.getByRole('button', { name: 'Zoom out' }))
     await waitFor(() => expect(screen.getByRole('img', { name: /Drawing/ })).toHaveAttribute('data-zoom', '0.75'))
+  })
+
+  it('zooms with the mouse wheel, and scrolls with Shift and the wheel', async () => {
+    await openViewer()
+    await userEvent.click(await screen.findByRole('button', { name: '100%' }))
+    const area = screen.getByLabelText(/^Drawing area/)
+    const drawing = () => screen.getByRole('img', { name: /Drawing/ })
+
+    expect(fireEvent.wheel(area, { deltaY: -100 })).toBe(false) // the page itself does not scroll
+    await waitFor(() => expect(drawing()).toHaveAttribute('data-zoom', '1.25'))
+    fireEvent.wheel(area, { deltaY: 100 })
+    await waitFor(() => expect(drawing()).toHaveAttribute('data-zoom', '1'))
+    fireEvent.wheel(area, { deltaY: 100 })
+    await waitFor(() => expect(drawing()).toHaveAttribute('data-zoom', '0.75'))
+
+    // A touchpad sends many small movements: they add up to one step.
+    fireEvent.wheel(area, { deltaY: -20 })
+    fireEvent.wheel(area, { deltaY: -20 })
+    expect(drawing()).toHaveAttribute('data-zoom', '0.75')
+    fireEvent.wheel(area, { deltaY: -20 })
+    await waitFor(() => expect(drawing()).toHaveAttribute('data-zoom', '1'))
+
+    expect(fireEvent.wheel(area, { deltaY: 100, shiftKey: true })).toBe(true)
+    expect(drawing()).toHaveAttribute('data-zoom', '1')
   })
 
   it('says why pages cannot be run when the project is finalised', async () => {
