@@ -44,7 +44,7 @@ beforeEach(() => {
 describe('Drawing upload', () => {
   it('explains supported files and limits before upload', async () => {
     await openProject()
-    expect(await screen.findByText(/up to 200 MB · up to 300 pages per set/)).toBeInTheDocument()
+    expect(await screen.findByText(/up to 250 MB · up to 500 pages per set/)).toBeInTheDocument()
     expect(screen.getByText('Password-protected PDFs cannot be processed.')).toBeInTheDocument()
     expect(screen.getByText('No drawings yet')).toBeInTheDocument()
   })

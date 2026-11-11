@@ -571,8 +571,8 @@ function checkFor(projectId: string) {
 
 const LIMITS = {
   allowed_extensions: ['pdf'],
-  max_upload_mb: 200,
-  max_pages: 300,
+  max_upload_mb: 250,
+  max_pages: 500,
   notes: ['Password-protected PDFs cannot be processed.'],
 }
 
