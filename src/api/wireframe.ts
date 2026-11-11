@@ -6,6 +6,7 @@ import type {
   GridFillResult,
   GridImportResult,
   LevelProposals,
+  PageTekla,
   ProjectGrid,
   SchedulerColumns,
   Wireframe,
@@ -186,5 +187,11 @@ export async function importProjectGrids(projectId: string, file: File, apply: b
   form.append('file', file)
   form.append('apply', apply ? 'true' : 'false')
   const { data } = await apiClient.post<GridImportResult>(`/api/v1/projects/${projectId}/grids/import/`, form)
+  return data
+}
+
+/** A plan page's members for Tekla: the old Wireframer's CSVs and the Tekla macro's payload. */
+export async function getPageTekla(pageId: string): Promise<PageTekla> {
+  const { data } = await apiClient.get<PageTekla>(`/api/v1/drawing-pages/${pageId}/tekla/`)
   return data
 }

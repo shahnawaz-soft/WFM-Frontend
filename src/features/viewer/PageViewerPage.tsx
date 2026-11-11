@@ -37,6 +37,7 @@ import { columnBreakdown } from './columnSymbols'
 import { nearestGridPoint } from './grids'
 import { memberKind, MEMBER_KINDS, type MemberKind } from './memberAppearance'
 import { PageAreaControls, type AreaBox } from './PageAreaControls'
+import { TeklaExport } from './TeklaExport'
 import { PageStrip } from './PageStrip'
 import { FlagsPanel } from './panels/FlagsPanel'
 import { LevelPanel } from './panels/LevelPanel'
@@ -750,6 +751,7 @@ export function PageViewerPage() {
                   Remove in box
                 </Button>
               )}
+              {current.current_run && kindGroup(current) === 'plan' && <TeklaExport pageId={current.id} />}
               {lastBoxRemoved?.pageId === pageId && canRun && (
                 <Button loading={undoBoxRemoval.isPending} onClick={() => undoBoxRemoval.mutate(lastBoxRemoved.removed)}>
                   Undo box remove

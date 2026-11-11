@@ -131,6 +131,7 @@ export type SchedulerLevel = Schemas['ColumnLevel']
 export type ColumnChanges = Schemas['ColumnChangesRequest']
 export type ApplyToAbmResult = Schemas['ApplyToAbmResult']
 export type WireframeSetup = Schemas['WireframeSetup']
+export type PageTekla = Schemas['PageTekla']
 
 export type FinalizeCheck = Schemas['FinalizeCheck']
 export type OutputVersion = Schemas['OutputVersion']

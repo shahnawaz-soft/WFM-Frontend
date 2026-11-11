@@ -508,6 +508,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/drawing-pages/{id}/tekla/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description A plan page's members for Tekla: the old Wireframer's beams and columns CSV, and the
+         *     payload of its Tekla macro (the browser sends it to the macro on the detailer's PC).
+         */
+        get: operations["drawing_pages_tekla_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/drawing-pages/{id}/thumbnail/": {
         parameters: {
             query?: never;
@@ -3240,6 +3260,18 @@ export interface components {
          * @enum {string}
          */
         PageStatusEnum: "pending" | "processing" | "processed" | "reviewed" | "added" | "failed";
+        PageTekla: {
+            /** @description For the file names: <set>_p<page> */
+            file_stem: string;
+            /** @description The old Wireframer's beams CSV (mm) */
+            beams_csv: string;
+            /** @description The old Wireframer's columns CSV (mm) */
+            columns_csv: string;
+            /** @description The Tekla macro's POST /insert body */
+            payload: unknown;
+            counts: components["schemas"]["TeklaCounts"];
+            skipped: components["schemas"]["TeklaSkipped"][];
+        };
         /**
          * @description * `plan` - plan
          *     * `elevation` - elevation
@@ -4087,6 +4119,17 @@ export interface components {
             entries_created: number;
             /** @description Entries made earlier from symbols in a view beside the plan, taken out */
             entries_withdrawn: number;
+        };
+        TeklaCounts: {
+            beams: number;
+            columns: number;
+            skipped: number;
+        };
+        TeklaSkipped: {
+            id: string;
+            kind: string;
+            designation: string;
+            reasons: string[];
         };
         /**
          * @description * `pending` - Pending
@@ -5543,6 +5586,27 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DrawingPage"];
+                };
+            };
+        };
+    };
+    drawing_pages_tekla_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageTekla"];
                 };
             };
         };
