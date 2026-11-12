@@ -195,3 +195,10 @@ export async function getPageTekla(pageId: string): Promise<PageTekla> {
   const { data } = await apiClient.get<PageTekla>(`/api/v1/drawing-pages/${pageId}/tekla/`)
   return data
 }
+
+/** Every run page's members for Tekla in one beams and one columns CSV (the page Export CSV,
+ *  for the whole project). */
+export async function getProjectTekla(projectId: string): Promise<PageTekla> {
+  const { data } = await apiClient.get<PageTekla>(`/api/v1/projects/${projectId}/tekla/`)
+  return data
+}

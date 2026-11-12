@@ -13,6 +13,23 @@ vi.mock('../../api/abm', async (importOriginal) => ({
   downloadDraftAbm: (...args: unknown[]) => downloadDraftAbm(...(args as [])),
 }))
 
+const tekla = vi.hoisted(() => ({ downloads: [] as string[] }))
+vi.mock('../../api/wireframe', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../api/wireframe')>()),
+  getProjectTekla: async () => ({
+    file_stem: 'Warehouse',
+    beams_csv: 'COMPONENT_ID…',
+    columns_csv: 'COMPONENT_ID…',
+    payload: {},
+    counts: { beams: 2, columns: 1, skipped: 0 },
+    skipped: [],
+  }),
+}))
+vi.mock('../viewer/tekla', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../viewer/tekla')>()),
+  downloadText: (_: string, name: string) => tekla.downloads.push(name),
+}))
+
 const OWNER = 'estimator@steelo.test'
 
 async function openProject() {
@@ -43,5 +60,13 @@ describe('Project page layout', () => {
     const abm = await screen.findByRole('region', { name: 'ABM' })
     await userEvent.click(within(abm).getByRole('button', { name: 'Download ABM' }))
     await waitFor(() => expect(downloadDraftAbm).toHaveBeenCalledWith(project.id, 'Warehouse-ABM.xlsx'))
+  })
+
+  it('exports the whole project as beams and columns CSV beside Download ABM', async () => {
+    tekla.downloads = []
+    await openProject()
+    const abm = await screen.findByRole('region', { name: 'ABM' })
+    await userEvent.click(within(abm).getByRole('button', { name: 'Export CSV' }))
+    await waitFor(() => expect(tekla.downloads).toEqual(['beams_Warehouse.csv', 'columns_Warehouse.csv']))
   })
 })

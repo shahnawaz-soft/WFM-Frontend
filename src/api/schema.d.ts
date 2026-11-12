@@ -1300,6 +1300,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{id}/tekla/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Every run page's beams and columns for Tekla in one CSV each (the page Export CSV, for
+         *     the whole project).
+         */
+        get: operations["projects_tekla_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/wireframe-setup/": {
         parameters: {
             query?: never;
@@ -4130,6 +4150,8 @@ export interface components {
             kind: string;
             designation: string;
             reasons: string[];
+            /** @description Project export: its page */
+            page_number?: number;
         };
         /**
          * @description * `pending` - Pending
@@ -6921,6 +6943,27 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProjectSummary"];
+                };
+            };
+        };
+    };
+    projects_tekla_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageTekla"];
                 };
             };
         };

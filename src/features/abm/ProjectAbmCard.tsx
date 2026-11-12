@@ -2,8 +2,12 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router'
 
 import { downloadDraftAbm, getAbmSummary, getAbmTotals } from '../../api/abm'
+import { toApiError } from '../../api/errors'
 import type { Project } from '../../api/types'
+import { getProjectTekla } from '../../api/wireframe'
+import { notify } from '../../components/feedback/toastStore'
 import { Button } from '../../components/ui/Button'
+import { downloadText, skippedSummary, type TeklaSkipped } from '../viewer/tekla'
 import { formatTonnes, formatTons } from './format'
 
 /** Where the project's ABM stands, with the way in. */
@@ -17,6 +21,23 @@ export function ProjectAbmCard({ project }: { project: Project }) {
     // version's frozen Excel is under Review and finalise.
     mutationFn: () => downloadDraftAbm(project.id, `${project.name.replace(/[^A-Za-z0-9]+/g, '-')}-ABM.xlsx`),
   })
+  const exportCsv = useMutation({
+    // Every run page's beams and columns, one CSV each, as each page's own Export CSV gives them.
+    mutationFn: () => getProjectTekla(project.id),
+    meta: { suppressErrorToast: true },
+    onError: (e) => notify.error('Export failed', toApiError(e).message),
+    onSuccess: (data) => {
+      const left = skippedSummary(data.skipped as TeklaSkipped[])
+      if (data.counts.beams + data.counts.columns === 0) {
+        notify.error('Nothing in the project can be placed yet', left || 'Run the plan pages and set their levels first.')
+        return
+      }
+      if (data.counts.beams) downloadText(data.beams_csv, `beams_${data.file_stem}.csv`)
+      if (data.counts.columns) downloadText(data.columns_csv, `columns_${data.file_stem}.csv`)
+      const n = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`
+      notify.success(`Exported ${n(data.counts.beams, 'beam')} and ${n(data.counts.columns, 'column')}`, left || undefined)
+    },
+  })
   return (
     <section className="card" aria-labelledby="abm-card-heading">
       <div className="card__header">
@@ -27,6 +48,13 @@ export function ProjectAbmCard({ project }: { project: Project }) {
           </Link>
           <Button loading={download.isPending} onClick={() => download.mutate()}>
             Download ABM
+          </Button>
+          <Button
+            loading={exportCsv.isPending}
+            onClick={() => exportCsv.mutate()}
+            title="Download every run page's beams and columns as CSV, in the old Wireframer's format (mm)"
+          >
+            Export CSV
           </Button>
           <Link className="button button--primary" to={`/projects/${project.id}/abm`}>
             Open ABM
