@@ -11,6 +11,13 @@ export interface Toast {
   description?: string
 }
 
+/** How long a notification shows (ms): a short success ("Level saved") just confirms, so it goes
+ * within a second; one with details stays to be read; errors stay until dismissed. */
+export function toastDuration(toast: Toast): number {
+  if (toast.tone === 'error') return Infinity
+  return toast.tone === 'success' && !toast.description ? 1000 : 4000
+}
+
 type Listener = () => void
 
 let toasts: readonly Toast[] = []
@@ -31,7 +38,11 @@ export const toastStore = {
   },
   show(toast: Omit<Toast, 'id'>): number {
     const id = nextId++
-    toasts = [...toasts, { ...toast, id }].slice(-5)
+    // The same message again replaces the one showing (saving twice shows one "Level saved").
+    const others = toasts.filter(
+      (t) => !(t.tone === toast.tone && t.title === toast.title && t.description === toast.description),
+    )
+    toasts = [...others, { ...toast, id }].slice(-5)
     emit()
     return id
   },

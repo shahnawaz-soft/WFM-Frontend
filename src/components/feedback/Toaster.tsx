@@ -2,7 +2,7 @@ import * as ToastPrimitive from '@radix-ui/react-toast'
 import { useSyncExternalStore } from 'react'
 
 import { StatusIcon } from '../ui/StatusIcon'
-import { toastStore, type ToastTone } from './toastStore'
+import { toastDuration, toastStore, type ToastTone } from './toastStore'
 
 const TONE_LABEL: Record<ToastTone, string> = {
   success: 'Success',
@@ -21,7 +21,7 @@ export function Toaster() {
           key={toast.id}
           className={`toast toast--${toast.tone}`}
           type={toast.tone === 'error' ? 'foreground' : 'background'}
-          duration={toast.tone === 'error' ? Infinity : 5000}
+          duration={toastDuration(toast)}
           onOpenChange={(open) => {
             if (!open) toastStore.dismiss(toast.id)
           }}

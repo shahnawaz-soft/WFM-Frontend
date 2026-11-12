@@ -7,9 +7,25 @@ import { ApiError } from '../../api/errors'
 import { createTestQueryClient } from '../../test/renderApp'
 import { ErrorBoundary } from './ErrorBoundary'
 import { Toaster } from './Toaster'
-import { notify } from './toastStore'
+import { notify, toastDuration, toastStore } from './toastStore'
 
 describe('Toaster', () => {
+  it('closes a short success at once; details stay to be read; errors stay', () => {
+    expect(toastDuration({ id: 1, tone: 'success', title: 'Level saved' })).toBe(1000)
+    expect(toastDuration({ id: 2, tone: 'success', title: 'Pushed', description: '47 beams' })).toBe(4000)
+    expect(toastDuration({ id: 3, tone: 'info', title: 'Nothing to place' })).toBe(4000)
+    expect(toastDuration({ id: 4, tone: 'error', title: 'Failed' })).toBe(Infinity)
+  })
+
+  it('shows a repeated notification once, not stacked', () => {
+    toastStore.clear()
+    notify.success('Level saved')
+    notify.success('Level saved')
+    notify.success('Level saved')
+    expect(toastStore.getSnapshot().map((t) => t.title)).toEqual(['Level saved'])
+    toastStore.clear()
+  })
+
   it('announces the tone in text and can be dismissed', async () => {
     render(<Toaster />)
     notify.error('Upload failed', 'File is too large.')

@@ -47,6 +47,7 @@ export const WARNING_LABELS: Record<string, string> = {
   locations_not_read: 'Column locations not read',
   in_column_schedule: 'Counted on the column schedule',
   post_label: 'Post: height not on the plan',
+  base_plate_label: 'Column (base plate mark): height not on the plan',
   reference_view: 'Reference view: not counted',
   outside_area: 'Outside the page area: not counted',
   beam_by_leader: 'Label tied to the beam by a leader',
@@ -65,7 +66,7 @@ export const WARNING_LABELS: Record<string, string> = {
 }
 
 /** Warnings that explain how (or whether) a length was measured, most important first. */
-const LENGTH_WARNINGS = ['column_on_below', 'column_joined', 'same_column', 'same_beam', 'in_column_schedule', 'from_column_schedule', 'length_from_legend', 'from_beam_legend', 'measured_on_image', 'true_to_size', 'length_from_levels', 'post_label', 'column_by_leader', 'column_by_mark', 'length_long', 'length_implausible', 'length_not_determined', 'support_not_found', 'member_line_ambiguous', 'scale_unconfirmed']
+const LENGTH_WARNINGS = ['column_on_below', 'column_joined', 'same_column', 'same_beam', 'in_column_schedule', 'from_column_schedule', 'length_from_legend', 'from_beam_legend', 'measured_on_image', 'true_to_size', 'length_from_levels', 'post_label', 'base_plate_label', 'column_by_leader', 'column_by_mark', 'length_long', 'length_implausible', 'length_not_determined', 'support_not_found', 'member_line_ambiguous', 'scale_unconfirmed']
 
 export function lengthNote(member: ExtractedMember): string | null {
   const code = LENGTH_WARNINGS.find((w) => member.warnings.includes(w))
