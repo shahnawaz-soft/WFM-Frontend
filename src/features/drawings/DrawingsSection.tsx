@@ -424,7 +424,7 @@ function runAllMessage(result: SetRunResult): { title: string; description?: str
   if (result.running.length || result.skipped.length) return { title: 'No new pages to run', description }
   return {
     title: 'Every page has already been run',
-    description: 'Use “Run again” on a page to process it again.',
+    description: 'To read every page again (for example after a Steelo update), use “Run all again”.',
   }
 }
 
