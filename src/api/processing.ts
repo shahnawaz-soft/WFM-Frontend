@@ -20,8 +20,11 @@ export interface SetRunResult {
 }
 
 /** Run Plan on every page of a drawing set not run yet (pending or failed pages). */
-export async function runAllPages(drawingSetId: string): Promise<SetRunResult> {
-  const { data } = await apiClient.post<SetRunResult>(`/api/v1/drawing-sets/${drawingSetId}/run-plan/`)
+/** Run every page not run yet; with ``runAgain``, processed pages too (reviewed pages are skipped). */
+export async function runAllPages(drawingSetId: string, runAgain = false): Promise<SetRunResult> {
+  const { data } = await apiClient.post<SetRunResult>(`/api/v1/drawing-sets/${drawingSetId}/run-plan/`, {
+    run_again: runAgain,
+  })
   return data
 }
 

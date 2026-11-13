@@ -103,8 +103,22 @@ describe('Run Plan', () => {
     expect(await screen.findByText('Every page has already been run')).toBeInTheDocument()
   })
 
+  it('runs processed pages again with "Run all again", after asking', async () => {
+    const grid = await projectWithPages(2)
+    await userEvent.click(screen.getByRole('button', { name: 'Run all pages' }))
+    for (const n of [1, 2]) expect(await within(pageCard(grid, n)).findByText(/^\d+ members?$/)).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Run all again' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Run every page again?' })
+    expect(within(dialog).getByText(/already reviewed are left as they are/)).toBeInTheDocument()
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Run all again' }))
+    expect(await screen.findByText('Running 2 pages')).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
   it('does not offer "Run all pages" to viewers', async () => {
     await projectWithPages(2, 'viewer')
     expect(screen.queryByRole('button', { name: 'Run all pages' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Run all again' })).not.toBeInTheDocument()
   })
 })

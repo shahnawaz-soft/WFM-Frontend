@@ -87,9 +87,10 @@ export function DrawingsSection({ project }: { project: Project }) {
   })
   const runnable = sets?.filter((s) => s.status === 'ready') ?? []
 
+  const [confirmRunAgain, setConfirmRunAgain] = useState(false)
   const runAll = useMutation({
-    mutationFn: async () => {
-      const results = await Promise.all(runnable.map((s) => runAllPages(s.id)))
+    mutationFn: async (runAgain: boolean) => {
+      const results = await Promise.all(runnable.map((s) => runAllPages(s.id, runAgain)))
       return results.reduce<SetRunResult>(
         (all, r) => ({
           queued: [...all.queued, ...r.queued],
@@ -100,6 +101,7 @@ export function DrawingsSection({ project }: { project: Project }) {
       )
     },
     onSuccess: (result) => {
+      setConfirmRunAgain(false)
       const { title, description } = runAllMessage(result)
       notify.info(title, description)
       return queryClient.invalidateQueries({ queryKey: ['drawing-set'] })
@@ -128,13 +130,45 @@ export function DrawingsSection({ project }: { project: Project }) {
               </Button>
             )}
             {canEdit && runnable.length > 0 && (
-              <Button variant="primary" loading={runAll.isPending} onClick={() => runAll.mutate()}>
+              <Button
+                loading={runAll.isPending && runAll.variables}
+                disabled={runAll.isPending}
+                onClick={() => setConfirmRunAgain(true)}
+              >
+                Run all again
+              </Button>
+            )}
+            {canEdit && runnable.length > 0 && (
+              <Button
+                variant="primary"
+                loading={runAll.isPending && !runAll.variables}
+                disabled={runAll.isPending}
+                onClick={() => runAll.mutate(false)}
+              >
                 Run all pages
               </Button>
             )}
           </div>
         )}
       </div>
+      <ConfirmDialog
+        open={confirmRunAgain}
+        title="Run every page again?"
+        confirmLabel="Run all again"
+        pending={runAll.isPending}
+        error={runAll.error ? toApiError(runAll.error).message : null}
+        onConfirm={() => runAll.mutate(true)}
+        onCancel={() => {
+          setConfirmRunAgain(false)
+          runAll.reset()
+        }}
+      >
+        <p>
+          Every page is read again with the latest Steelo rules, the project’s scale and pens. Each page’s previous
+          result is kept in its history. Pages people have already reviewed are left as they are: run those again page
+          by page.
+        </p>
+      </ConfirmDialog>
       {selecting && (
         <div className="selection-bar" role="toolbar" aria-label="Selected pages">
           <span>
@@ -367,9 +401,18 @@ function runAllMessage(result: SetRunResult): { title: string; description?: str
   const plural = (n: number) => (n === 1 ? 'page' : 'pages')
   const notes: string[] = []
   if (result.running.length) notes.push(`${result.running.length} ${plural(result.running.length)} already running.`)
-  if (result.skipped.length) {
+  const reviewed = result.skipped.filter((s) => s.reason === 'review_in_progress')
+  const notReady = result.skipped.filter((s) => s.reason !== 'review_in_progress')
+  if (reviewed.length) {
     notes.push(
-      `${result.skipped.length} ${plural(result.skipped.length)} could not be run (${result.skipped
+      `${reviewed.length} reviewed ${plural(reviewed.length)} left as they are (${reviewed
+        .map((s) => s.page)
+        .join(', ')}): use “Run again” on the page.`,
+    )
+  }
+  if (notReady.length) {
+    notes.push(
+      `${notReady.length} ${plural(notReady.length)} could not be run (${notReady
         .map((s) => s.page)
         .join(', ')}): use “Retry failed pages” first.`,
     )

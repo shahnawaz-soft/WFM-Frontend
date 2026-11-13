@@ -1077,22 +1077,29 @@ export const drawingHandlers = [
   }),
 
   // "Run all pages": every page not run yet (pending or failed), through the page route above.
+  // "Run all again" (run_again): processed pages too; reviewed ones are skipped.
   http.post('*/api/v1/drawing-sets/:id/run-plan/', async ({ params, request }) => {
     const s = sets.find((x) => x.set.id === params.id)!
+    const { run_again: again } = (await request.json().catch(() => ({}))) as { run_again?: boolean }
+    const states = again ? ['pending', 'failed', 'processed'] : ['pending', 'failed']
     const result = { queued: [] as number[], running: [] as number[], skipped: [] as { page: number; reason: string }[] }
     for (const page of [...s.pages].sort((a, b) => a.page_number - b.page_number)) {
       if (page.latest_job && ['queued', 'processing'].includes(page.latest_job.status)) {
         result.running.push(page.page_number)
-      } else if (['pending', 'failed'].includes(page.status)) {
+      } else if (states.includes(page.status) && !page.hidden) {
         if (page.thumbnail_status !== 'ready') {
           result.skipped.push({ page: page.page_number, reason: 'page_not_ready' })
           continue
         }
-        await fetch(new URL(`/api/v1/drawing-pages/${page.id}/run-plan/`, request.url), {
+        const response = await fetch(new URL(`/api/v1/drawing-pages/${page.id}/run-plan/`, request.url), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: request.headers.get('Authorization') ?? '' },
           body: '{}',
         })
+        if (response.status === 409) {
+          result.skipped.push({ page: page.page_number, reason: 'review_in_progress' })
+          continue
+        }
         result.queued.push(page.page_number)
       }
     }
