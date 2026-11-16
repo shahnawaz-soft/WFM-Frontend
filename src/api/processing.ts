@@ -178,3 +178,59 @@ export async function getSimilarColumnsJob(jobId: string): Promise<SimilarColumn
   const { data } = await apiClient.get<SimilarColumnsJob>(`/api/v1/similar-columns-jobs/${jobId}/`)
   return data
 }
+
+/** A grid as the "Add grids" dialog gives it (the old Wireframer's): the point clicked on the
+ *  sheet (PDF points), label, orientation, and the reference grid and distance from it. */
+export type PageGridInput = Schemas['PageGridRequest']
+
+/** A grid a person placed on the page, as saved (``DrawingPage.grid_edits``). */
+export interface PageGridRecord {
+  label: string
+  orientation: 'vertical' | 'horizontal' | 'diagonal'
+  x: number
+  y: number
+  slope: number | null
+  real_angle: number | null
+  reference: string
+  distance_text: string
+  distance_in: number | null
+  base: boolean
+  replaces: string | null
+}
+
+export interface PageGridEdits {
+  grids: PageGridRecord[]
+  deleted: string[]
+}
+
+/** Add a grid, edit one (drawn or added) or delete one; the page runs again. */
+export async function changePageGrid(
+  pageId: string,
+  change: { action: 'add' | 'edit' | 'delete'; label?: string; grid?: PageGridInput },
+  options: { discardReview?: boolean } = {},
+): Promise<DrawingPage> {
+  const { data } = await apiClient.post<DrawingPage>(`/api/v1/drawing-pages/${pageId}/grids/`, {
+    ...change,
+    discard_review: options.discardReview ?? false,
+  })
+  return data
+}
+
+/** Put the page's grids back as they were (undo, redo); the page runs again. */
+export async function setPageGridEdits(
+  pageId: string,
+  edits: PageGridEdits,
+  options: { discardReview?: boolean } = {},
+): Promise<DrawingPage> {
+  const { data } = await apiClient.put<DrawingPage>(`/api/v1/drawing-pages/${pageId}/grids/`, {
+    grid_edits: edits,
+    discard_review: options.discardReview ?? false,
+  })
+  return data
+}
+
+/** The page's grid edits as saved ({} on a page without any). */
+export function gridEditsOf(raw: unknown): PageGridEdits {
+  const value = (raw ?? {}) as Partial<PageGridEdits>
+  return { grids: value.grids ?? [], deleted: value.deleted ?? [] }
+}

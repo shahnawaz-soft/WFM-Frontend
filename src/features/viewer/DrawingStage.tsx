@@ -66,6 +66,8 @@ interface DrawingStageProps {
   columns?: ColumnSymbol[] | null
   /** A click on a column's box (a person removing a column found wrongly); none: not clickable. */
   onColumnClick?: (column: ColumnSymbol) => void
+  /** Clicking a grid line edits it (Add grids): its label and the point clicked. */
+  onGridClick?: (label: string, point: [number, number]) => void
   /** Structural grid lines found on the plan, drawn when ``showGrids`` is on. */
   grids?: GridLine[] | null
   /** Reference lines at the ends of dimensions printed from a grid line, drawn with the grids. */
@@ -299,12 +301,6 @@ export function DrawingStage(props: DrawingStageProps) {
           <Button onClick={() => step(1)} disabled={zoom >= MAX_ZOOM} aria-label="Zoom in">
             +
           </Button>
-          <Button aria-pressed={fit === 'width'} onClick={() => setFit('width')}>
-            Fit width
-          </Button>
-          <Button aria-pressed={fit === 'page'} onClick={() => setFit('page')}>
-            Fit page
-          </Button>
           <Button
             aria-pressed={!fit && zoom === 1}
             onClick={() => {
@@ -371,7 +367,12 @@ export function DrawingStage(props: DrawingStageProps) {
               onViewport={onViewport}
             />
             {(gridsShown.length > 0 || dimensionLinesShown.length > 0) && viewport && Math.abs(viewport.scale - zoom) < 0.001 && (
-              <GridOverlay viewport={viewport} grids={gridsShown} dimensionLines={dimensionLinesShown} />
+              <GridOverlay
+                viewport={viewport}
+                grids={gridsShown}
+                dimensionLines={dimensionLinesShown}
+                onGridClick={placing ? undefined : props.onGridClick}
+              />
             )}
             {showLabels && viewport && Math.abs(viewport.scale - zoom) < 0.001 && (
               <MemberOverlay
@@ -495,9 +496,24 @@ function ColumnOverlay({
 /** Grid lines found on the plan, with their labels at each bubble. A line whose extent was
  *  inferred from a short stub is drawn fainter. Reference lines from printed dimensions are
  *  drawn apart, named on hover only (a plan can have twenty: STRU S201). */
-function GridOverlay({ viewport, grids, dimensionLines }: { viewport: PageViewport; grids: GridLine[]; dimensionLines: DimensionLine[] }) {
+function GridOverlay({
+  viewport,
+  grids,
+  dimensionLines,
+  onGridClick,
+}: {
+  viewport: PageViewport
+  grids: GridLine[]
+  dimensionLines: DimensionLine[]
+  onGridClick?: (label: string, point: [number, number]) => void
+}) {
   return (
-    <svg className="grid-overlay" width={viewport.width} height={viewport.height} aria-hidden="true">
+    <svg
+      className={`grid-overlay${onGridClick ? ' grid-overlay--editable' : ''}`}
+      width={viewport.width}
+      height={viewport.height}
+      aria-hidden={onGridClick ? undefined : true}
+    >
       {dimensionLines.map((d) => {
         const [x1, y1] = viewport.convertToViewportPoint(d.x1, d.y1) as [number, number]
         const [x2, y2] = viewport.convertToViewportPoint(d.x2, d.y2) as [number, number]
@@ -514,8 +530,16 @@ function GridOverlay({ viewport, grids, dimensionLines }: { viewport: PageViewpo
         const [x2, y2] = viewport.convertToViewportPoint(g.x2, g.y2) as [number, number]
         const note = g.secondary ? ' (another line is the real grid; no grid points here)' : g.drawn ? '' : ' (only a stub is drawn; position inferred)'
         const title = <title>{`Grid ${g.label}${note}`}</title>
+        const edit = onGridClick
+          ? () => onGridClick(g.label, [(g.x1 + g.x2) / 2, (g.y1 + g.y2) / 2])
+          : undefined
         return (
-          <g key={`${g.label}-${i}`} data-drawn={g.drawn} data-secondary={g.secondary ? 'true' : undefined}>
+          <g
+            key={`${g.label}-${i}`}
+            data-drawn={g.drawn}
+            data-secondary={g.secondary ? 'true' : undefined}
+            data-person={g.person ? 'true' : undefined}
+          >
             {g.arc ? (
               <polyline points={arcPoints(viewport, g.arc)} fill="none">
                 {title}
@@ -524,6 +548,33 @@ function GridOverlay({ viewport, grids, dimensionLines }: { viewport: PageViewpo
               <line x1={x1} y1={y1} x2={x2} y2={y2}>
                 {title}
               </line>
+            )}
+            {g.person && g.bubbles.length === 0 && (
+              <text x={x1} y={y1 - 8}>
+                {g.label}
+              </text>
+            )}
+            {edit && !g.arc && (
+              <line
+                className="grid-overlay__hit"
+                x1={x1}
+                y1={y1}
+                x2={x2}
+                y2={y2}
+                role="button"
+                tabIndex={0}
+                aria-label={`Edit grid ${g.label}`}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  edit()
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    edit()
+                  }
+                }}
+              />
             )}
             {g.bubbles.map(([bx = 0, by = 0, r = 9]) => {
               const [cx, cy] = viewport.convertToViewportPoint(bx, by) as [number, number]

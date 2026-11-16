@@ -305,6 +305,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/drawing-pages/{id}/grids/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * @description Grids a person adds, edits or deletes on the page (the old Wireframer's "Add grids");
+         *     PUT puts them back as they were (undo, redo). The page runs again.
+         */
+        put: operations["drawing_pages_grids_update"];
+        /**
+         * @description Grids a person adds, edits or deletes on the page (the old Wireframer's "Add grids");
+         *     PUT puts them back as they were (undo, redo). The page runs again.
+         */
+        post: operations["drawing_pages_grids_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/drawing-pages/{id}/issues/": {
         parameters: {
             query?: never;
@@ -2536,6 +2560,7 @@ export interface components {
             readonly scale: string;
             /** @description Part of the sheet counted [left, bottom, right, top], PDF points; null = all */
             readonly area: number[] | null;
+            readonly grid_edits: unknown;
             readonly latest_job: components["schemas"]["PageJob"] | null;
             readonly current_run: components["schemas"]["ExtractionRun"] | null;
             readonly level_label: string;
@@ -2575,6 +2600,7 @@ export interface components {
             readonly scale: string;
             /** @description Part of the sheet counted [left, bottom, right, top], PDF points; null = all */
             readonly area: number[] | null;
+            readonly grid_edits: unknown;
             readonly latest_job: components["schemas"]["PageJob"] | null;
             readonly current_run: components["schemas"]["RunListItem"] | null;
             readonly level_label: string;
@@ -2911,11 +2937,16 @@ export interface components {
              * @description Degrees, 0 ≤ angle < 180 (0 = across the sheet)
              */
             angle: number;
-            orientation: components["schemas"]["OrientationEnum"];
+            orientation: components["schemas"]["GridLineOrientationEnum"];
             /** @description False = only a stub at the bubble is drawn; the extent is inferred */
             drawn: boolean;
             /** @description [x, y, radius] of each bubble */
             bubbles: number[][];
+            /**
+             * @description Added or edited by a person on the page
+             * @default false
+             */
+            person: boolean;
             /**
              * @description Another line with this label is the real grid (an offset line, a detail, the key plan): shown, but no grid points
              * @default false
@@ -2924,6 +2955,14 @@ export interface components {
             /** @description A curved grid line: its circle and span (x1…y2 are then its ends) */
             arc?: components["schemas"]["GridArc"] | null;
         };
+        /**
+         * @description * `vertical` - vertical
+         *     * `horizontal` - horizontal
+         *     * `angled` - angled
+         *     * `arc` - arc
+         * @enum {string}
+         */
+        GridLineOrientationEnum: "vertical" | "horizontal" | "angled" | "arc";
         GridPoint: {
             /** @description e.g. "B/3" */
             label: string;
@@ -2932,6 +2971,12 @@ export interface components {
             /** Format: double */
             y: number;
         };
+        /**
+         * @description * `+` - Right / above
+         *     * `-` - Left / below
+         * @enum {string}
+         */
+        GridSideEnum: "+" | "-";
         GridSpacing: {
             grids: string[];
             /** @description As printed */
@@ -3232,14 +3277,6 @@ export interface components {
             previous: string | null;
             results: components["schemas"]["OpsJob"][];
         };
-        /**
-         * @description * `vertical` - vertical
-         *     * `horizontal` - horizontal
-         *     * `angled` - angled
-         *     * `arc` - arc
-         * @enum {string}
-         */
-        OrientationEnum: "vertical" | "horizontal" | "angled" | "arc";
         OutputVersion: {
             /** Format: uuid */
             id: string;
@@ -3273,6 +3310,66 @@ export interface components {
              * @default false
              */
             discard_review: boolean;
+        };
+        /**
+         * @description * `add` - add
+         *     * `edit` - edit
+         *     * `delete` - delete
+         * @enum {string}
+         */
+        PageGridChangeActionEnum: "add" | "edit" | "delete";
+        PageGridChangeRequest: {
+            action: components["schemas"]["PageGridChangeActionEnum"];
+            /** @description The grid edited or deleted */
+            label?: string;
+            grid?: components["schemas"]["PageGridRequest"];
+            /**
+             * @description Confirm running again a page already reviewed
+             * @default false
+             */
+            discard_review: boolean;
+        };
+        PageGridEditsRequest: {
+            /** @description {"grids": [...], "deleted": [...]}, as saved */
+            grid_edits: unknown;
+            /** @default false */
+            discard_review: boolean;
+        };
+        /**
+         * @description * `vertical` - vertical
+         *     * `horizontal` - horizontal
+         *     * `diagonal` - diagonal
+         * @enum {string}
+         */
+        PageGridOrientationEnum: "vertical" | "horizontal" | "diagonal";
+        /** @description A grid as the dialog gives it (the old Wireframer's "Add grids"). */
+        PageGridRequest: {
+            label: string;
+            orientation: components["schemas"]["PageGridOrientationEnum"];
+            /**
+             * Format: double
+             * @description The point clicked on the sheet, PDF points
+             */
+            x: number;
+            /** Format: double */
+            y: number;
+            /**
+             * Format: double
+             * @description Diagonal: rise/run on the sheet (y up)
+             */
+            slope?: number | null;
+            /**
+             * Format: double
+             * @description Diagonal: real-world angle, degrees
+             */
+            real_angle?: number | null;
+            reference?: string;
+            /** @description From the reference: 10' 6" */
+            distance?: string;
+            /** @default + */
+            direction: components["schemas"]["GridSideEnum"];
+            /** @default false */
+            base: boolean;
         };
         /**
          * @description A page's latest job: the job without its run, which the page shows once, as
@@ -3966,6 +4063,11 @@ export interface components {
              * @default
              */
             scale_set_by: components["schemas"]["ScaleSetByEnum"] | components["schemas"]["BlankEnum"];
+            /**
+             * @description A person changed the page's grids since it ran: they show, but columns and member ends follow them when the page runs again
+             * @default false
+             */
+            grids_changed: boolean;
         };
         ScaleCheck: {
             /** @description Printed dimensions whose ends were found */
@@ -5360,6 +5462,56 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SimilarColumnsJob"];
+                };
+            };
+        };
+    };
+    drawing_pages_grids_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PageGridEditsRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DrawingPage"];
+                };
+            };
+        };
+    };
+    drawing_pages_grids_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PageGridChangeRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DrawingPage"];
                 };
             };
         };

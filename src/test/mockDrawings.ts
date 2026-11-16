@@ -102,6 +102,42 @@ function findMember(id: string): { member: MockMember; pageId: string } | null {
   return null
 }
 
+type MockGridEdits = { grids: (Record<string, unknown> & { label: string; orientation: string; x: number; y: number; replaces?: string | null })[]; deleted: string[] }
+const drawnGridsOf = new Map<string, Record<string, unknown>[]>()
+
+function gridEditsOfMock(page: DrawingPage): MockGridEdits {
+  const raw = (page.grid_edits ?? {}) as Partial<MockGridEdits>
+  return { grids: [...(raw.grids ?? [])], deleted: [...(raw.deleted ?? [])] }
+}
+
+function currentGridLabels(page: DrawingPage, edits: MockGridEdits): string[] {
+  const drawn = drawnGridsOf.get(page.id) ?? ((page.current_run?.grids ?? []) as Record<string, unknown>[])
+  const gone = new Set([...edits.deleted, ...edits.grids.map((r) => r.replaces).filter(Boolean)])
+  return [...drawn.map((g) => g.label as string).filter((l) => !gone.has(l)), ...edits.grids.map((r) => r.label)]
+}
+
+/** The page's grids with its edits, shown at once on the current run (as the server does). */
+function applyGridEdits(page: Mutable<DrawingPage>) {
+  const run = page.current_run as unknown as { grids: Record<string, unknown>[]; summary?: Record<string, unknown> } | null
+  if (!run) return
+  run.summary = { ...run.summary, grids_changed: true } // shown at once; columns follow on Run again
+  if (!drawnGridsOf.has(page.id)) drawnGridsOf.set(page.id, run.grids.filter((g) => !g.person))
+  const drawn = drawnGridsOf.get(page.id)!
+  const edits = gridEditsOfMock(page)
+  const gone = new Set([...edits.deleted, ...edits.grids.map((r) => r.replaces).filter(Boolean)])
+  const xs = drawn.flatMap((g) => [g.x1 as number, g.x2 as number])
+  const ys = drawn.flatMap((g) => [g.y1 as number, g.y2 as number])
+  const [l, r, b, t] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)]
+  run.grids = [
+    ...drawn.filter((g) => !gone.has(g.label as string)),
+    ...edits.grids.map((rec) => {
+      const vertical = rec.orientation === 'vertical'
+      const ends = vertical ? { x1: rec.x, y1: b, x2: rec.x, y2: t } : { x1: l, y1: rec.y, x2: r, y2: rec.y }
+      return { label: rec.label, ...ends, angle: vertical ? 90 : 0, orientation: rec.orientation, drawn: true, bubbles: [], person: true }
+    }),
+  ]
+}
+
 function pageById(id: string) {
   return sets.flatMap((s) => s.pages).find((p) => p.id === id) as Mutable<DrawingPage> | undefined
 }
@@ -656,6 +692,7 @@ export const mockDrawings = {
   reset() {
     sets = []
     batches = []
+    drawnGridsOf.clear()
     similarJobs = {}
     connectionLines = []
     connectionTemplates = []
@@ -1237,6 +1274,46 @@ export const drawingHandlers = [
 
   // The part of the sheet to count: members whose label is outside are set aside, as the
   // engine does when the page "runs again".
+  // Add grids (the old Wireframer's): a simplified engine: the drawn grids, less those deleted
+  // or replaced, plus the person's, across the drawn ones' extent.
+  http.post('*/api/v1/drawing-pages/:id/grids/', async ({ params, request }) => {
+    const page = pageById(params.id as string) as Mutable<DrawingPage>
+    const body = (await request.json()) as {
+      action: 'add' | 'edit' | 'delete'
+      label?: string
+      grid?: Record<string, unknown> & { label: string; orientation: string; x: number; y: number; reference?: string; distance?: string; direction?: string }
+    }
+    const edits = gridEditsOfMock(page)
+    const labels = currentGridLabels(page, edits)
+    if (body.action === 'delete') {
+      const own = edits.grids.find((r) => r.label === body.label)
+      if (own) {
+        edits.grids = edits.grids.filter((r) => r !== own)
+        if (own.replaces) edits.deleted.push(own.replaces as string)
+      } else edits.deleted.push(body.label!)
+    } else {
+      const g = body.grid!
+      if (labels.includes(g.label) && g.label !== body.label) {
+        return err(400, 'validation_error', 'Some fields are invalid.', { label: [`Grid labels must be unique: ${g.label} is already used.`] })
+      }
+      const record = { ...g, slope: g.slope ?? null, real_angle: g.real_angle ?? null, reference: g.reference ?? '', distance_text: g.distance ?? '', distance_in: null, base: Boolean(g.base), replaces: null as string | null }
+      if (body.action === 'add') edits.grids.push(record)
+      else {
+        const i = edits.grids.findIndex((r) => r.label === body.label)
+        if (i >= 0) edits.grids[i] = { ...record, replaces: edits.grids[i]!.replaces as string | null }
+        else edits.grids.push({ ...record, replaces: body.label! })
+      }
+    }
+    page.grid_edits = edits
+    applyGridEdits(page)
+    return HttpResponse.json(page)
+  }),
+  http.put('*/api/v1/drawing-pages/:id/grids/', async ({ params, request }) => {
+    const page = pageById(params.id as string) as Mutable<DrawingPage>
+    page.grid_edits = ((await request.json()) as { grid_edits: unknown }).grid_edits
+    applyGridEdits(page)
+    return HttpResponse.json(page)
+  }),
   http.post('*/api/v1/drawing-pages/:id/area/', async ({ params, request }) => {
     const page = pageById(params.id as string) as Mutable<DrawingPage>
     const body = (await request.json()) as { area: [number, number, number, number] | null; discard_review?: boolean }

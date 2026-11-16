@@ -679,7 +679,9 @@ a.button { text-decoration: none; justify-content: center; }
 .page-layer .viewer__canvas:not([data-drawn]) { visibility: hidden; }
 .page-preview { position: absolute; top: 0; left: 0; display: block; background: #fff; box-shadow: 0 2px 10px rgb(0 0 0 / 35%); pointer-events: none; user-select: none; }
 .page-preview__status { position: sticky; top: var(--space-2); left: var(--space-2); z-index: 1; display: inline-block; margin: var(--space-2); padding: var(--space-1) var(--space-3); background: var(--color-surface); border-radius: var(--radius); box-shadow: var(--shadow); font-size: 0.85rem; }
-.member-overlay { position: absolute; inset: 0; overflow: visible; }
+/* Only the label boxes take clicks: the rest of the layer lets them through to the grid lines below. */
+.member-overlay { position: absolute; inset: 0; overflow: visible; pointer-events: none; }
+.member-overlay .member-shape { pointer-events: all; }
 
 .family-tabs { display: inline-flex; border: 1px solid var(--color-primary); border-radius: var(--radius); overflow: hidden; }
 .family-tabs button { font: inherit; font-size: 0.8rem; font-weight: 700; padding: var(--space-1) var(--space-3); background: var(--color-surface); color: var(--color-primary); border: none; border-right: 1px solid var(--color-primary); cursor: pointer; }
@@ -961,6 +963,15 @@ a.button { text-decoration: none; justify-content: center; }
 .grid-overlay text { fill: #0e7490; font: 700 12px system-ui, sans-serif; text-anchor: middle; paint-order: stroke; stroke: #fff; stroke-width: 3px; }
 .grid-overlay [data-reference="true"] line { stroke: #b45309; stroke-width: 1; stroke-dasharray: 4 4; pointer-events: stroke; }
 .grid-overlay__key { stroke: #0e7490; stroke-width: 1.5; stroke-dasharray: 6 2 1 2; }
+.grid-overlay [data-person="true"] line, .grid-overlay [data-person="true"] polyline { stroke: #7c3aed; stroke-width: 2; stroke-dasharray: 12 4; }
+.grid-overlay [data-person="true"] text { fill: #7c3aed; }
+.grid-overlay--editable line.grid-overlay__hit { stroke: transparent; stroke-width: 12; stroke-dasharray: none; pointer-events: stroke; cursor: pointer; }
+.grid-overlay--editable line.grid-overlay__hit:hover, .grid-overlay--editable line.grid-overlay__hit:focus { stroke: rgba(124, 58, 237, 0.25); outline: none; }
+.grid-form .pill-group { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin: 0 0 var(--space-3); }
+.pill-group__label { width: 100%; font-weight: 600; font-size: 0.9rem; }
+.pill { padding: var(--space-1) var(--space-3); border: 1px solid var(--color-border); border-radius: 999px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.pill[aria-pressed='true'] { border-color: var(--color-primary); color: var(--color-primary); font-weight: 600; }
+.grid-form .checkbox { margin: 0 0 var(--space-3); }
 .column-overlay { position: absolute; inset: 0; overflow: visible; pointer-events: none; }
 .column-overlay[data-clickable] rect, .column-overlay[data-clickable] circle { pointer-events: all; cursor: pointer; }
 .column-overlay[data-clickable] rect:hover, .column-overlay[data-clickable] circle:hover { fill: rgb(234 88 12 / 30%); }

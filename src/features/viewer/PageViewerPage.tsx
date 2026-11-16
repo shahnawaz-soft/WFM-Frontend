@@ -6,13 +6,18 @@ import { fetchOriginalPdf, getDrawingSet, getPage, listPages } from '../../api/d
 import { toApiError } from '../../api/errors'
 import {
   findSimilarColumns,
+  gridEditsOf,
+  setPageGridEdits,
   removeColumn,
   removeInBox,
   removeLike,
   undoRemoveInBox,
   type FindSimilarResult,
+  type PageGridEdits,
   type RemovedInBox,
 } from '../../api/processing'
+import { GridDialog } from './GridDialog'
+import { BLANK_GRID_FORM, initialForm, slopeBetween, type GridForm } from './gridForm'
 import { listPageIssues, listPageMembers } from '../../api/members'
 import { getProject } from '../../api/projects'
 import type { ColumnSymbol, DrawingPageListItem } from '../../api/types'
@@ -107,6 +112,16 @@ export function PageViewerPage() {
   const [lastBoxRemoved, setLastBoxRemoved] = useState<{ pageId: string; removed: RemovedInBox } | null>(null)
   // Picking a pen: the next click on the drawing reads the pen of the line there.
   const [pickingPen, setPickingPen] = useState(false)
+  // Add grids (the old Wireframer's): 'point' = the next click opens the grid dialog there;
+  // 'slope' = the next click is the second point of a diagonal's slope.
+  const [gridPick, setGridPick] = useState<'point' | 'slope' | null>(null)
+  const [gridDialog, setGridDialog] = useState<{ point: [number, number]; editing: string | null; form: GridForm } | null>(null)
+  // The page's grids before each change (Undo) and after each undo (Redo): Ctrl+Z / Ctrl+Y.
+  const [gridHistory, setGridHistory] = useState<{ pageId: string; undo: PageGridEdits[]; redo: PageGridEdits[] }>({
+    pageId: '',
+    undo: [],
+    redo: [],
+  })
   const [penPoint, setPenPoint] = useState<[number, number] | null>(null)
   // A column a person is removing (found wrongly), and the last one removed (for Undo).
   const [removingColumn, setRemovingColumn] = useState<ColumnSymbol | null>(null)
@@ -200,6 +215,7 @@ export function PageViewerPage() {
     setDrawingArea(false)
     setPickingPen(false)
     setBoxRemoving(false)
+    setGridPick(null)
   }, [])
   // After Find similar added columns: the pages' columns, their members (new ABM entries) and
   // the set's pages change. The set's PDF does not: invalidating it would download and parse
@@ -270,9 +286,20 @@ export function PageViewerPage() {
   })
   // Every plan of the set: a job the viewer follows (and finds again when the person comes back).
   const setSearch = useSetSimilarSearch(pageId, setId, refreshAfterSimilar)
+  const pageRotation = current?.rotation ?? 0
   const place = useCallback(
     (location: [number, number]) => {
       setPlacing(false)
+      if (gridPick === 'slope') {
+        setGridPick(null)
+        setGridDialog((d) => d && { ...d, form: { ...d.form, group: '', slope: slopeBetween(d.point, location, pageRotation) || d.form.slope } })
+        return
+      }
+      if (gridPick === 'point') {
+        setGridPick(null)
+        setGridDialog({ point: location, editing: null, form: BLANK_GRID_FORM })
+        return
+      }
       if (drawingArea || boxRemoving) {
         setDrawingArea(false) // an area is a box: a plain click draws none
         setBoxRemoving(false)
@@ -302,7 +329,7 @@ export function PageViewerPage() {
       setTab('quantities')
       setPanelOpen(true)
     },
-    [pickingReference, gridPoints, findingSimilar, findSimilar, drawingArea, pickingPen, boxRemoving],
+    [pickingReference, gridPoints, findingSimilar, findSimilar, drawingArea, pickingPen, boxRemoving, gridPick, pageRotation],
   )
 
   // Selecting in the list zooms the drawing to the member; selecting on the drawing opens
@@ -335,6 +362,84 @@ export function PageViewerPage() {
     },
     [selectFromList],
   )
+
+  // Add grids: who may (as for the page's other changes), and its undo / redo.
+  const gridsEditable =
+    projectCan(project.data, 'project.edit') &&
+    (batches.data?.find((b) => b.id === current?.batch)?.can_work ?? true) &&
+    current?.status !== 'reviewed' &&
+    Boolean(detail?.current_run)
+  const pageHistory = useMemo(
+    () => (gridHistory.pageId === pageId ? gridHistory : { pageId, undo: [] as PageGridEdits[], redo: [] as PageGridEdits[] }),
+    [gridHistory, pageId],
+  )
+  const refreshGrids = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: ['drawing-page', pageId] })
+    void queryClient.invalidateQueries({ queryKey: ['drawing-set', setId], predicate: (q) => q.queryKey[2] !== 'pdf' })
+  }, [queryClient, pageId, setId])
+  const gridRestore = useMutation({
+    mutationFn: ({ to }: { to: PageGridEdits; from: PageGridEdits; redo: boolean }) => setPageGridEdits(pageId, to),
+    onSuccess: (_, { from, redo }) => {
+      setGridHistory((h) => {
+        const mine = h.pageId === pageId ? h : { pageId, undo: [], redo: [] }
+        return redo
+          ? { pageId, undo: [...mine.undo, from], redo: mine.redo.slice(0, -1) }
+          : { pageId, undo: mine.undo.slice(0, -1), redo: [...mine.redo, from] }
+      })
+      notify.success(redo ? 'Grid change redone' : 'Grid change undone')
+      refreshGrids()
+    },
+  })
+  const undoGrids = useCallback(
+    (redo: boolean) => {
+      const stack = redo ? pageHistory.redo : pageHistory.undo
+      const to = stack.at(-1)
+      if (!to || !detail || gridRestore.isPending) return
+      gridRestore.mutate({ to, from: gridEditsOf(detail.grid_edits), redo })
+    },
+    [pageHistory, detail, gridRestore],
+  )
+  const startGridPick = useCallback(() => {
+    setAdding(null)
+    setPickingReference(false)
+    setFindingSimilar(false)
+    setDrawingArea(false)
+    setPickingPen(false)
+    setBoxRemoving(false)
+    setGridPick('point')
+    setPlacing(true)
+  }, [])
+  // G: Add grids by click; Ctrl+Z / Ctrl+Y (or Ctrl+Shift+Z): undo / redo a grid change.
+  useEffect(() => {
+    if (!gridsEditable) return
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.isContentEditable) return
+      if (document.querySelector('[role="dialog"]')) return
+      if (event.ctrlKey || event.metaKey) {
+        const key = event.key.toLowerCase()
+        if (key === 'z' && !event.shiftKey) {
+          if (!pageHistory.undo.length) return
+          event.preventDefault()
+          undoGrids(false)
+        } else if ((key === 'z' && event.shiftKey) || key === 'y') {
+          if (!pageHistory.redo.length) return
+          event.preventDefault()
+          undoGrids(true)
+        }
+        return
+      }
+      if (event.key === 'g' || event.key === 'G') startGridPick()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [gridsEditable, pageHistory, undoGrids, startGridPick])
+  const afterGridSaved = (before: PageGridEdits, message: string) => {
+    setGridHistory((h) => ({ pageId, undo: [...(h.pageId === pageId ? h.undo : []), before], redo: [] }))
+    setGridDialog(null)
+    notify.success(message)
+    refreshGrids()
+  }
 
   const error = project.error ?? (page.isPlaceholderData ? null : page.error) ?? drawingSet.error
   if (error) {
@@ -425,6 +530,19 @@ export function PageViewerPage() {
                 }}
               >
                 Older version · run again
+              </button>
+            )}
+            {detail?.current_run?.summary?.grids_changed && (
+              <button
+                type="button"
+                className="status-badge status-badge--warning viewer__outdated"
+                title="The grids show as changed. Columns at grid crossings, member ends and exact positions follow them when the page runs again: run it again once you have finished with the grids."
+                onClick={() => {
+                  setTab('page')
+                  setPanelOpen(true)
+                }}
+              >
+                Grids changed · run again
               </button>
             )}
           </h1>
@@ -604,7 +722,11 @@ export function PageViewerPage() {
           onHover={setHoveredId}
           placing={placing}
           placingHint={
-            pickingPen
+            gridPick === 'point'
+              ? 'Click on the drawing where the grid line is (Esc to stop)'
+              : gridPick === 'slope'
+              ? 'Click a second point on the grid line to give its slope'
+              : pickingPen
               ? 'Click a line on the drawing to see its pen (line width and colour)'
               : boxRemoving
               ? 'Drag a box around the false finds to remove: the columns and members inside it'
@@ -620,6 +742,18 @@ export function PageViewerPage() {
           }
           columns={detailRun?.columns ?? undefined}
           onColumnClick={canRun && !reviewLocked ? setRemovingColumn : undefined}
+          onGridClick={
+            gridsEditable && detail
+              ? (label, point) => {
+                  const record = gridEditsOf(detail.grid_edits).grids.find((r) => r.label === label)
+                  setGridDialog({
+                    point: record ? [record.x, record.y] : point,
+                    editing: label,
+                    form: initialForm(detail, detailRun?.grids ?? [], label),
+                  })
+                }
+              : undefined
+          }
           grids={detailRun?.grids ?? undefined}
           dimensionLines={detailRun?.dimension_lines}
           showGrids={showGrids}
@@ -695,6 +829,25 @@ export function PageViewerPage() {
                   }}
                 >
                   Pens
+                </Button>
+              )}
+              {gridsEditable && (
+                <Button
+                  aria-pressed={gridPick === 'point'}
+                  title="Add grids (G): click on the drawing where the grid line is. Click a grid line to edit or delete it."
+                  onClick={() => (gridPick === 'point' ? cancelPlace() : startGridPick())}
+                >
+                  ⊞ Add grids
+                </Button>
+              )}
+              {gridsEditable && pageHistory.undo.length > 0 && (
+                <Button loading={gridRestore.isPending && !gridRestore.variables?.redo} onClick={() => undoGrids(false)} title="Ctrl+Z">
+                  Undo grid
+                </Button>
+              )}
+              {gridsEditable && pageHistory.redo.length > 0 && (
+                <Button loading={gridRestore.isPending && gridRestore.variables?.redo} onClick={() => undoGrids(true)} title="Ctrl+Y">
+                  Redo grid
                 </Button>
               )}
               {lastRemoved?.pageId === pageId && canRun && (
@@ -939,6 +1092,23 @@ export function PageViewerPage() {
 
       {penPoint && project.data && (
         <PickedPenDialog project={project.data} pageId={pageId} point={penPoint} onClose={() => setPenPoint(null)} />
+      )}
+      {gridDialog && detail && (
+        <GridDialog
+          page={detail}
+          grids={detailRun?.grids ?? []}
+          point={gridDialog.point}
+          editing={gridDialog.editing}
+          form={gridDialog.form}
+          onForm={(form) => setGridDialog((d) => d && { ...d, form })}
+          hidden={gridPick === 'slope'}
+          onPickSlope={() => {
+            setGridPick('slope')
+            setPlacing(true)
+          }}
+          onSaved={afterGridSaved}
+          onClose={() => setGridDialog(null)}
+        />
       )}
 
       {stripOpen && (

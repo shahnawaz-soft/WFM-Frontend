@@ -1,4 +1,4 @@
-import { cleanup, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { beforeAll, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
@@ -315,6 +315,82 @@ describe('Pens', () => {
     await userEvent.click(await within(dialog).findByRole('button', { name: 'Columns are this pen' }))
     expect(await screen.findByText(/Pens saved: 1 page running again/)).toBeInTheDocument()
     expect(mockProjects.all.find((p) => p.id === project.id)!.pens).toEqual({ member: [], grid: [], column: [{ width: 1.08, colour: '#000000' }] })
+  })
+})
+
+describe('Add grids (as the old Wireframer)', () => {
+  it('adds a grid at the point clicked, with its reference and distance, and Undo takes it away', async () => {
+    const { page } = await openProcessedPage()
+    await screen.findByRole('table', { name: /Detected members/ })
+    await userEvent.click(screen.getByRole('button', { name: '⊞ Add grids' }))
+    expect(screen.getByText(/Click on the drawing where the grid line is/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('img', { name: /Drawing/ }))
+    const dialog = await screen.findByRole('dialog', { name: 'Add Grid Line' })
+    await userEvent.type(within(dialog).getByLabelText('Grid Label'), '2')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Vertical' }))
+    await userEvent.selectOptions(within(dialog).getByLabelText('Reference Grid (Vertical)'), '1')
+    await userEvent.type(within(dialog).getByLabelText('Distance from Ref (ft / in)'), "10' 6\"")
+    await userEvent.click(within(dialog).getByRole('button', { name: '- (Left / Below)' }))
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Add Grid' }))
+    expect(await screen.findByText(/Grid “2” added: run the page again when you have finished/)).toBeInTheDocument()
+    // shown at once; the page says its columns follow the grids when it runs again
+    expect(await screen.findByRole('button', { name: 'Grids changed · run again' })).toBeInTheDocument()
+    const [record] = (mockDrawings.sets[0]!.pages[0]!.grid_edits as { grids: Record<string, unknown>[] }).grids
+    expect(record).toMatchObject({ label: '2', orientation: 'vertical', reference: '1', distance: "10' 6\"", direction: '-' })
+    expect(page.id).toBeTruthy()
+    expect(await screen.findByRole('button', { name: 'Edit grid 2' })).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Undo grid' }))
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Edit grid 2' })).not.toBeInTheDocument())
+    expect(screen.getByRole('button', { name: 'Redo grid' })).toBeInTheDocument()
+  })
+
+  it('a click on a grid line edits it; Delete Grid removes it', async () => {
+    await openProcessedPage()
+    await screen.findByRole('table', { name: /Detected members/ })
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit grid A' }))
+    let dialog = await screen.findByRole('dialog', { name: 'Edit Grid Line' })
+    expect(within(dialog).getByLabelText('Grid Label')).toHaveValue('A')
+    expect(within(dialog).getByRole('button', { name: 'Horizontal' })).toHaveAttribute('aria-pressed', 'true')
+    await userEvent.clear(within(dialog).getByLabelText('Grid Label'))
+    await userEvent.type(within(dialog).getByLabelText('Grid Label'), 'B')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save Grid' }))
+    expect(await screen.findByText(/Grid “B” updated/)).toBeInTheDocument()
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit grid B' }))
+    dialog = await screen.findByRole('dialog', { name: 'Edit Grid Line' })
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Delete Grid' }))
+    const confirm = await screen.findByRole('dialog', { name: 'Delete grid “B”?' })
+    await userEvent.click(within(confirm).getByRole('button', { name: 'Delete grid' }))
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Edit grid B' })).not.toBeInTheDocument())
+  })
+
+  it('G starts adding a grid; a diagonal takes its slope from two points picked', async () => {
+    await openProcessedPage()
+    await screen.findByRole('table', { name: /Detected members/ })
+    await userEvent.keyboard('g')
+    await userEvent.click(screen.getByRole('img', { name: /Drawing/ }))
+    let dialog = await screen.findByRole('dialog', { name: 'Add Grid Line' })
+    await userEvent.type(within(dialog).getByLabelText('Grid Label'), 'X1')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Diagonal' }))
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Pick Points for Slope' }))
+    expect(screen.queryByRole('dialog', { name: 'Add Grid Line' })).not.toBeInTheDocument()
+    expect(screen.getByText(/Click a second point on the grid line/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('img', { name: /Drawing/ }), { clientX: 120, clientY: 60 })
+    dialog = await screen.findByRole('dialog', { name: 'Add Grid Line' })
+    expect(within(dialog).getByLabelText('Grid Label')).toHaveValue('X1')
+    expect(within(dialog).getByLabelText(/^Slope/)).not.toHaveValue('')
+  })
+
+  it('a label already on the page is refused', async () => {
+    await openProcessedPage()
+    await screen.findByRole('table', { name: /Detected members/ })
+    await userEvent.click(screen.getByRole('button', { name: '⊞ Add grids' }))
+    await userEvent.click(screen.getByRole('img', { name: /Drawing/ }))
+    const dialog = await screen.findByRole('dialog', { name: 'Add Grid Line' })
+    await userEvent.type(within(dialog).getByLabelText('Grid Label'), '1')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Add Grid' }))
+    expect(await within(dialog).findByText(/Grid labels must be unique/)).toBeInTheDocument()
   })
 })
 
