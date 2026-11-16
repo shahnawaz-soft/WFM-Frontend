@@ -7,7 +7,7 @@ import { downloadOriginal, hidePages, removeDrawingSet, retryDrawingSet } from '
 import { toApiError } from '../../api/errors'
 import { runAllPages, type SetRunResult } from '../../api/processing'
 import { setRevises } from '../../api/revisions'
-import type { DrawingSet, Project } from '../../api/types'
+import type { DrawingSet, PageBatch, Project } from '../../api/types'
 import { EmptyState, ErrorState, LoadingState } from '../../components/feedback/States'
 import { notify } from '../../components/feedback/toastStore'
 import { Button } from '../../components/ui/Button'
@@ -17,7 +17,8 @@ import { SelectField } from '../../components/ui/Field'
 import { StatusBadge } from '../../components/ui/StatusBadge'
 import { projectCan } from '../projects/useProjectPermissions'
 import { PageCard } from './PageCard'
-import { AddToBatchDialog, BatchSections } from './Batches'
+import { useAuth } from '../../auth/AuthContext'
+import { AddToBatchDialog, BatchList } from './Batches'
 import { MoveToMenu } from './MoveToMenu'
 import { KIND_GROUPS, kindGroup, repeatedNumbers, sheetLabel, tabFromParam, type KindGroup } from './sheets'
 import { drawingSetStatus, formatBytes } from './status'
@@ -26,6 +27,8 @@ import { UploadPanel } from './UploadPanel'
 
 export function DrawingsSection({ project }: { project: Project }) {
   const canEdit = projectCan(project, 'project.edit')
+  const isLead = projectCan(project, 'project.review')
+  const { user } = useAuth()
   const queryClient = useQueryClient()
   const query = useQuery(drawingSetsQuery(project.id))
   const sets = query.data
@@ -53,6 +56,9 @@ export function DrawingsSection({ project }: { project: Project }) {
     setSelected(new Set())
   }
   const batches = useQuery(batchesQuery(project.id))
+  // Once a batch is assigned, uploads, batches and project settings are an owner's or reviewer's.
+  const assigned = batches.data?.some((b) => b.assignees.length > 0) ?? false
+  const canManage = canEdit && (isLead || !assigned)
   // Plans, elevations, details …: what the engine classified each run page as, or where a person
   // moved it. Kept in the address, so coming back from page review opens the same tab.
   const [searchParams, setSearchParams] = useSearchParams()
@@ -124,7 +130,7 @@ export function DrawingsSection({ project }: { project: Project }) {
                 Select pages
               </Button>
             )}
-            {canEdit && (
+            {canManage && (
               <Button aria-expanded={uploadOpen} onClick={() => setUploadOpen((o) => !o)}>
                 Upload PDF
               </Button>
@@ -182,9 +188,11 @@ export function DrawingsSection({ project }: { project: Project }) {
               Show selected ({selected.size})
             </Button>
           )}
-          <Button disabled={!selected.size} onClick={() => setBatching(true)}>
-            Add to batch… ({selected.size})
-          </Button>
+          {canManage && (
+            <Button disabled={!selected.size} onClick={() => setBatching(true)}>
+              Add to batch… ({selected.size})
+            </Button>
+          )}
           <MoveToMenu
             projectId={project.id}
             pageIds={[...selected]}
@@ -208,7 +216,7 @@ export function DrawingsSection({ project }: { project: Project }) {
           }}
         />
       )}
-      {canEdit && uploadOpen && <UploadPanel project={project} drawingSets={sets} />}
+      {canManage && uploadOpen && <UploadPanel project={project} drawingSets={sets} />}
       {kindCounts.size > 1 && (
         <div className="kind-filter" role="group" aria-label="Show sheets">
           <Button aria-pressed={kind === 'all'} onClick={() => setKind('all')}>
@@ -241,21 +249,17 @@ export function DrawingsSection({ project }: { project: Project }) {
             ))}
           </ul>
           {batches.data && batches.data.length > 0 && (
-            <BatchSections
-              projectId={project.id}
-              batches={batches.data}
-              sets={sets}
-              canEdit={canEdit}
-              showHidden={showHidden}
-              kind={kind}
-              selection={selecting ? { selected, toggle } : undefined}
-            />
+            <>
+              <BatchList projectId={project.id} batches={batches.data} userId={user?.id} canAssign={isLead} />
+              <h3 className="pages-heading">All pages</h3>
+            </>
           )}
           {sets.map((set) => (
             <PageGrid
               key={set.id}
               drawingSet={set}
               canRun={canEdit}
+              batches={batches.data ?? []}
               showHidden={showHidden}
               kind={kind}
               selection={selecting ? { selected, toggle } : undefined}
@@ -436,12 +440,14 @@ export interface PageSelection {
 function PageGrid({
   drawingSet,
   canRun,
+  batches,
   showHidden,
   kind,
   selection,
 }: {
   drawingSet: DrawingSet
   canRun: boolean
+  batches: PageBatch[]
   showHidden: boolean
   kind: KindGroup
   selection?: PageSelection
@@ -450,11 +456,11 @@ function PageGrid({
 
   if (query.isPending) return <LoadingState label="Loading pages…" />
   if (query.error) return <ErrorState title="Could not load pages" error={query.error} onRetry={() => void query.refetch()} />
-  // Pages in a batch are shown in its section instead.
+  // Every page, those in a batch too (marked with it); a page in a batch assigned to other
+  // engineers is theirs to run and edit.
   const repeated = repeatedNumbers(query.data)
-  const pages = query.data.filter(
-    (p) => !p.batch && (showHidden || !p.hidden) && (kind === 'all' || kindGroup(p) === kind),
-  )
+  const pages = query.data.filter((p) => (showHidden || !p.hidden) && (kind === 'all' || kindGroup(p) === kind))
+  const batchOf = (id: string | null) => batches.find((b) => b.id === id)
   if (!pages.length) return null
   return (
     <ol className="page-grid" aria-label={`Pages of ${drawingSet.original_filename}`}>
@@ -464,10 +470,11 @@ function PageGrid({
           page={page}
           projectId={drawingSet.project}
           setName={drawingSet.original_filename}
-          canRun={canRun}
+          canRun={canRun && (batchOf(page.batch)?.can_work ?? true)}
           selection={selection}
           sheetName={sheetLabel(page, repeated)}
           tab={kind}
+          inBatch={batchOf(page.batch)}
         />
       ))}
     </ol>

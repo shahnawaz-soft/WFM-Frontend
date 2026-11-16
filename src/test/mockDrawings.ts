@@ -17,7 +17,7 @@ interface StoredSet {
 
 let sets: StoredSet[] = []
 /** Batches of pages, per project (pages carry ``batch`` and ``batch_position``). */
-let batches: { id: string; project: string; name: string; position: number }[] = []
+let batches: { id: string; project: string; name: string; position: number; assignees: string[] }[] = []
 /** Set-wide find-similar jobs, by id. */
 let similarJobs: Record<string, Record<string, unknown>> = {}
 let beamMarks: { mark: string; beams: number; length_mm: string; length_display: string; sections: string[]; pages: number[] }[] = []
@@ -578,15 +578,31 @@ const LIMITS = {
 
 function batchList(project: string) {
   const all = sets.filter((s) => s.set.project === project).flatMap((s) => s.pages)
+  const stored = mockProjects.all.find((p) => p.id === project)
+  const me = mockBackend.state.sessionUserId
+  const role = stored?.members.find((m) => m.user.id === me)?.role
+  const lead = role === 'owner' || role === 'reviewer'
   return batches
     .filter((b) => b.project === project)
-    .map((b) => ({
-      ...b,
-      pages: all
-        .filter((p) => p.batch === b.id)
-        .sort((x, y) => x.batch_position - y.batch_position)
-        .map((p) => p.id),
-    }))
+    .map(({ assignees, ...b }) => {
+      const pages = all.filter((p) => p.batch === b.id).sort((x, y) => x.batch_position - y.batch_position)
+      const shown = pages.filter((p) => !p.hidden).map((p) => p.status)
+      return {
+        ...b,
+        pages: pages.map((p) => p.id),
+        assignees: assignees.map((id) => {
+          const u = mockBackend.state.users.find((x) => x.id === id)!
+          return { id: u.id, email: u.email, username: u.username, full_name: u.full_name, is_active: u.is_active }
+        }),
+        can_work: lead || assignees.length === 0 || assignees.includes(me ?? ''),
+        progress: {
+          pages: shown.length,
+          processed: shown.filter((x) => ['processed', 'reviewed', 'added'].includes(x)).length,
+          reviewed: shown.filter((x) => ['reviewed', 'added'].includes(x)).length,
+          added: shown.filter((x) => x === 'added').length,
+        },
+      }
+    })
 }
 
 function counts(s: StoredSet): DrawingSet {
@@ -621,6 +637,22 @@ let sheetKinds: Record<string, string> = {}
 let noProposedElevation = new Set<string>()
 
 export const mockDrawings = {
+  /** The id of a project's batch by name. */
+  batchId(project: string, name: string) {
+    return batches.find((b) => b.project === project && b.name === name)!.id
+  },
+  /** A batch of ``pageIds``, in that order (as arranging them would). */
+  addBatch(project: string, name: string, pageIds: string[]) {
+    const batch = { id: crypto.randomUUID(), project, name, position: batches.length, assignees: [] }
+    batches.push(batch)
+    const all = sets.flatMap((s) => s.pages)
+    pageIds.forEach((id, i) => Object.assign(all.find((p) => p.id === id)!, { batch: batch.id, batch_position: i }))
+    return batch.id
+  },
+  /** Assign a batch to users by email (as an owner would). */
+  assign(batchId: string, emails: string[]) {
+    batches.find((b) => b.id === batchId)!.assignees = emails.map((e) => mockBackend.userByEmail(e).id)
+  },
   reset() {
     sets = []
     batches = []
@@ -1012,9 +1044,9 @@ export const drawingHandlers = [
   http.post('*/api/v1/projects/:id/batches/', async ({ params, request }) => {
     const { name } = (await request.json()) as { name: string }
     const project = params.id as string
-    const batch = { id: crypto.randomUUID(), project, name: name.trim(), position: batches.filter((b) => b.project === project).length }
+    const batch = { id: crypto.randomUUID(), project, name: name.trim(), position: batches.filter((b) => b.project === project).length, assignees: [] }
     batches.push(batch)
-    return HttpResponse.json({ ...batch, pages: [] }, { status: 201 })
+    return HttpResponse.json(batchList(project).find((b) => b.id === batch.id), { status: 201 })
   }),
   http.post('*/api/v1/projects/:id/batches/arrange/', async ({ params, request }) => {
     const { batch, pages } = (await request.json()) as { batch: string | null; pages: string[] }
@@ -1026,6 +1058,18 @@ export const drawingHandlers = [
   http.patch('*/api/v1/batches/:id/', async ({ params, request }) => {
     const batch = batches.find((b) => b.id === params.id)!
     batch.name = ((await request.json()) as { name: string }).name
+    return HttpResponse.json(batchList(batch.project).find((b) => b.id === batch.id))
+  }),
+  http.put('*/api/v1/batches/:id/assignees/', async ({ params, request }) => {
+    const batch = batches.find((b) => b.id === params.id)!
+    batch.assignees = ((await request.json()) as { assignees: string[] }).assignees
+    // someone not in the project yet joins as an editor (an owner's assignment)
+    const project = mockProjects.all.find((p) => p.id === batch.project)!
+    const owner = project.members[0]!.user
+    for (const id of batch.assignees.filter((a) => !project.members.some((m) => m.user.id === a))) {
+      const user = mockBackend.state.users.find((u) => u.id === id)!
+      project.members.push({ id: crypto.randomUUID(), user, role: 'editor', added_by: owner, created_at: new Date().toISOString() })
+    }
     return HttpResponse.json(batchList(batch.project).find((b) => b.id === batch.id))
   }),
   http.delete('*/api/v1/batches/:id/', ({ params }) => {

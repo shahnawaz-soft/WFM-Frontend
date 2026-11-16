@@ -93,13 +93,31 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** @description One batch, with its pages, assignees and progress (anyone who sees the project). */
+        get: operations["batches_retrieve"];
         put?: never;
         post?: never;
         delete: operations["batches_destroy"];
         options?: never;
         head?: never;
         patch: operations["batches_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/batches/{id}/assignees/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description The engineers a batch is assigned to (owners and reviewers set them). */
+        put: operations["batches_assignees_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/connection-material/{id}/": {
@@ -653,7 +671,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Run Plan on every page of a drawing set not run yet (pending or failed pages). */
+        /**
+         * @description Run Plan on every page of a drawing set not run yet (pending or failed pages); with
+         *     ``run_again``, processed pages too (pages people reviewed are skipped).
+         */
         post: operations["drawing_sets_run_plan_create"];
         delete?: never;
         options?: never;
@@ -2040,9 +2061,26 @@ export interface components {
             readonly position: number;
             /** @description Its pages' ids, in the batch's order */
             readonly pages: string[];
+            readonly assignees: components["schemas"]["UserSummary"][];
+            /** @description Whether the current user may work on its pages (assigned, or a lead) */
+            readonly can_work: boolean;
+            /** @description Counts of its pages not hidden */
+            readonly progress: components["schemas"]["BatchProgress"];
+        };
+        BatchAssigneesRequest: {
+            /** @description Empty: assigned to no one */
+            assignees: string[];
         };
         BatchNameRequest: {
             name: string;
+        };
+        BatchProgress: {
+            pages: number;
+            /** @description Run, or further on */
+            processed: number;
+            /** @description Reviewed, or added to the ABM */
+            reviewed: number;
+            added: number;
         };
         /** @enum {unknown} */
         BlankEnum: "";
@@ -4023,6 +4061,13 @@ export interface components {
             running: number[];
             skipped: components["schemas"]["SetRunSkipped"][];
         };
+        SetRunRequestRequest: {
+            /**
+             * @description Also run processed pages again. Pages people reviewed are skipped.
+             * @default false
+             */
+            run_again: boolean;
+        };
         SetRunSkipped: {
             page: number;
             /** @description page_not_ready, page_not_runnable, … */
@@ -4908,6 +4953,27 @@ export interface operations {
             };
         };
     };
+    batches_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Batch"];
+                };
+            };
+        };
+    };
     batches_destroy: {
         parameters: {
             query?: never;
@@ -4940,6 +5006,31 @@ export interface operations {
         requestBody?: {
             content: {
                 "application/json": components["schemas"]["PatchedBatchNameRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Batch"];
+                };
+            };
+        };
+    };
+    batches_assignees_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchAssigneesRequest"];
             };
         };
         responses: {
@@ -5837,7 +5928,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SetRunRequestRequest"];
+            };
+        };
         responses: {
             202: {
                 headers: {

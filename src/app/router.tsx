@@ -29,6 +29,10 @@ export const routes: RouteObject[] = [
             lazy: async () => ({ Component: (await import('../features/viewer/PageViewerPage')).PageViewerPage }),
           },
           {
+            path: 'projects/:projectId/batches/:batchId',
+            lazy: async () => ({ Component: (await import('../features/drawings/BatchPage')).BatchPage }),
+          },
+          {
             path: 'projects/:projectId/abm',
             lazy: async () => ({ Component: (await import('../features/abm/AbmPage')).AbmPage }),
           },

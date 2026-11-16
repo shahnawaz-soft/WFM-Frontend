@@ -98,6 +98,12 @@ export async function renameBatch(batchId: string, name: string): Promise<PageBa
   return data
 }
 
+/** The engineers working on a batch's pages (empty: no one). Owners and reviewers set them. */
+export async function setBatchAssignees(batchId: string, userIds: string[]): Promise<PageBatch> {
+  const { data } = await apiClient.put<PageBatch>(`/api/v1/batches/${batchId}/assignees/`, { assignees: userIds })
+  return data
+}
+
 export async function deleteBatch(batchId: string): Promise<void> {
   await apiClient.delete(`/api/v1/batches/${batchId}/`)
 }

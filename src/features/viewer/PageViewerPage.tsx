@@ -21,6 +21,7 @@ import { notify } from '../../components/feedback/toastStore'
 import { Button } from '../../components/ui/Button'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { StatusBadge } from '../../components/ui/StatusBadge'
+import { batchesQuery } from '../drawings/queries'
 import { isActiveJob, PAGE_STATUS } from '../drawings/status'
 import { groupLabel, kindGroup, tabFromParam } from '../drawings/sheets'
 import { usePagePreview } from './usePagePreview'
@@ -62,6 +63,9 @@ export function PageViewerPage() {
   // ?sheets=plan: opened from that tab of the project page: the strip and Previous / Next go
   // through that tab's pages only (until "Show all pages").
   const sheets = tabFromParam(searchParams.get('sheets'))
+  // ?batch=<id>: opened from a batch's page: the strip and Previous / Next go through that
+  // batch's pages, in its order, and Close goes back to it.
+  const batchParam = searchParams.get('batch')
   const [download, setDownload] = useState<{ loaded: number; total?: number } | null>(null)
 
   // Workspace state: shared by the drawing, the panels and the toolbar.
@@ -114,6 +118,7 @@ export function PageViewerPage() {
   const queryClient = useQueryClient()
 
   const project = useQuery({ queryKey: ['project', projectId], queryFn: () => getProject(projectId) })
+  const batches = useQuery(batchesQuery(projectId))
   const page = useQuery({
     queryKey: ['drawing-page', pageId],
     queryFn: () => getPage(pageId),
@@ -348,9 +353,13 @@ export function PageViewerPage() {
 
   // Hidden pages are left out of review (the open page stays, even if it is hidden), and so are
   // pages of other tabs when it was opened from one.
-  const pages = (siblings.data ?? []).filter(
-    (p) => p.id === pageId || (!p.hidden && (sheets === 'all' || kindGroup(p) === sheets)),
-  )
+  const openedFrom = batchParam ? batches.data?.find((b) => b.id === batchParam) : undefined
+  const pages = openedFrom
+    ? openedFrom.pages.flatMap((id) => (siblings.data ?? []).filter((p) => p.id === id && (p.id === pageId || !p.hidden)))
+    : (siblings.data ?? []).filter((p) => p.id === pageId || (!p.hidden && (sheets === 'all' || kindGroup(p) === sheets)))
+  const backTo = openedFrom
+    ? `/projects/${projectId}/batches/${openedFrom.id}`
+    : `/projects/${projectId}${sheets === 'all' ? '' : `?tab=${sheets}`}`
   const index = pages.findIndex((p) => p.id === pageId)
   const prev = index > 0 ? pages[index - 1] : undefined
   const next = index >= 0 && index < pages.length - 1 ? pages[index + 1] : undefined
@@ -362,10 +371,13 @@ export function PageViewerPage() {
     setPickingReference(false)
     setPickedReference(null)
     setPickedLabel(null)
-    navigate(`/projects/${projectId}/pages/${id}${sheets === 'all' ? '' : `?sheets=${sheets}`}`)
+    const filter = openedFrom ? `?batch=${openedFrom.id}` : sheets === 'all' ? '' : `?sheets=${sheets}`
+    navigate(`/projects/${projectId}/pages/${id}${filter}`)
   }
   const status = PAGE_STATUS[current.status]
-  const canRun = projectCan(project.data, 'project.edit')
+  // A page in a batch assigned to other engineers is theirs to work on (16 Nov 2026).
+  const batch = batches.data?.find((b) => b.id === current.batch)
+  const canRun = projectCan(project.data, 'project.edit') && (batch?.can_work ?? true)
   const finalised = project.data?.status === 'finalized'
   // Pages added to the project stay editable: their members are ABM entries (OD-31).
   const reviewLocked = current.status === 'reviewed'
@@ -392,6 +404,11 @@ export function PageViewerPage() {
             <Link to="/projects">Projects</Link> <span aria-hidden="true">/</span>{' '}
             <Link to={`/projects/${projectId}${sheets === 'all' ? '' : `?tab=${sheets}`}`}>{project.data.name}</Link>{' '}
             <span aria-hidden="true">/</span>{' '}
+            {openedFrom && (
+              <>
+                <Link to={backTo}>{openedFrom.name}</Link> <span aria-hidden="true">/</span>{' '}
+              </>
+            )}
             <span>{drawingSet.data.original_filename}</span>
           </nav>
           <h1 className="viewer__title">
@@ -442,7 +459,7 @@ export function PageViewerPage() {
           <Link className="button button--secondary" to={`/projects/${projectId}/abm`}>
             ABM
           </Link>
-          <Link className="button button--secondary" to={`/projects/${projectId}`} aria-label="Close page review">
+          <Link className="button button--secondary" to={backTo} aria-label="Close page review">
             <span aria-hidden="true">✕</span> Close
           </Link>
         </div>
@@ -926,9 +943,9 @@ export function PageViewerPage() {
 
       {stripOpen && (
         <aside className="workspace__strip">
-          {sheets !== 'all' && (
+          {(openedFrom || sheets !== 'all') && (
             <div className="page-strip__filter" role="group" aria-label="Pages shown">
-              <span>{groupLabel(sheets)} only</span>
+              <span>{openedFrom ? `${openedFrom.name} only` : `${groupLabel(sheets)} only`}</span>
               <button
                 type="button"
                 className="link-button"

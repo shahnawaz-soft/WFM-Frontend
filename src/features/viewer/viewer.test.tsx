@@ -136,6 +136,25 @@ describe('Page workspace', () => {
     expect(await screen.findByRole('heading', { level: 1, name: /^Page 3 of 3/ })).toBeInTheDocument()
   })
 
+  it('opened from a batch, goes through that batch only, in its order, and closes back to it', async () => {
+    const project = mockProjects.create('Warehouse', OWNER)
+    mockBackend.startSession(OWNER)
+    await acceptUpload(project.id, new File(['%PDF-1.7 pages:3'], 'GA.pdf'))
+    const [first, , third] = mockDrawings.sets[0]!.pages
+    const batch = mockDrawings.addBatch(project.id, 'Level 2 framing', [third!.id, first!.id])
+    renderApp(`/projects/${project.id}/pages/${third!.id}?batch=${batch}`)
+    await screen.findByRole('heading', { level: 1, name: /^Page 3 of 3/ })
+    const strip = screen.getByRole('navigation', { name: 'Pages in this drawing set' })
+    await waitFor(() => expect(within(strip).getAllByRole('button')).toHaveLength(2))
+    expect(screen.getByText('Level 2 framing only')).toBeInTheDocument()
+    const back = `/projects/${project.id}/batches/${batch}`
+    expect(screen.getByRole('link', { name: 'Close page review' })).toHaveAttribute('href', back)
+    expect(screen.getByRole('link', { name: 'Level 2 framing' })).toHaveAttribute('href', back)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Next →' }))
+    expect(await screen.findByRole('heading', { level: 1, name: /^Page 1 of 3/ })).toBeInTheDocument()
+  })
+
   it('opened from a tab of the project page, goes through the pages of that tab only', async () => {
     const project = mockProjects.create('Warehouse', OWNER)
     mockBackend.startSession(OWNER)

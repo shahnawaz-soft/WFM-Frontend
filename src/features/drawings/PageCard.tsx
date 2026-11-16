@@ -30,9 +30,13 @@ interface PageCardProps {
   move?: { earlier?: () => void; later?: () => void; pending: boolean }
   /** The project page's tab it is shown under: page review then goes through that tab's pages. */
   tab?: KindGroup
+  /** Shown on its batch's page: page review then goes through the batch's pages only. */
+  batchId?: string
+  /** On the project page, the batch the page is in: shown as a link to the batch's page. */
+  inBatch?: { id: string; name: string }
 }
 
-export function PageCard({ page, projectId, setName, canRun, selection, move, tab = 'all', sheetName = '' }: PageCardProps) {
+export function PageCard({ page, projectId, setName, canRun, selection, move, tab = 'all', sheetName = '', batchId, inBatch }: PageCardProps) {
   const [renaming, setRenaming] = useState(false)
   // A page a person moved shows the tab it is in; otherwise the kind read from it.
   const kind = page.sheet_kind
@@ -56,7 +60,7 @@ export function PageCard({ page, projectId, setName, canRun, selection, move, ta
         </label>
       )}
       <Link
-        to={`/projects/${projectId}/pages/${page.id}${tab === 'all' ? '' : `?sheets=${tab}`}`}
+        to={`/projects/${projectId}/pages/${page.id}${batchId ? `?batch=${batchId}` : tab === 'all' ? '' : `?sheets=${tab}`}`}
         className="page-card__open"
         aria-label={`Open page ${page.page_number} of ${setName}`}
       >
@@ -65,6 +69,11 @@ export function PageCard({ page, projectId, setName, canRun, selection, move, ta
       {sheetName && (
         <p className="page-card__sheet" title={sheetName}>
           {sheetName}
+        </p>
+      )}
+      {inBatch && (
+        <p className="page-card__batch">
+          Batch: <Link to={`/projects/${projectId}/batches/${inBatch.id}`}>{inBatch.name}</Link>
         </p>
       )}
       {renaming && <SheetNameDialog page={page} current={sheetName} onClose={() => setRenaming(false)} />}
