@@ -69,6 +69,16 @@ const tab = (name: string) => screen.getByRole('tab', { name: new RegExp(`^${nam
 const shapes = (container: HTMLElement) => [...container.querySelectorAll<SVGRectElement>('.member-overlay rect')]
 
 /** Process page 1 from the Page tab, then return to Quantities. */
+/** Steps the zoom with the − / + buttons until the drawing is at 100%. */
+async function zoomTo100() {
+  const drawing = await screen.findByRole('img', { name: /Drawing/ })
+  for (let i = 0; i < 20 && drawing.getAttribute('data-zoom') !== '1'; i++) {
+    const below = Number(drawing.getAttribute('data-zoom')) < 1
+    await userEvent.click(screen.getByRole('button', { name: below ? 'Zoom in' : 'Zoom out' }))
+  }
+  expect(drawing).toHaveAttribute('data-zoom', '1')
+}
+
 async function runPlan() {
   await userEvent.click(tab('Page'))
   const panel = screen.getByRole('tabpanel')
@@ -99,13 +109,26 @@ describe('Page workspace', () => {
     await waitFor(() => expect(downloadStarted).toBe(true))
   })
 
+  it('downloads the page alone, never its whole set', async () => {
+    // Staging, 16 Nov 2026: BLDG 12's page 6 waited for the whole 77.9 MB set (0.28 MB alone).
+    const files: string[] = []
+    server.events.on('request:start', ({ request }) => {
+      const path = new URL(request.url).pathname
+      if (path.endsWith('/file/')) files.push(path)
+    })
+    onTestFinished(() => server.events.removeAllListeners())
+    await openViewer()
+    await waitFor(() => expect(files.some((f) => /\/drawing-pages\/[^/]+\/file\/$/.test(f))).toBe(true))
+    expect(files.filter((f) => f.includes('/drawing-sets/'))).toEqual([])
+  })
+
   it("shows the page's picture at once, while the drawing itself loads", async () => {
     // High School's sheets (300,000+ shapes) took the browser seconds to draw (6 Nov 2026).
     let releaseFile = () => {}
     const fileHeld = new Promise<void>((resolve) => (releaseFile = resolve))
     onTestFinished(() => releaseFile())
     server.use(
-      http.get('*/api/v1/drawing-sets/:id/file/', async () => {
+      http.get('*/api/v1/drawing-pages/:id/file/', async () => {
         await fileHeld // then falls through to the default handler
       }),
     )
@@ -186,7 +209,7 @@ describe('Page workspace', () => {
   it('moves between pages with Previous/Next and the page strip, keeping the zoom', async () => {
     await openViewer(1)
     expect(screen.getByRole('button', { name: '← Previous' })).toBeDisabled()
-    await userEvent.click(await screen.findByRole('button', { name: '100%' }))
+    await zoomTo100()
     await userEvent.click(screen.getByRole('button', { name: 'Next →' }))
     expect(screen.queryByText('Opening page…')).not.toBeInTheDocument()
     expect(screen.getByRole('heading', { level: 1, name: /^Page 2 of 3/ })).toBeInTheDocument()
@@ -202,7 +225,7 @@ describe('Page workspace', () => {
 
   it('zooms in and out', async () => {
     await openViewer()
-    await userEvent.click(await screen.findByRole('button', { name: '100%' }))
+    await zoomTo100()
     await userEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
     await waitFor(() => expect(screen.getByRole('img', { name: /Drawing/ })).toHaveAttribute('data-zoom', '1.25'))
     await userEvent.click(screen.getByRole('button', { name: 'Zoom out' }))
@@ -212,7 +235,7 @@ describe('Page workspace', () => {
 
   it('zooms with the mouse wheel, and scrolls with Shift and the wheel', async () => {
     await openViewer()
-    await userEvent.click(await screen.findByRole('button', { name: '100%' }))
+    await zoomTo100()
     const area = screen.getByLabelText(/^Drawing area/)
     const drawing = () => screen.getByRole('img', { name: /Drawing/ })
 

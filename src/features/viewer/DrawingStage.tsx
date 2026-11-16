@@ -35,6 +35,8 @@ interface DrawingStageProps {
   heightPt: number
   rotation: number
   pageNumber: number
+  /** The page's number in the PDF loaded (``pdfState``): 1 for the page's own file. */
+  docPage?: number
   label: string
   pdfState: { data?: Awaited<ReturnType<typeof loadPdf>>; error: Error | null; isPending: boolean; refetch: () => unknown }
   download: { loaded: number; total?: number } | null
@@ -301,15 +303,6 @@ export function DrawingStage(props: DrawingStageProps) {
           <Button onClick={() => step(1)} disabled={zoom >= MAX_ZOOM} aria-label="Zoom in">
             +
           </Button>
-          <Button
-            aria-pressed={!fit && zoom === 1}
-            onClick={() => {
-              setFit(null)
-              setZoom(1)
-            }}
-          >
-            100%
-          </Button>
         </div>
       </div>
       <div
@@ -361,7 +354,7 @@ export function DrawingStage(props: DrawingStageProps) {
             <PdfPageCanvas
               key={pageNumber}
               doc={pdfState.data}
-              pageNumber={pageNumber}
+              pageNumber={props.docPage ?? pageNumber}
               zoom={zoom}
               label={label}
               onViewport={onViewport}

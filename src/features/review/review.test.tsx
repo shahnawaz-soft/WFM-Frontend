@@ -521,7 +521,8 @@ describe('Remove in box', () => {
   })
 })
 
-describe('Find similar', () => {
+// Find similar is hidden for now (SHOW_FIND_SIMILAR in PageViewerPage): un-skip when it returns.
+describe.skip('Find similar', () => {
   beforeEach(() => {
     similarSearchPolling.intervalMs = 20 // the job is polled every 2 s in the app
   })
@@ -561,12 +562,12 @@ describe('Find similar', () => {
   it('refreshes the pages when the job ends, without downloading the drawing again', async () => {
     const count = countRequests()
     await findOnPage()
-    await waitFor(() => expect(count(/\/drawing-sets\/[^/]+\/file\/$/)).toBe(1))
+    await waitFor(() => expect(count(/\/drawing-pages\/[^/]+\/file\/$/)).toBe(1))
     const listsBefore = count(/^GET .*\/drawing-sets\/[^/]+\/pages\/$/)
     await userEvent.click(screen.getByRole('button', { name: 'Also on every plan of this set' }))
     expect(await screen.findByText(/5 columns added on 1 page\./)).toBeInTheDocument()
     await waitFor(() => expect(count(/^GET .*\/drawing-sets\/[^/]+\/pages\/$/)).toBeGreaterThan(listsBefore))
-    expect(count(/\/drawing-sets\/[^/]+\/file\/$/)).toBe(1)
+    expect(count(/\/drawing-pages\/[^/]+\/file\/$/)).toBe(1)
   })
 
   it('follows the search already running on the set instead of failing', async () => {

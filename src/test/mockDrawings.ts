@@ -1022,6 +1022,10 @@ export const drawingHandlers = [
   http.get('*/api/v1/drawing-sets/:id/file/', () =>
     new HttpResponse(new Uint8Array([37, 80, 68, 70]).buffer, { headers: { 'Content-Type': 'application/pdf' } }),
   ),
+  // The page's own one-page PDF, for the page viewer.
+  http.get('*/api/v1/drawing-pages/:id/file/', () =>
+    new HttpResponse(new Uint8Array([37, 80, 68, 70]).buffer, { headers: { 'Content-Type': 'application/pdf' } }),
+  ),
 
   http.get('*/api/v1/drawing-pages/:id/', ({ params }) => {
     const page = sets.flatMap((s) => s.pages).find((p) => p.id === params.id)

@@ -22,9 +22,9 @@ function isClientError(error: unknown): boolean {
  *   (`meta: { suppressErrorToast: true }`).
  * - 4xx responses are never retried; network/5xx errors retry twice.
  */
-/** A PDF.js document (['drawing-set', id, 'pdf']), typed by shape so PDF.js stays out of this chunk. */
+/** A PDF.js document (['page-pdf', id]), typed by shape so PDF.js stays out of this chunk. */
 function isPdfDocument(key: readonly unknown[], data: unknown): data is { destroy: () => Promise<void> } {
-  return key[0] === 'drawing-set' && key[2] === 'pdf' && typeof (data as { destroy?: unknown } | undefined)?.destroy === 'function'
+  return key[0] === 'page-pdf' && typeof (data as { destroy?: unknown } | undefined)?.destroy === 'function'
 }
 
 export function createQueryClient() {

@@ -146,12 +146,12 @@ export async function getPage(pageId: string): Promise<DrawingPage> {
   return data
 }
 
-/** The original PDF bytes (authenticated), for rendering in the page viewer. */
-export async function fetchOriginalPdf(
-  drawingSetId: string,
+/** The page's own one-page PDF (authenticated), for rendering in the page viewer. */
+export async function fetchPagePdf(
+  pageId: string,
   onProgress?: (loaded: number, total: number | undefined) => void,
 ): Promise<ArrayBuffer> {
-  const { data } = await apiClient.get<ArrayBuffer>(`/api/v1/drawing-sets/${drawingSetId}/file/`, {
+  const { data } = await apiClient.get<ArrayBuffer>(`/api/v1/drawing-pages/${pageId}/file/`, {
     responseType: 'arraybuffer',
     timeout: 0,
     onDownloadProgress: (event) => onProgress?.(event.loaded, event.total),

@@ -17,7 +17,7 @@ describe('PDF documents in the cache', () => {
     const client = createQueryClient()
     const doc = { destroy: vi.fn(async () => {}) }
     const observer = new QueryObserver(client, {
-      queryKey: ['drawing-set', 's1', 'pdf'],
+      queryKey: ['page-pdf', 'p1'],
       queryFn: () => doc,
       staleTime: Infinity,
       gcTime: GC_TIME,
@@ -46,7 +46,7 @@ describe('PDF documents in the cache', () => {
     const { client, doc, unsubscribe } = watchPdf()
     await vi.advanceTimersByTimeAsync(0)
     unsubscribe()
-    client.removeQueries({ queryKey: ['drawing-set', 's1'] })
+    client.removeQueries({ queryKey: ['page-pdf', 'p1'] })
     expect(doc.destroy).toHaveBeenCalledTimes(1)
   })
 

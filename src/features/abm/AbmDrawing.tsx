@@ -2,11 +2,11 @@ import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link } from 'react-router'
 
-import { fetchOriginalPdf, getPage } from '../../api/drawings'
+import { getPage } from '../../api/drawings'
 import { listPageMembers } from '../../api/members'
 import { LoadingState } from '../../components/feedback/States'
 import { DrawingStage, type FocusRequest } from '../viewer/DrawingStage'
-import { loadPdf } from '../viewer/pdf'
+import { usePagePdf } from '../viewer/usePagePdf'
 
 interface AbmDrawingProps {
   projectId: string
@@ -29,15 +29,7 @@ export function AbmDrawing(props: AbmDrawingProps) {
   const [download, setDownload] = useState<{ loaded: number; total?: number } | null>(null)
   const [showLabels, setShowLabels] = useState(true)
   const page = useQuery({ queryKey: ['drawing-page', pageId], queryFn: () => getPage(pageId) })
-  const setId = page.data?.drawing_set
-  const pdf = useQuery({
-    queryKey: ['drawing-set', setId, 'pdf'],
-    queryFn: async () => loadPdf(await fetchOriginalPdf(setId!, (loaded, total) => setDownload({ loaded, total }))),
-    enabled: Boolean(setId),
-    staleTime: Infinity,
-    gcTime: 5 * 60_000,
-    retry: false,
-  })
+  const pdf = usePagePdf(pageId, [], (loaded, total) => setDownload({ loaded, total }))
   const runId = page.data?.current_run?.id
   const members = useQuery({
     queryKey: ['drawing-page', pageId, 'members', runId],
@@ -55,6 +47,7 @@ export function AbmDrawing(props: AbmDrawingProps) {
       heightPt={current.height_pt ?? 0}
       rotation={current.rotation}
       pageNumber={current.page_number}
+      docPage={1}
       label={`Drawing: page ${current.page_number} of ${fileName}`}
       pdfState={pdf}
       download={download}

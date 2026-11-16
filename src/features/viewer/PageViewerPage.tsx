@@ -2,7 +2,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 
-import { fetchOriginalPdf, getDrawingSet, getPage, listPages } from '../../api/drawings'
+import { getDrawingSet, getPage, listPages } from '../../api/drawings'
 import { toApiError } from '../../api/errors'
 import {
   findSimilarColumns,
@@ -52,9 +52,13 @@ import { QuantitiesPanel } from './panels/QuantitiesPanel'
 import { ScalePanel } from './panels/ScalePanel'
 import { SetSimilarSearchStatus } from './SetSimilarSearchStatus'
 import { useSetSimilarSearch } from './useSetSimilarSearch'
-import { loadPdf } from './pdf'
+import { usePagePdf } from './usePagePdf'
 import { ModelPanel } from './panels/ModelPanel'
 import { ViewerRail, type ViewerTab } from './ViewerRail'
+
+/** Find similar is hidden for now (16 Nov 2026): its results were not good enough. Set to true to
+ * bring the button back; the code behind it is kept. */
+const SHOW_FIND_SIMILAR = false
 
 const POLL_MS = 2000
 const ALL = 'ALL'
@@ -163,14 +167,10 @@ export function PageViewerPage() {
   useEffect(() => {
     if (stripJob && pageJob && (stripJob.id !== pageJob.id || stripJob.status !== pageJob.status)) void refetchPage()
   }, [stripJob, pageJob, refetchPage])
-  const pdf = useQuery({
-    queryKey: ['drawing-set', setId, 'pdf'],
-    queryFn: async () => loadPdf(await fetchOriginalPdf(setId!, (loaded, total) => setDownload({ loaded, total }))),
-    enabled: Boolean(setId), // in parallel with the page strip: the PDF is the longest request
-    staleTime: Infinity,
-    gcTime: 5 * 60_000,
-    retry: false,
-  })
+  // The page's own PDF, in parallel with the page strip; the pages either side fetched ahead.
+  const pdf = usePagePdf(pageId, at >= 0 ? [strip[at - 1]?.id, strip[at + 1]?.id] : [], (loaded, total) =>
+    setDownload({ loaded, total }),
+  )
 
   // This page's own detail: not the previous page's, kept as placeholder while switching. The
   // only source of overlay and panel data (columns, grids, grid points, summary, scale check,
@@ -712,6 +712,7 @@ export function PageViewerPage() {
           download={download}
           previewUrl={previewUrl}
           pageNumber={current.page_number}
+          docPage={1}
           label={`Drawing: page ${current.page_number} of ${drawingSet.data.original_filename}`}
           members={shown}
           showLabels={showLabels}
@@ -884,7 +885,7 @@ export function PageViewerPage() {
                 proposed={proposedArea}
                 onPropose={setProposedArea}
               />
-              {canRun && current.current_run && (
+              {SHOW_FIND_SIMILAR && canRun && current.current_run && (
                 <Button
                   aria-pressed={findingSimilar}
                   loading={findSimilar.isPending}
