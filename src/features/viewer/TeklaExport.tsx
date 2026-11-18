@@ -18,7 +18,10 @@ export function TeklaExport({ pageId }: { pageId: string }) {
 
   async function load(): Promise<{ data: PageTekla; left: string } | null> {
     const data = await getPageTekla(pageId)
-    const left = skippedSummary(data.skipped as TeklaSkipped[])
+    const skipped = skippedSummary(data.skipped as TeklaSkipped[])
+    // No elevation set: beams still go out, at Z = 0 (their lengths and plan positions hold).
+    const assumed = data.elevation_assumed ? 'No elevation set: exported at elevation 0.' : ''
+    const left = [assumed, skipped].filter(Boolean).join(' ')
     if (data.counts.beams + data.counts.columns === 0) {
       notify.error('Nothing on this page can be placed yet', left || 'No members found on this page.')
       return null

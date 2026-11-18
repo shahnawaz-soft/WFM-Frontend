@@ -268,6 +268,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/drawing-pages/{id}/file/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description The page's own one-page PDF for the page viewer: the page alone, not its whole set
+         *     (``services.page_file``). Same size, box and rotation as in the set.
+         */
+        get: operations["drawing_pages_file_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/drawing-pages/{id}/find-similar-columns/": {
         parameters: {
             query?: never;
@@ -3049,9 +3069,14 @@ export interface components {
          *     * `no_elevation_marked` - no_elevation_marked
          *     * `elevation_alternatives` - elevation_alternatives
          *     * `no_common_grid_point` - no_common_grid_point
+         *     * `aligned_on_other_crossing` - aligned_on_other_crossing
+         *     * `elevation_typed_on_other_page` - elevation_typed_on_other_page
+         *     * `elevation_of_first_floor` - elevation_of_first_floor
+         *     * `elevation_by_level_order` - elevation_by_level_order
+         *     * `views_at_several_levels` - views_at_several_levels
          * @enum {string}
          */
-        IssuesEnum: "no_level_title" | "title_names_two_levels" | "no_elevation_marked" | "elevation_alternatives" | "no_common_grid_point";
+        IssuesEnum: "no_level_title" | "title_names_two_levels" | "no_elevation_marked" | "elevation_alternatives" | "no_common_grid_point" | "aligned_on_other_crossing" | "elevation_typed_on_other_page" | "elevation_of_first_floor" | "elevation_by_level_order" | "views_at_several_levels";
         /**
          * @description * `queued` - Queued
          *     * `processing` - Processing
@@ -3426,6 +3451,8 @@ export interface components {
             payload: unknown;
             counts: components["schemas"]["TeklaCounts"];
             skipped: components["schemas"]["TeklaSkipped"][];
+            /** @description A plan with no elevation set was exported at elevation 0 */
+            elevation_assumed: boolean;
         };
         /**
          * @description * `plan` - plan
@@ -5412,6 +5439,27 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RemoveLikeResult"];
+                };
+            };
+        };
+    };
+    drawing_pages_file_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
                 };
             };
         };
