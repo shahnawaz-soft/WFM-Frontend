@@ -10,6 +10,10 @@ export const PROPOSAL_ISSUES: Record<string, string> = {
   elevation_alternatives: 'Marked with another elevation too: check',
   no_common_grid_point: 'This plan shows no grid crossing the other plans place: pick one by hand',
   aligned_on_other_crossing: "This plan doesn't show the shared crossing: aligned on another one the other plans place",
+  elevation_by_level_order:
+    'Numbered above the marked levels: the named level above them in order (penthouse, roof) is proposed',
+  views_at_several_levels:
+    'Partial plans of several storeys on this sheet: no one level for it (its steel is placed by hand)',
   elevation_typed_on_other_page: 'Elevation typed on another plan of this level',
   elevation_of_first_floor: 'No 1st floor plan: the 1st floor elevation is proposed for the foundation plan',
 }
