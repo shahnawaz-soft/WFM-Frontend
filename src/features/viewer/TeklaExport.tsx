@@ -21,7 +21,9 @@ export function TeklaExport({ pageId }: { pageId: string }) {
     const skipped = skippedSummary(data.skipped as TeklaSkipped[])
     // No elevation set: beams still go out, at Z = 0 (their lengths and plan positions hold).
     const assumed = data.elevation_assumed ? 'No elevation set: exported at elevation 0.' : ''
-    const left = [assumed, skipped].filter(Boolean).join(' ')
+    // No reference point and no grid: placed from the sheet's corner (one page needs no other).
+    const corner = data.reference_assumed ? "No reference point: placed from the sheet's corner." : ''
+    const left = [assumed, corner, skipped].filter(Boolean).join(' ')
     if (data.counts.beams + data.counts.columns === 0) {
       notify.error('Nothing on this page can be placed yet', left || 'No members found on this page.')
       return null

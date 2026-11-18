@@ -31,6 +31,7 @@ beforeEach(() => {
     counts: { beams: 1, columns: 0, skipped: 1 },
     skipped: [{ id: 'x', kind: 'column', designation: '', reasons: [LEVEL] }],
     elevation_assumed: false,
+    reference_assumed: false,
   }
 })
 

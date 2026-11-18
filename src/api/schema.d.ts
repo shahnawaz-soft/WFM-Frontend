@@ -3453,6 +3453,8 @@ export interface components {
             skipped: components["schemas"]["TeklaSkipped"][];
             /** @description A plan with no elevation set was exported at elevation 0 */
             elevation_assumed: boolean;
+            /** @description A plan with no reference point and no grid was placed from the sheet's corner */
+            reference_assumed: boolean;
         };
         /**
          * @description * `plan` - plan
