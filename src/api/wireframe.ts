@@ -3,6 +3,7 @@ import type {
   ApplyToAbmResult,
   ColumnChanges,
   DrawingPage,
+  GridSource,
   GridFillResult,
   GridImportResult,
   LevelProposals,
@@ -77,6 +78,12 @@ export async function addElement(
 
 export async function removeElement(id: string, version: number, reason = ''): Promise<void> {
   await apiClient.delete(`/api/v1/wireframe-elements/${id}/`, { data: { version, reason } })
+}
+
+/** A removed element back as it was: the undo of a removal. */
+export async function restoreElement(id: string, version: number, reason = ''): Promise<WireframeElement> {
+  const { data } = await apiClient.post<WireframeElement>(`/api/v1/wireframe-elements/${id}/restore/`, { version, reason })
+  return data
 }
 
 export async function markWireframeReviewed(wireframeId: string, note = ''): Promise<Wireframe> {
@@ -173,6 +180,12 @@ export async function addProjectGrid(
 
 export async function changeProjectGrid(projectId: string, gridId: string, changes: GridChanges): Promise<ProjectGrid> {
   const { data } = await apiClient.patch<ProjectGrid>(`/api/v1/projects/${projectId}/grids/${gridId}/`, changes)
+  return data
+}
+
+/** Where a grid line's position comes from, plan by plan (the old Wireframer's grid path). */
+export async function getGridSources(projectId: string, gridId: string): Promise<GridSource[]> {
+  const { data } = await apiClient.get<GridSource[]>(`/api/v1/projects/${projectId}/grids/${gridId}/sources/`)
   return data
 }
 

@@ -1047,6 +1047,12 @@ a.button { text-decoration: none; justify-content: center; }
 .point-fields .field { margin: 0; }
 .point-fields .field__control { width: 100%; min-width: 0; }
 .point-fields .field__error { grid-column: 1 / -1; }
+/* Placing a point by grid and offset (old Wireframer): under the point's x, y, z */
+.point-fields .grid-placer__open { grid-column: 1 / -1; justify-self: start; }
+.grid-placer { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-1); border-top: 1px dashed var(--color-border); padding-top: var(--space-1); }
+.grid-placer .field { margin: 0; }
+.grid-placer .field__control { width: 100%; min-width: 0; }
+.grid-placer .field__error, .grid-placer .button-row { grid-column: 1 / -1; }
 @media (max-width: 1000px) {
   .wf3d { grid-template-columns: 1fr; }
   .wf3d__panel { width: auto; max-height: none; }

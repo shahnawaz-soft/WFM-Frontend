@@ -1211,6 +1211,23 @@ export interface paths {
         patch: operations["projects_grids_partial_update"];
         trace?: never;
     };
+    "/api/v1/projects/{id}/grids/{grid_pk}/sources/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Where a grid line's position comes from, plan by plan. */
+        get: operations["projects_grids_sources_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/grids/fill/": {
         parameters: {
             query?: never;
@@ -1757,6 +1774,23 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["wireframe_elements_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/wireframe-elements/{id}/restore/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description A removed element back as it was: the undo of a removal. */
+        post: operations["wireframe_elements_restore_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/wireframes/{id}/": {
@@ -2692,6 +2726,11 @@ export interface components {
             /** @default  */
             reason: string;
         };
+        ElementRemoveRequest: {
+            version: number;
+            /** @default  */
+            reason: string;
+        };
         ExtractedMember: {
             /** Format: uuid */
             readonly id: string;
@@ -2997,6 +3036,31 @@ export interface components {
          * @enum {string}
          */
         GridSideEnum: "+" | "-";
+        /** @description One plan's say on a grid line's position (``grid_table.sources``). */
+        GridSource: {
+            /** Format: uuid */
+            page_id: string;
+            page_number: number | null;
+            sheet_number: string;
+            level_label: string;
+            /** Format: decimal */
+            position_mm: string;
+            readonly position_display: string;
+            /** @description The crossing the plan is placed from */
+            reference_label: string;
+            /** Format: decimal */
+            from_reference_mm: string;
+            readonly from_reference_display: string;
+            /**
+             * @description From the plan's printed grid dimensions, or its drawn length at the scale
+             *
+             *     * `printed_dimensions` - printed_dimensions
+             *     * `drawn_at_scale` - drawn_at_scale
+             */
+            measured_by: components["schemas"]["MeasuredByEnum"];
+            /** @description Within 6" of the grid table */
+            agrees: boolean;
+        };
         GridSpacing: {
             grids: string[];
             /** @description As printed */
@@ -3185,6 +3249,12 @@ export interface components {
             /** Format: decimal */
             weight_kg_per_m: string;
         };
+        /**
+         * @description * `printed_dimensions` - printed_dimensions
+         *     * `drawn_at_scale` - drawn_at_scale
+         * @enum {string}
+         */
+        MeasuredByEnum: "printed_dimensions" | "drawn_at_scale";
         /**
          * @description * `automated` - Automated extraction
          *     * `manual` - Added manually
@@ -7028,6 +7098,28 @@ export interface operations {
             };
         };
     };
+    projects_grids_sources_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                grid_pk: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GridSource"][];
+                };
+            };
+        };
+    };
     projects_grids_fill_create: {
         parameters: {
             query?: never;
@@ -7957,6 +8049,31 @@ export interface operations {
         requestBody?: {
             content: {
                 "application/json": components["schemas"]["PatchedElementEditRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WireframeElement"];
+                };
+            };
+        };
+    };
+    wireframe_elements_restore_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ElementRemoveRequest"];
             };
         };
         responses: {

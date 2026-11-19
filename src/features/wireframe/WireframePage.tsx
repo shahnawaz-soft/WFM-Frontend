@@ -24,6 +24,7 @@ import type { StatusTone } from '../../components/ui/StatusIcon'
 import { signedFeetInches } from '../abm/format'
 import { projectCan } from '../projects/useProjectPermissions'
 import { AddElementForm, ElementPanel } from './ElementPanel'
+import { EMPTY_HISTORY, record, step, valuesOf, type History } from './elementHistory'
 import { describeColumn } from '../viewer/columnSymbols'
 import { ColumnScheduler } from './ColumnScheduler'
 import { IsometricPreview } from './IsometricPreview'
@@ -295,6 +296,14 @@ function RevisionSection({
   }, [openTab])
   // Columns picked in the schedule or in the view (Ctrl+click): one selection for both.
   const [picked, setPicked] = useState<Set<string>>(new Set())
+  // Undo/redo of element changes made here (old Wireframer's Ctrl+Z): per revision.
+  const [kept, setKept] = useState<{ id: string; history: History }>({ id: current.id, history: EMPTY_HISTORY })
+  const history = kept.id === current.id ? kept.history : EMPTY_HISTORY
+  const setHistory = (next: History | ((h: History) => History)) =>
+    setKept((k) => {
+      const now = k.id === current.id ? k.history : EMPTY_HISTORY
+      return { id: current.id, history: typeof next === 'function' ? next(now) : next }
+    })
   const [allHeights, setAllHeights] = useState(false)
   const [showGrids, setShowGrids] = useState(true)
   // What a left-drag does in the view, 3D or simple: one switch for both.
@@ -338,6 +347,17 @@ function RevisionSection({
     void queryClient.invalidateQueries({ queryKey: ['wireframe', current.id, 'columns'] })
     void queryClient.invalidateQueries({ queryKey: ['wireframes', projectId] })
   }
+  const undoRedo = useMutation({
+    mutationFn: (undo: boolean) =>
+      step(history, undo, (id) => queryClient.getQueryData<WireframeElement[]>(['wireframe', current.id, 'elements'])?.find((e) => e.id === id)?.version),
+    onSuccess: (next) => {
+      setHistory(next)
+      setPanelNonce((n) => n + 1)
+      refresh()
+    },
+  })
+  const undo = () => history.past.length && !undoRedo.isPending && undoRedo.mutate(true)
+  const redo = () => history.future.length && !undoRedo.isPending && undoRedo.mutate(false)
   const copy = useMutation({
     mutationFn: () => copyWireframe(current.id),
     meta: { successMessage: 'New draft revision started' },
@@ -460,6 +480,12 @@ function RevisionSection({
                 >
                   + Add element
                 </Button>
+                <Button onClick={undo} disabled={!history.past.length} loading={undoRedo.isPending && undoRedo.variables === true} title="Undo the last element change (Ctrl+Z)">
+                  Undo
+                </Button>
+                <Button onClick={redo} disabled={!history.future.length} loading={undoRedo.isPending && undoRedo.variables === false} title="Redo (Ctrl+Y)">
+                  Redo
+                </Button>
                 <Button variant="primary" onClick={() => setReviewing(true)}>
                   Save as reviewed…
                 </Button>
@@ -473,7 +499,22 @@ function RevisionSection({
             {!current.is_latest && <span className="muted">Only the latest revision can be edited.</span>}
           </div>
 
-          <div className="wf3d" data-expanded={expanded ? '' : undefined}>
+          <div
+            className="wf3d"
+            data-expanded={expanded ? '' : undefined}
+            onKeyDown={(e) => {
+              if (!editable || (e.target as HTMLElement).closest('input, select, textarea')) return
+              const mod = e.ctrlKey || e.metaKey
+              const key = e.key.toLowerCase()
+              if (mod && key === 'z' && !e.shiftKey) {
+                e.preventDefault()
+                undo()
+              } else if (mod && (key === 'y' || (key === 'z' && e.shiftKey))) {
+                e.preventDefault()
+                redo()
+              }
+            }}
+          >
             <div className="wf3d__stage">
               <Button className="wf3d__expand" aria-pressed={expanded} onClick={() => setExpanded(!expanded)}>
                 {expanded ? 'Exit full screen' : 'Full screen'}
@@ -571,7 +612,9 @@ function RevisionSection({
                 {adding ? (
                   <AddElementForm
                     wireframeId={current.id}
+                    grids={current.grids}
                     onAdded={(e) => {
+                      setHistory((h) => record(h, { kind: 'add', id: e.id }, e.version))
                       setAdding(false)
                       refresh()
                       setSelectedId(e.id)
@@ -583,6 +626,7 @@ function RevisionSection({
                     <ElementPanel
                       key={`${selected.id}:${panelNonce}`}
                       projectId={projectId}
+                      grids={current.grids}
                       element={selected}
                       editable={editable}
                       column={
@@ -591,6 +635,11 @@ function RevisionSection({
                           : null
                       }
                       onChanged={(updated, keep) => {
+                        if (updated) {
+                          setHistory((h) => record(h, { kind: 'edit', id: updated.id, before: valuesOf(selected), after: valuesOf(updated) }, updated.version))
+                        } else if (!keep) {
+                          setHistory((h) => record(h, { kind: 'remove', id: selected.id }, selected.version + 1))
+                        }
                         if (updated) {
                           queryClient.setQueryData<WireframeElement[]>(['wireframe', current.id, 'elements'], (list) =>
                             list?.map((e) => (e.id === updated.id ? updated : e)),

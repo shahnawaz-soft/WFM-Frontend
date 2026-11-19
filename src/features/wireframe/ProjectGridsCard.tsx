@@ -21,6 +21,7 @@ import { FormAlert, SelectField, TextField } from '../../components/ui/Field'
 import { NO_ERRORS, toFormErrors, type FormErrors } from '../../lib/formErrors'
 import { signedFeetInches } from '../abm/format'
 import { gridConflicts, type GridConflictKind } from './gridConflicts'
+import { GridSources } from './GridSources'
 
 const DIRECTIONS: Record<ProjectGrid['direction'], string> = { x: 'Along X', y: 'Along Y', angled: 'Angled' }
 const SOURCES: Record<ProjectGrid['source'], string> = { found: 'Drawings', person: 'You', csv: 'Grids file' }
@@ -40,6 +41,7 @@ export function ProjectGridsCard({ projectId, canEdit }: { projectId: string; ca
   const grids = useQuery({ queryKey: key, queryFn: () => listProjectGrids(projectId) })
   const [editing, setEditing] = useState<ProjectGrid | 'new' | null>(null)
   const [deleting, setDeleting] = useState<ProjectGrid | null>(null)
+  const [tracing, setTracing] = useState<ProjectGrid | null>(null)
   const refresh = () => queryClient.invalidateQueries({ queryKey: key })
   const fileInput = useRef<HTMLInputElement>(null)
   // A grids file read and lined up with the project, waiting to be applied.
@@ -228,15 +230,22 @@ export function ProjectGridsCard({ projectId, canEdit }: { projectId: string; ca
                   <td>
                     {g.plans === 0 ? (
                       <span className="muted">—</span>
-                    ) : g.disagrees ? (
-                      <span
-                        className="field__error"
-                        title="Some plans place this line elsewhere (more than 6 inches away): a sheet may be read at a wrong scale, or the label names another line there. The position is the one the plans that agree give."
-                      >
-                        ⚠ {g.plans_agreeing} of {g.plans} agree
-                      </span>
                     ) : (
-                      `${g.plans} ${g.plans === 1 ? 'plan' : 'plans'}`
+                      <>
+                        {g.disagrees ? (
+                          <span
+                            className="field__error"
+                            title="Some plans place this line elsewhere (more than 6 inches away): a sheet may be read at a wrong scale, or the label names another line there. The position is the one the plans that agree give."
+                          >
+                            ⚠ {g.plans_agreeing} of {g.plans} agree
+                          </span>
+                        ) : (
+                          `${g.plans} ${g.plans === 1 ? 'plan' : 'plans'}`
+                        )}{' '}
+                        <button type="button" className="link-button" aria-label={`Where grid ${g.label} comes from`} onClick={() => setTracing(g)}>
+                          Where from?
+                        </button>
+                      </>
                     )}
                   </td>
                   <td>
@@ -284,6 +293,7 @@ export function ProjectGridsCard({ projectId, canEdit }: { projectId: string; ca
       {editing && (
         <GridDialog projectId={projectId} grid={editing === 'new' ? null : editing} onDone={() => setEditing(null)} onSaved={refresh} />
       )}
+      {tracing && <GridSources projectId={projectId} grid={tracing} onClose={() => setTracing(null)} />}
       <ConfirmDialog
         open={deleting !== null}
         title={`Delete grid ${deleting?.label ?? ''}?`}
