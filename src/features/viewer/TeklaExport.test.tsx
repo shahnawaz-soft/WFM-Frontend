@@ -28,6 +28,7 @@ beforeEach(() => {
     beams_csv: 'COMPONENT_ID…',
     columns_csv: 'COMPONENT_ID…',
     payload: { replaceExisting: true, beams: [{ profile: 'W12X26' }] },
+    classes: { b1: '3' },
     counts: { beams: 1, columns: 0, skipped: 1 },
     skipped: [{ id: 'x', kind: 'column', designation: '', reasons: [LEVEL] }],
     elevation_assumed: false,

@@ -36,6 +36,8 @@ interface Wireframe3DProps {
   /** The project's grid lines (mm), drawn at the lowest level; none: a plain helper grid. */
   grids?: WireframeGrid[]
   showGrids?: boolean
+  /** Tekla checking colours: a colour (#hex) per element id, in place of the usual ones. */
+  colours?: Map<string, string> | null
 }
 
 const COLORS = { beam: '#2563eb', column: '#c2410c', selected: '#7c3aed', added: '#15803d', hover: '#db2777' }
@@ -156,10 +158,12 @@ function CameraRig({ box, view, nonce, dragMode }: { box: THREE.Box3; view: Came
  *  each was hit-tested on every pointer move. */
 function Elements3D({
   items,
+  colours: colourOf,
   onSelect,
   onHover,
 }: {
   items: Placed[]
+  colours?: Map<string, string> | null
   onSelect: (id: string, additive: boolean) => void
   /** The element under the pointer (null: none) and where the pointer is, on every move. */
   onHover: (id: string | null, x?: number, y?: number) => void
@@ -170,7 +174,7 @@ function Elements3D({
     const owners: string[] = [] // element id per segment
     const colour = new THREE.Color()
     for (const p of items) {
-      colour.set(p.e.provenance === 'added' ? COLORS.added : COLORS[p.e.element_type])
+      colour.set(colourOf?.get(p.e.id) ?? (p.e.provenance === 'added' ? COLORS.added : COLORS[p.e.element_type]))
       for (let i = 0; i < p.points.length - 1; i++) {
         const [a, b] = [p.points[i]!, p.points[i + 1]!]
         positions.push(a.x, a.y, a.z, b.x, b.y, b.z)
@@ -183,7 +187,7 @@ function Elements3D({
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colours, 3))
     geometry.computeBoundingSphere()
     return { lines: new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ vertexColors: true })), owners }
-  }, [items])
+  }, [items, colourOf])
   useEffect(
     () => () => {
       lines.geometry.dispose()
@@ -480,6 +484,7 @@ export default function Wireframe3D({
   onSelect,
   grids,
   showGrids = true,
+  colours,
 }: Wireframe3DProps) {
   const items = useMemo(() => placed(elements), [elements])
   // Only which element is hovered is state: the pointer moves the tooltip directly, so a move
@@ -552,7 +557,7 @@ export default function Wireframe3D({
             rotation={[Math.PI / 2, 0, 0]}
           />
         )}
-        <Elements3D items={items} onSelect={onSelect} onHover={onHover} />
+        <Elements3D items={items} colours={colours} onSelect={onSelect} onHover={onHover} />
         {picked.map((p) => (
           <Selected3D key={p.e.id} p={p} />
         ))}

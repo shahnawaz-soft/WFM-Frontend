@@ -3519,6 +3519,10 @@ export interface components {
             columns_csv: string;
             /** @description The Tekla macro's POST /insert body */
             payload: unknown;
+            /** @description CLASS of each member sent, by its COMPONENT_ID: 3 green, 13 orange, 2 red (scaled), 4 column */
+            classes: {
+                [key: string]: string;
+            };
             counts: components["schemas"]["TeklaCounts"];
             skipped: components["schemas"]["TeklaSkipped"][];
             /** @description A plan with no elevation set was exported at elevation 0 */

@@ -8,6 +8,7 @@ import type { Wireframe, WireframeElement } from '../../api/types'
 import {
   copyWireframe,
   generateWireframe,
+  getProjectTekla,
   getSchedulerColumns,
   getWireframeSetup,
   listWireframeElements,
@@ -31,6 +32,8 @@ import { IsometricPreview } from './IsometricPreview'
 import { ColumnMarksCard } from './ColumnMarksCard'
 import { LevelProposalsCard } from './LevelProposals'
 import { ProjectGridsCard } from './ProjectGridsCard'
+import { TeklaLegend } from '../viewer/TeklaLegend'
+import { elementColour, TEKLA_COLOURS, type TeklaClasses, type TeklaColour } from '../viewer/teklaColours'
 import type { CameraView } from './Wireframe3D'
 import { supportsWebGL } from './webgl'
 
@@ -306,6 +309,8 @@ function RevisionSection({
     })
   const [allHeights, setAllHeights] = useState(false)
   const [showGrids, setShowGrids] = useState(true)
+  // The detailers' checking colours, as Push to Tekla classes the members: off until asked.
+  const [showTeklaColours, setShowTeklaColours] = useState(false)
   // What a left-drag does in the view, 3D or simple: one switch for both.
   const [dragMode, setDragMode] = useState<'turn' | 'move'>('turn')
   // Bumped when a column's values change in its panel: the panel re-reads the element.
@@ -321,6 +326,21 @@ function RevisionSection({
     queryFn: () => listWireframeElements(current.id),
     enabled: generated,
   })
+  const tekla = useQuery({
+    queryKey: ['project-tekla', projectId],
+    queryFn: () => getProjectTekla(projectId),
+    enabled: showTeklaColours && generated,
+    staleTime: 0,
+  })
+  const teklaColourKeys = useMemo(() => {
+    if (!showTeklaColours || !tekla.data || !elements.data) return null
+    const data = tekla.data as TeklaClasses
+    return new Map<string, TeklaColour>(elements.data.map((e) => [e.id, elementColour(data, e)]))
+  }, [showTeklaColours, tekla.data, elements.data])
+  const teklaColours = useMemo(
+    () => (teklaColourKeys ? new Map([...teklaColourKeys].map(([id, c]) => [id, TEKLA_COLOURS[c].colour])) : null),
+    [teklaColourKeys],
+  )
   const editable = canEdit && current.status === 'draft' && current.is_latest
   const columnRows = useQuery({
     queryKey: ['wireframe', current.id, 'columns'],
@@ -561,6 +581,7 @@ function RevisionSection({
                       onSelect={pick}
                       grids={current.grids}
                       showGrids={showGrids}
+                      colours={teklaColours}
                     />
                   </Suspense>
                 ) : (
@@ -588,6 +609,22 @@ function RevisionSection({
                     <input type="checkbox" checked={allHeights} onChange={(e) => setAllHeights(e.target.checked)} /> Show every column’s height
                   </label>
                 </li>
+                {webgl && (
+                  <li>
+                    <label className="checkbox" title="Colour each member as Push to Tekla classes it, in the old Wireframer's colours">
+                      <input type="checkbox" checked={showTeklaColours} onChange={(e) => setShowTeklaColours(e.target.checked)} /> Tekla colours
+                    </label>
+                  </li>
+                )}
+                {showTeklaColours && tekla.isFetching && !tekla.data && (
+                  <li role="status">Working out the colours…</li>
+                )}
+                {showTeklaColours && tekla.error && <li role="status">Colours not available: {toApiError(tekla.error).message}</li>}
+                {teklaColourKeys && (
+                  <li>
+                    <TeklaLegend colours={teklaColourKeys.values()} />
+                  </li>
+                )}
                 {webgl && current.grids.length > 0 && (
                   <li>
                     <label className="checkbox">

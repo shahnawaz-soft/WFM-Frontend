@@ -697,6 +697,8 @@ a.button { text-decoration: none; justify-content: center; }
 .member-shape--unsupported { stroke: #b91c1c; fill: rgb(220 38 38 / 10%); stroke-dasharray: 2 3; }
 .member-shape--accepted { stroke: #15803d; fill: rgb(22 163 74 / 12%); }
 .member-shape--rejected { stroke: #6b7280; fill: none; stroke-dasharray: 1 4; }
+.member-shape[data-tekla] { stroke: var(--tekla); fill: none; stroke-width: 2; }
+.tekla-spans line { stroke-width: 2; stroke-dasharray: 4 3; opacity: 0.9; vector-effect: non-scaling-stroke; pointer-events: none; }
 .member-shape[data-hovered] { stroke-width: 2.5; }
 .member-shape[data-selected] { stroke: #7c3aed; stroke-width: 3; stroke-dasharray: none; fill: rgb(124 58 237 / 25%); }
 

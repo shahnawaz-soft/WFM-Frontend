@@ -8,6 +8,7 @@ import { toViewportRect } from './geometry'
 import { MemberOverlay } from './MemberOverlay'
 import type { loadPdf, PageViewport } from './pdf'
 import { PdfPageCanvas } from './PdfPageCanvas'
+import type { TeklaColour } from './teklaColours'
 
 const ZOOM_STEPS = [0.1, 0.15, 0.25, 0.33, 0.5, 0.67, 0.75, 1, 1.25, 1.5, 2, 3, 4]
 const MIN_ZOOM = ZOOM_STEPS[0]!
@@ -44,6 +45,8 @@ interface DrawingStageProps {
   previewUrl?: string | null
   members: ExtractedMember[]
   showLabels: boolean
+  /** Tekla checking colours by member id (the "Tekla colours" switch), or none. */
+  teklaColours?: Map<string, TeklaColour> | null
   selectedId: string | null
   hoveredId: string | null
   focus: FocusRequest | null
@@ -375,6 +378,7 @@ export function DrawingStage(props: DrawingStageProps) {
                 hoveredId={props.hoveredId}
                 onSelect={props.onSelect}
                 onHover={props.onHover}
+                colours={props.teklaColours}
               />
             )}
             {showLabels && props.columns && props.columns.length > 0 && viewport && Math.abs(viewport.scale - zoom) < 0.001 && (

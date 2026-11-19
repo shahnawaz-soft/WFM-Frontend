@@ -21,6 +21,7 @@ import { BLANK_GRID_FORM, initialForm, slopeBetween, type GridForm } from './gri
 import { listPageIssues, listPageMembers } from '../../api/members'
 import { getProject } from '../../api/projects'
 import type { ColumnSymbol, DrawingPageListItem } from '../../api/types'
+import { getPageTekla } from '../../api/wireframe'
 import { ErrorState, LoadingState } from '../../components/feedback/States'
 import { notify } from '../../components/feedback/toastStore'
 import { Button } from '../../components/ui/Button'
@@ -44,6 +45,8 @@ import { nearestGridPoint } from './grids'
 import { memberKind, MEMBER_KINDS, type MemberKind } from './memberAppearance'
 import { PageAreaControls, type AreaBox } from './PageAreaControls'
 import { TeklaExport } from './TeklaExport'
+import { TeklaLegend } from './TeklaLegend'
+import { teklaColour, type TeklaClasses, type TeklaColour } from './teklaColours'
 import { PageStrip } from './PageStrip'
 import { FlagsPanel } from './panels/FlagsPanel'
 import { LevelPanel } from './panels/LevelPanel'
@@ -86,6 +89,8 @@ export function PageViewerPage() {
   const [family, setFamily] = useState<string>(ALL)
   const [showLabels, setShowLabels] = useState(true)
   const [showGrids, setShowGrids] = useState(true)
+  // The detailers' checking colours, as Push to Tekla classes the members: off until asked.
+  const [showTeklaColours, setShowTeklaColours] = useState(false)
   // Reference lines from printed dimensions: off until a person asks (a plan can have twenty).
   const [showDimensionLines, setShowDimensionLines] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(linkedMember)
@@ -193,6 +198,22 @@ export function PageViewerPage() {
   })
 
   const allMembers = useMemo(() => (runId ? (members.data ?? []) : []), [members.data, runId])
+  const isPlanPage = Boolean(current && kindGroup(current) === 'plan')
+  const tekla = useQuery({
+    queryKey: ['drawing-page', pageId, 'tekla', runId],
+    queryFn: () => getPageTekla(pageId),
+    enabled: showTeklaColours && Boolean(runId) && isPlanPage,
+  })
+  const teklaColours = useMemo(() => {
+    if (!showTeklaColours || !tekla.data) return null
+    const data = tekla.data as TeklaClasses
+    const out = new Map<string, TeklaColour>()
+    for (const m of allMembers) {
+      const colour = teklaColour(data, m.id)
+      if (colour) out.set(m.id, colour)
+    }
+    return out
+  }, [showTeklaColours, tekla.data, allMembers])
   const families = useMemo(() => {
     const counts = new Map<string, number>()
     for (const m of allMembers) counts.set(m.profile, (counts.get(m.profile) ?? 0) + m.quantity)
@@ -716,6 +737,7 @@ export function PageViewerPage() {
           label={`Drawing: page ${current.page_number} of ${drawingSet.data.original_filename}`}
           members={shown}
           showLabels={showLabels}
+          teklaColours={teklaColours}
           selectedId={selectedId}
           hoveredId={hoveredId}
           focus={focus}
@@ -923,6 +945,22 @@ export function PageViewerPage() {
                 </Button>
               )}
               {current.current_run && kindGroup(current) === 'plan' && <TeklaExport pageId={current.id} />}
+              {current.current_run && isPlanPage && allMembers.length > 0 && (
+                <label className="checkbox" title="Colour each member as Push to Tekla classes it, in the old Wireframer's colours">
+                  <input type="checkbox" checked={showTeklaColours} onChange={(e) => setShowTeklaColours(e.target.checked)} /> Tekla colours
+                </label>
+              )}
+              {showTeklaColours && tekla.isFetching && !tekla.data && (
+                <span className="muted" role="status">
+                  Working out the colours…
+                </span>
+              )}
+              {showTeklaColours && tekla.error && (
+                <span className="muted" role="status">
+                  Colours not available: {toApiError(tekla.error).message}
+                </span>
+              )}
+              {teklaColours && <TeklaLegend colours={teklaColours.values()} />}
               {lastBoxRemoved?.pageId === pageId && canRun && (
                 <Button loading={undoBoxRemoval.isPending} onClick={() => undoBoxRemoval.mutate(lastBoxRemoved.removed)}>
                   Undo box remove
