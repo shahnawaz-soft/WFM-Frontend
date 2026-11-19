@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { colourCounts, elementColour, teklaColour } from './teklaColours'
+import { colourCounts, elementColour, nextId, teklaColour } from './teklaColours'
 
 const DATA = { classes: { a: '3', b: '13', c: '2', d: '4' }, skipped: [{ id: 'e' }] }
 
@@ -28,5 +28,13 @@ describe('Tekla colours', () => {
       ['grid', 1],
       ['scaled', 2],
     ])
+  })
+
+  it('Next goes through one colour’s members in turn, and round again', () => {
+    expect(nextId(['a', 'b', 'c'], null)).toBe('a')
+    expect(nextId(['a', 'b', 'c'], 'a')).toBe('b')
+    expect(nextId(['a', 'b', 'c'], 'c')).toBe('a')
+    expect(nextId(['a', 'b'], 'not-pink')).toBe('a')
+    expect(nextId([], 'a')).toBeNull()
   })
 })

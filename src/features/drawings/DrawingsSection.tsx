@@ -94,6 +94,26 @@ export function DrawingsSection({ project }: { project: Project }) {
   const runnable = sets?.filter((s) => s.status === 'ready') ?? []
 
   const [confirmRunAgain, setConfirmRunAgain] = useState(false)
+  // Pages read by an older engine (shown on each page): after an engine change, only these.
+  const outdatedCount = visiblePages.filter((p) => p.status === 'processed' && p.current_run?.engine_outdated).length
+  const runOutdated = useMutation({
+    mutationFn: async () => {
+      const results = await Promise.all(runnable.map((s) => runAllPages(s.id, false, true)))
+      return results.reduce<SetRunResult>(
+        (all, r) => ({
+          queued: [...all.queued, ...r.queued],
+          running: [...all.running, ...r.running],
+          skipped: [...all.skipped, ...r.skipped],
+        }),
+        { queued: [], running: [], skipped: [] },
+      )
+    },
+    onSuccess: (result) => {
+      const { title, description } = runAllMessage(result)
+      notify.info(title, description)
+      return queryClient.invalidateQueries({ queryKey: ['drawing-set'] })
+    },
+  })
   const runAll = useMutation({
     mutationFn: async (runAgain: boolean) => {
       const results = await Promise.all(runnable.map((s) => runAllPages(s.id, runAgain)))
@@ -133,6 +153,16 @@ export function DrawingsSection({ project }: { project: Project }) {
             {canManage && (
               <Button aria-expanded={uploadOpen} onClick={() => setUploadOpen((o) => !o)}>
                 Upload PDF
+              </Button>
+            )}
+            {canEdit && runnable.length > 0 && outdatedCount > 0 && (
+              <Button
+                loading={runOutdated.isPending}
+                disabled={runOutdated.isPending || runAll.isPending}
+                onClick={() => runOutdated.mutate()}
+                title="Read again, with the latest Steelo rules, only the pages an older version read. Pages people reviewed are left as they are."
+              >
+                Run outdated pages again ({outdatedCount})
               </Button>
             )}
             {canEdit && runnable.length > 0 && (

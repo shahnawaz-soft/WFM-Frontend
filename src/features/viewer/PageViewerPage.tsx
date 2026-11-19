@@ -46,7 +46,8 @@ import { memberKind, MEMBER_KINDS, type MemberKind } from './memberAppearance'
 import { PageAreaControls, type AreaBox } from './PageAreaControls'
 import { TeklaExport } from './TeklaExport'
 import { TeklaLegend } from './TeklaLegend'
-import { teklaColour, type TeklaClasses, type TeklaColour } from './teklaColours'
+import { colourCounts, nextId, teklaColour, type TeklaClasses, type TeklaColour } from './teklaColours'
+import { ColourFilter } from './ColourFilter'
 import { PageStrip } from './PageStrip'
 import { FlagsPanel } from './panels/FlagsPanel'
 import { LevelPanel } from './panels/LevelPanel'
@@ -91,6 +92,8 @@ export function PageViewerPage() {
   const [showGrids, setShowGrids] = useState(true)
   // The detailers' checking colours, as Push to Tekla classes the members: off until asked.
   const [showTeklaColours, setShowTeklaColours] = useState(false)
+  // Review by colour: only one colour's members in the list and on the drawing.
+  const [colourFilter, setColourFilter] = useState<TeklaColour | null>(null)
   // Reference lines from printed dimensions: off until a person asks (a plan can have twenty).
   const [showDimensionLines, setShowDimensionLines] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(linkedMember)
@@ -220,9 +223,18 @@ export function PageViewerPage() {
     return [...counts.entries()].sort((a, b) => b[1] - a[1])
   }, [allMembers])
   const activeFamily = family !== ALL && families.some(([f]) => f === family) ? family : ALL
-  const shown = useMemo(
+  const inFamily = useMemo(
     () => (activeFamily === ALL ? allMembers : allMembers.filter((m) => m.profile === activeFamily)),
     [allMembers, activeFamily],
+  )
+  const activeColour = teklaColours ? colourFilter : null
+  const shown = useMemo(
+    () => (activeColour ? inFamily.filter((m) => teklaColours?.get(m.id) === activeColour) : inFamily),
+    [inFamily, activeColour, teklaColours],
+  )
+  const colourCountsShown = useMemo(
+    () => (teklaColours ? colourCounts(inFamily.map((m) => teklaColours.get(m.id) ?? null)) : []),
+    [inFamily, teklaColours],
   )
   const kindsPresent = useMemo(() => [...new Set(shown.map(memberKind))] as MemberKind[], [shown])
   const lowCount = useMemo(() => shown.filter((m) => memberKind(m) === 'low').length, [shown])
@@ -360,6 +372,25 @@ export function PageViewerPage() {
     setEditingId((e) => (e === id ? e : null))
     setFocus((f) => ({ memberId: id, nonce: (f?.nonce ?? 0) + 1 }))
   }, [])
+  // Next member of the colour being reviewed (N), shown on the drawing.
+  const showNextOfColour = useCallback(() => {
+    const id = nextId(
+      shown.map((m) => m.id),
+      selectedId,
+    )
+    if (id) selectFromList(id)
+  }, [shown, selectedId, selectFromList])
+  useEffect(() => {
+    if (!teklaColours) return
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.isContentEditable) return
+      if (document.querySelector('[role="dialog"]') || event.ctrlKey || event.metaKey || event.altKey) return
+      if (event.key === 'n' || event.key === 'N') showNextOfColour()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [teklaColours, showNextOfColour])
   // The edit form opens only from a row's edit button (selecting just shows the member).
   const editFromList = useCallback(
     (id: string) => {
@@ -638,6 +669,9 @@ export function PageViewerPage() {
                   : undefined
               }
             >
+              {teklaColours && (
+                <ColourFilter counts={colourCountsShown} active={activeColour} onPick={setColourFilter} onNext={showNextOfColour} />
+              )}
               {current.current_run && (
                 <ReviewBar projectId={projectId} page={current} members={allMembers} canEdit={canRun} onChanged={() => void cache.refetch()} />
               )}
@@ -738,6 +772,32 @@ export function PageViewerPage() {
           members={shown}
           showLabels={showLabels}
           teklaColours={teklaColours}
+          legend={
+            <>
+              {showLabels && (kindsPresent.length > 0 || Boolean(detailRun?.columns?.length)) && (
+                <ul className="legend" aria-label="Legend">
+                  {Boolean(detailRun?.columns?.length) && (
+                    <li>
+                      <svg width="22" height="12" aria-hidden="true">
+                        <rect x="6" y="1" width="10" height="10" className="column-overlay__key" />
+                      </svg>
+                      <span title={columnBreakdown(detailRun!.columns!)}>Column ({detailRun!.columns!.length})</span>
+                    </li>
+                  )}
+                  {!teklaColours && kindsPresent.map((kind) => (
+                    <li key={kind}>
+                      <svg width="22" height="12" aria-hidden="true">
+                        <rect x="1" y="1" width="20" height="10" rx="2" className={`member-shape member-shape--${kind}`} />
+                      </svg>
+                      {MEMBER_KINDS[kind].label}
+                      {kind === 'low' && ` (${lowCount})`}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {teklaColours && <TeklaLegend colours={teklaColours.values()} />}
+            </>
+          }
           selectedId={selectedId}
           hoveredId={hoveredId}
           focus={focus}
@@ -960,7 +1020,6 @@ export function PageViewerPage() {
                   Colours not available: {toApiError(tekla.error).message}
                 </span>
               )}
-              {teklaColours && <TeklaLegend colours={teklaColours.values()} />}
               {lastBoxRemoved?.pageId === pageId && canRun && (
                 <Button loading={undoBoxRemoval.isPending} onClick={() => undoBoxRemoval.mutate(lastBoxRemoved.removed)}>
                   Undo box remove
@@ -1019,27 +1078,6 @@ export function PageViewerPage() {
                   <input type="checkbox" checked={showDimensionLines} onChange={(e) => setShowDimensionLines(e.target.checked)} /> Dimension lines (
                   {detailRun!.dimension_lines.length})
                 </label>
-              )}
-              {showLabels && (kindsPresent.length > 0 || Boolean(detailRun?.columns?.length)) && (
-                <ul className="legend" aria-label="Legend">
-                  {Boolean(detailRun?.columns?.length) && (
-                    <li>
-                      <svg width="22" height="12" aria-hidden="true">
-                        <rect x="6" y="1" width="10" height="10" className="column-overlay__key" />
-                      </svg>
-                      <span title={columnBreakdown(detailRun!.columns!)}>Column ({detailRun!.columns!.length})</span>
-                    </li>
-                  )}
-                  {kindsPresent.map((kind) => (
-                    <li key={kind}>
-                      <svg width="22" height="12" aria-hidden="true">
-                        <rect x="1" y="1" width="20" height="10" rx="2" className={`member-shape member-shape--${kind}`} />
-                      </svg>
-                      {MEMBER_KINDS[kind].label}
-                      {kind === 'low' && ` (${lowCount})`}
-                    </li>
-                  ))}
-                </ul>
               )}
             </>
           }

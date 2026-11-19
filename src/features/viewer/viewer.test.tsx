@@ -290,6 +290,9 @@ describe('Page workspace', () => {
     expect(within(legend).getByText('Detected')).toBeInTheDocument()
     expect(within(legend).getByText('Low confidence (1)')).toBeInTheDocument()
     expect(within(legend).getByText('Unsupported type')).toBeInTheDocument()
+    // The key sits in the drawing's corner, not in the one-row toolbar where it was cut off.
+    expect(legend.closest('.stage__legend')).not.toBeNull()
+    expect(legend.closest('[role="toolbar"]')).toBeNull()
   })
 
   it('links the list and the drawing in both directions', async () => {

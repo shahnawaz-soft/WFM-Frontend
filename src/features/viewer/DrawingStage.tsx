@@ -53,6 +53,8 @@ interface DrawingStageProps {
   onSelect: (id: string | null) => void
   onHover: (id: string | null) => void
   toolbar?: ReactNode
+  /** The key to the overlays, in the drawing's corner (not in the one-row toolbar). */
+  legend?: ReactNode
   /** When true, the next click on the drawing reports its PDF-space point instead of selecting. */
   placing?: boolean
   onPlace?: (point: [number, number]) => void
@@ -394,6 +396,7 @@ export function DrawingStage(props: DrawingStageProps) {
           </div>
         )}
       </div>
+      {props.legend && <div className="stage__legend">{props.legend}</div>}
     </section>
   )
 }

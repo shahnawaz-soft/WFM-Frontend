@@ -46,3 +46,11 @@ export function elementColour(
   if (element.provenance !== 'generated') return 'manual'
   return (element.source_member && teklaColour(data, element.source_member)) || 'unsent'
 }
+
+/** The member after ``selectedId`` in ``ids`` (the first when none or the last is selected):
+ *  "Next" through the members of one colour. */
+export function nextId(ids: string[], selectedId: string | null): string | null {
+  if (!ids.length) return null
+  const at = selectedId ? ids.indexOf(selectedId) : -1
+  return ids[(at + 1) % ids.length]!
+}

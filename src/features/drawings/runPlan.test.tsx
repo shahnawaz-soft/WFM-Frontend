@@ -117,6 +117,17 @@ describe('Run Plan', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
 
+  it('runs again only the pages an older Steelo read, with "Run outdated pages again"', async () => {
+    const grid = await projectWithPages(3)
+    expect(screen.queryByRole('button', { name: /Run outdated pages again/ })).not.toBeInTheDocument()
+    mockDrawings.outdate([2]) // page 2 is read by an older version of Steelo
+    await userEvent.click(screen.getByRole('button', { name: 'Run all pages' }))
+    for (const n of [1, 2, 3]) expect(await within(pageCard(grid, n)).findByText(/^\d+ members?$/)).toBeInTheDocument()
+    const button = await screen.findByRole('button', { name: 'Run outdated pages again (1)' })
+    await userEvent.click(button)
+    expect(await screen.findByText('Running 1 page')).toBeInTheDocument()
+  })
+
   it('does not offer "Run all pages" to viewers', async () => {
     await projectWithPages(2, 'viewer')
     expect(screen.queryByRole('button', { name: 'Run all pages' })).not.toBeInTheDocument()

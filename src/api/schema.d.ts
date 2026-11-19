@@ -4272,6 +4272,11 @@ export interface components {
              * @default false
              */
             run_again: boolean;
+            /**
+             * @description Run again only processed pages read by an older engine (reviewed: skipped).
+             * @default false
+             */
+            outdated_only: boolean;
         };
         SetRunSkipped: {
             page: number;

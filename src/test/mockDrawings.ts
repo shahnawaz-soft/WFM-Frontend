@@ -672,6 +672,8 @@ let sheetKinds: Record<string, string> = {}
 /** Pages whose drawings mark no elevation for their level (the proposal has none). */
 let noProposedElevation = new Set<string>()
 
+let outdatedPages: number[] = []
+
 export const mockDrawings = {
   /** The id of a project's batch by name. */
   batchId(project: string, name: string) {
@@ -691,6 +693,7 @@ export const mockDrawings = {
   },
   reset() {
     sets = []
+    outdatedPages = []
     batches = []
     drawnGridsOf.clear()
     similarJobs = {}
@@ -720,6 +723,10 @@ export const mockDrawings = {
   },
   sheetRead(pageNumber: number, sheet: { kind: string; number?: string; title?: string }) {
     sheetsRead[pageNumber] = sheet
+  },
+  /** Runs of these pages are read by an older engine than the one now (their runs say so). */
+  outdate(pageNumbers: number[]) {
+    outdatedPages = pageNumbers
   },
   runOutcome(pageNumber: number, outcome: RunOutcome) {
     runOutcomes[pageNumber] = outcome
@@ -1165,13 +1172,17 @@ export const drawingHandlers = [
   // "Run all again" (run_again): processed pages too; reviewed ones are skipped.
   http.post('*/api/v1/drawing-sets/:id/run-plan/', async ({ params, request }) => {
     const s = sets.find((x) => x.set.id === params.id)!
-    const { run_again: again } = (await request.json().catch(() => ({}))) as { run_again?: boolean }
-    const states = again ? ['pending', 'failed', 'processed'] : ['pending', 'failed']
+    const { run_again: again, outdated_only: outdated } = (await request.json().catch(() => ({}))) as {
+      run_again?: boolean
+      outdated_only?: boolean
+    }
+    const states = outdated ? ['processed'] : again ? ['pending', 'failed', 'processed'] : ['pending', 'failed']
     const result = { queued: [] as number[], running: [] as number[], skipped: [] as { page: number; reason: string }[] }
     for (const page of [...s.pages].sort((a, b) => a.page_number - b.page_number)) {
       if (page.latest_job && ['queued', 'processing'].includes(page.latest_job.status)) {
         result.running.push(page.page_number)
       } else if (states.includes(page.status) && !page.hidden) {
+        if (outdated && !page.current_run?.engine_outdated) continue
         if (page.thumbnail_status !== 'ready') {
           result.skipped.push({ page: page.page_number, reason: 'page_not_ready' })
           continue
@@ -1387,7 +1398,7 @@ export const drawingHandlers = [
       status: 'active',
       engine_name: 'page-analysis',
       engine_version: '1.0',
-      engine_outdated: false,
+      engine_outdated: outdatedPages.includes(page.page_number),
       current_engine_version: '1.0',
       page_kind: outcome === 'needs_review' ? 'raster' : 'vector',
       sheet_kind: sheetsRead[page.page_number]?.kind ?? (outcome === 'needs_review' ? 'unknown' : 'plan'),
