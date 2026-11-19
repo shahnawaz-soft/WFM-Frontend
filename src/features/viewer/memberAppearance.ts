@@ -63,6 +63,8 @@ export const WARNING_LABELS: Record<string, string> = {
   mark_only: 'Known by its mark: enter the section for the mark',
   same_beam: 'Same beam as on another page: counted there',
   ditto: 'Written "DO": as the member labelled before it',
+  label_both_sides: 'One label over a column: the beams on both sides (quantity 2)',
+  joists_on_span_line: 'Joist label on its span line (arrows at both ends): one joist for each line it crosses',
 }
 
 /** Warnings that explain how (or whether) a length was measured, most important first. */
