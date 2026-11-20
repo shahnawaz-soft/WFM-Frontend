@@ -349,6 +349,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/drawing-pages/{id}/grids/import/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description A Tekla grids file on the page (the old Wireframer's "Attach Grids CSV"): the page's grids
+         *     that are in the file get its distances, exact. Previewed, or applied.
+         */
+        post: operations["drawing_pages_grids_import_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/drawing-pages/{id}/issues/": {
         parameters: {
             query?: never;
@@ -3435,6 +3455,25 @@ export interface components {
             /** @default false */
             discard_review: boolean;
         };
+        PageGridImportRequest: {
+            /**
+             * Format: binary
+             * @description A Tekla grids export, or a grids CSV
+             */
+            file: string;
+            /**
+             * @description False: preview only
+             * @default false
+             */
+            apply: boolean;
+            /** @default false */
+            discard_review: boolean;
+        };
+        PageGridImportResult: {
+            format: string;
+            applied: boolean;
+            grids: components["schemas"]["PageImportedGrid"][];
+        };
         /**
          * @description * `vertical` - vertical
          *     * `horizontal` - horizontal
@@ -3471,6 +3510,36 @@ export interface components {
             /** @default false */
             base: boolean;
         };
+        PageImportedGrid: {
+            label: string;
+            /**
+             * Format: decimal
+             * @description As the file has it
+             */
+            position_mm: string;
+            /**
+             * @description reference: the grid the others are measured from; set: gets the file's distance; not_on_page: left out; order_differs: on the sheet it is on the other side
+             *
+             *     * `reference` - reference
+             *     * `set` - set
+             *     * `not_on_page` - not_on_page
+             *     * `order_differs` - order_differs
+             */
+            status: components["schemas"]["PageImportedGridStatusEnum"];
+            reference?: string;
+            /** @description From the reference, ft-in */
+            distance?: string;
+            /** @description As the drawing measures it at its scale */
+            drawn_distance?: string | null;
+        };
+        /**
+         * @description * `reference` - reference
+         *     * `set` - set
+         *     * `not_on_page` - not_on_page
+         *     * `order_differs` - order_differs
+         * @enum {string}
+         */
+        PageImportedGridStatusEnum: "reference" | "set" | "not_on_page" | "order_differs";
         /**
          * @description A page's latest job: the job without its run, which the page shows once, as
          *     ``current_run`` (26 Oct 2026: repeating it was half of a drawing set's page list).
@@ -5646,6 +5715,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DrawingPage"];
+                };
+            };
+        };
+    };
+    drawing_pages_grids_import_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["PageGridImportRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageGridImportResult"];
                 };
             };
         };

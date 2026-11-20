@@ -1,3 +1,4 @@
+import * as Menu from '@radix-ui/react-dropdown-menu'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
@@ -17,6 +18,7 @@ import {
   type RemovedInBox,
 } from '../../api/processing'
 import { GridDialog } from './GridDialog'
+import { GridFileDialog } from './GridFileDialog'
 import { BLANK_GRID_FORM, initialForm, slopeBetween, type GridForm } from './gridForm'
 import { listPageIssues, listPageMembers } from '../../api/members'
 import { getProject } from '../../api/projects'
@@ -44,6 +46,7 @@ import { columnBreakdown } from './columnSymbols'
 import { nearestGridPoint } from './grids'
 import { memberKind, MEMBER_KINDS, type MemberKind } from './memberAppearance'
 import { PageAreaControls, type AreaBox } from './PageAreaControls'
+import { ShowMenu, type ShowOption } from './ShowMenu'
 import { TeklaExport } from './TeklaExport'
 import { TeklaLegend } from './TeklaLegend'
 import { colourCounts, nextId, teklaColour, type TeklaClasses, type TeklaColour } from './teklaColours'
@@ -67,6 +70,16 @@ const SHOW_FIND_SIMILAR = false
 const POLL_MS = 2000
 const ALL = 'ALL'
 
+const STRIP_KEY = 'steelo.viewer.page-strip'
+
+function readStrip(): boolean {
+  try {
+    return localStorage.getItem(STRIP_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
 export function PageViewerPage() {
   const { projectId = '', pageId = '' } = useParams()
   const navigate = useNavigate()
@@ -84,7 +97,19 @@ export function PageViewerPage() {
   // Workspace state: shared by the drawing, the panels and the toolbar.
   const [tab, setTab] = useState<ViewerTab>(() => (searchParams.get('tab') === 'level' ? 'level' : 'quantities'))
   const [panelOpen, setPanelOpen] = useState(true)
-  const [stripOpen, setStripOpen] = useState(true)
+  // The page strip is closed until asked for (the drawing gets its width); the choice is remembered.
+  const [stripOpen, setStripOpenState] = useState(readStrip)
+  const setStripOpen = useCallback((next: boolean | ((open: boolean) => boolean)) => {
+    setStripOpenState((was) => {
+      const open = typeof next === 'function' ? next(was) : next
+      try {
+        localStorage.setItem(STRIP_KEY, open ? '1' : '0')
+      } catch {
+        // storage unavailable: the choice lasts this visit
+      }
+      return open
+    })
+  }, [])
   // Full drawing: the app menu, the panel and the page strip out of the way (UX review).
   const [full, setFull] = useState(false)
   const [family, setFamily] = useState<string>(ALL)
@@ -127,6 +152,8 @@ export function PageViewerPage() {
   // Add grids (the old Wireframer's): 'point' = the next click opens the grid dialog there;
   // 'slope' = the next click is the second point of a diagonal's slope.
   const [gridPick, setGridPick] = useState<'point' | 'slope' | null>(null)
+  // Upload grids: a grids file exported from Tekla gives the page's grids its distances.
+  const [gridFileOpen, setGridFileOpen] = useState(false)
   const [gridDialog, setGridDialog] = useState<{ point: [number, number]; editing: string | null; form: GridForm } | null>(null)
   // The page's grids before each change (Undo) and after each undo (Redo): Ctrl+Z / Ctrl+Y.
   const [gridHistory, setGridHistory] = useState<{ pageId: string; undo: PageGridEdits[]; redo: PageGridEdits[] }>({
@@ -540,6 +567,33 @@ export function PageViewerPage() {
   const reviewLocked = current.status === 'reviewed'
   const canAdd = canRun && (current.status === 'processed' || current.status === 'added')
 
+  // What the drawing shows: one "Show" menu instead of a row of boxes.
+  const primaryGrids = detailRun?.grids?.filter((g) => !g.secondary).length ?? 0
+  const showOptions: ShowOption[] = [
+    ...(allMembers.length > 0 ? [{ label: 'Labels', checked: showLabels, onChange: setShowLabels }] : []),
+    ...(detailRun?.grids?.length ? [{ label: `Grids (${primaryGrids})`, checked: showGrids, onChange: setShowGrids }] : []),
+    ...(detailRun?.dimension_lines?.length
+      ? [
+          {
+            label: `Dimension lines (${detailRun.dimension_lines.length})`,
+            checked: showDimensionLines,
+            onChange: setShowDimensionLines,
+            title: 'Lines at the ends of dimensions printed from a grid line. Shown only: they change no lengths.',
+          },
+        ]
+      : []),
+    ...(current.current_run && isPlanPage && allMembers.length > 0
+      ? [
+          {
+            label: 'Tekla colours',
+            checked: showTeklaColours,
+            onChange: setShowTeklaColours,
+            title: "Colour each member as Push to Tekla classes it, in the old Wireframer's colours",
+          },
+        ]
+      : []),
+  ]
+
   const onTab = (nextTab: ViewerTab) => {
     if (panelOpen && nextTab === tab) setPanelOpen(false)
     else {
@@ -568,36 +622,44 @@ export function PageViewerPage() {
             )}
             <span>{drawingSet.data.original_filename}</span>
           </nav>
-          <h1 className="viewer__title">
-            Page {current.page_number} <span className="muted">of {drawingSet.data.page_count}</span>{' '}
-            <StatusBadge tone={status.tone} label={status.label} />
-            {current.current_run?.engine_outdated && (
-              <button
-                type="button"
-                className="status-badge status-badge--warning viewer__outdated"
-                title={`Read with Steelo ${current.current_run.engine_version}; now ${current.current_run.current_engine_version ?? 'newer'}. Run again to read it with the latest rules.`}
-                onClick={() => {
-                  setTab('page')
-                  setPanelOpen(true)
-                }}
-              >
-                Older version · run again
-              </button>
-            )}
-            {detail?.current_run?.summary?.grids_changed && (
-              <button
-                type="button"
-                className="status-badge status-badge--warning viewer__outdated"
-                title="The grids show as changed. Columns at grid crossings, member ends and exact positions follow them when the page runs again: run it again once you have finished with the grids."
-                onClick={() => {
-                  setTab('page')
-                  setPanelOpen(true)
-                }}
-              >
-                Grids changed · run again
-              </button>
-            )}
-          </h1>
+          <div className="viewer__title-row">
+            <Button className="viewer__step" disabled={!prev} onClick={() => prev && go(prev.id)} aria-label="Previous page" title="Previous page">
+              ‹
+            </Button>
+            <h1 className="viewer__title">
+              Page {current.page_number} <span className="muted">of {drawingSet.data.page_count}</span>{' '}
+              <StatusBadge tone={status.tone} label={status.label} />
+              {current.current_run?.engine_outdated && (
+                <button
+                  type="button"
+                  className="status-badge status-badge--warning viewer__outdated"
+                  title={`Read with Steelo ${current.current_run.engine_version}; now ${current.current_run.current_engine_version ?? 'newer'}. Run again to read it with the latest rules.`}
+                  onClick={() => {
+                    setTab('page')
+                    setPanelOpen(true)
+                  }}
+                >
+                  Older version · run again
+                </button>
+              )}
+              {detail?.current_run?.summary?.grids_changed && (
+                <button
+                  type="button"
+                  className="status-badge status-badge--warning viewer__outdated"
+                  title="The grids show as changed. Columns at grid crossings, member ends and exact positions follow them when the page runs again: run it again once you have finished with the grids."
+                  onClick={() => {
+                    setTab('page')
+                    setPanelOpen(true)
+                  }}
+                >
+                  Grids changed · run again
+                </button>
+              )}
+            </h1>
+            <Button className="viewer__step" disabled={!next} onClick={() => next && go(next.id)} aria-label="Next page" title="Next page">
+              ›
+            </Button>
+          </div>
         </div>
         <ViewerRail
           active={tab}
@@ -606,12 +668,6 @@ export function PageViewerPage() {
           onChange={onTab}
         />
         <div className="workspace__nav" role="toolbar" aria-label="Page navigation">
-          <Button disabled={!prev} onClick={() => prev && go(prev.id)}>
-            ← Previous
-          </Button>
-          <Button disabled={!next} onClick={() => next && go(next.id)}>
-            Next →
-          </Button>
           <Button aria-pressed={stripOpen} onClick={() => setStripOpen((o) => !o)}>
             Pages
           </Button>
@@ -621,7 +677,7 @@ export function PageViewerPage() {
             onClick={() => {
               setFull((f) => !f)
               setPanelOpen(full)
-              setStripOpen(full)
+              setStripOpenState(full && readStrip())
             }}
           >
             {full ? 'Exit full drawing' : 'Full drawing'}
@@ -629,8 +685,8 @@ export function PageViewerPage() {
           <Link className="button button--secondary" to={`/projects/${projectId}/abm`}>
             ABM
           </Link>
-          <Link className="button button--secondary" to={backTo} aria-label="Close page review">
-            <span aria-hidden="true">✕</span> Close
+          <Link className="button button--secondary workspace__close" to={backTo} aria-label="Close page review" title="Close">
+            <span aria-hidden="true">✕</span>
           </Link>
         </div>
       </header>
@@ -879,50 +935,139 @@ export function PageViewerPage() {
           }
           toolbar={
             <>
-              {families.length > 0 && (
-                <div className="family-tabs" role="group" aria-label="Show section types">
-                  <button type="button" aria-pressed={activeFamily === ALL} onClick={() => setFamily(ALL)}>
-                    All <span className="family-tabs__count">{allMembers.length}</span>
-                  </button>
-                  {families.map(([f, count]) => (
-                    <button key={f} type="button" aria-pressed={activeFamily === f} onClick={() => setFamily(f)}>
-                      {f} <span className="family-tabs__count">{count}</span>
+              <div className="tool-group" role="group" aria-label="View">
+                {families.length > 0 && (
+                  <div className="family-tabs" role="group" aria-label="Show section types">
+                    <button type="button" aria-pressed={activeFamily === ALL} onClick={() => setFamily(ALL)}>
+                      All <span className="family-tabs__count">{allMembers.length}</span>
                     </button>
-                  ))}
+                    {families.map(([f, count]) => (
+                      <button key={f} type="button" aria-pressed={activeFamily === f} onClick={() => setFamily(f)}>
+                        {f} <span className="family-tabs__count">{count}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <ShowMenu options={showOptions} />
+              </div>
+              {((canRun && current.current_run) || gridsEditable) && (
+                <div className="tool-group" role="group" aria-label="Edit">
+                  <span className="tool-group__label" aria-hidden="true">
+                    Edit
+                  </span>
+                  {canRun && current.current_run && (
+                    <Button
+                      aria-pressed={pickingPen}
+                      title="Click a line to see its pen, and read the project's members or grid lines by it"
+                      onClick={() => {
+                        if (pickingPen) return cancelPlace()
+                        setAdding(null)
+                        setPickingReference(false)
+                        setFindingSimilar(false)
+                        setDrawingArea(false)
+                        setBoxRemoving(false)
+                        setPickingPen(true)
+                        setPlacing(true)
+                      }}
+                    >
+                      Pens
+                    </Button>
+                  )}
+                  {gridsEditable && (
+                    <Menu.Root>
+                      <Menu.Trigger
+                        className="button button--secondary"
+                        data-active={gridPick === 'point' || undefined}
+                        title="Add grids on the drawing, or upload a grids file exported from Tekla"
+                      >
+                        {gridPick === 'point' ? 'Adding grids' : '⊞ Grids'}
+                        <span aria-hidden="true"> ▾</span>
+                      </Menu.Trigger>
+                      <Menu.Portal>
+                        <Menu.Content className="menu" align="start" sideOffset={6}>
+                          <Menu.Item
+                            className="menu__item"
+                            title="Click on the drawing where the grid line is. Click a grid line to edit or delete it."
+                            onSelect={() => (gridPick === 'point' ? cancelPlace() : startGridPick())}
+                          >
+                            {gridPick === 'point' ? 'Stop adding grids' : 'Add grids (G)'}
+                          </Menu.Item>
+                          <Menu.Item
+                            className="menu__item"
+                            title="A grids file exported from Tekla: the page's grids get its distances, exact"
+                            onSelect={() => setGridFileOpen(true)}
+                          >
+                            Upload grids…
+                          </Menu.Item>
+                        </Menu.Content>
+                      </Menu.Portal>
+                    </Menu.Root>
+                  )}
+                  <PageAreaControls
+                    page={current}
+                    canEdit={canRun}
+                    drawing={drawingArea}
+                    onDraw={() => {
+                      if (drawingArea) return cancelPlace()
+                      setAdding(null)
+                      setPickingReference(false)
+                      setFindingSimilar(false)
+                      setPickingPen(false)
+                      setBoxRemoving(false)
+                      setDrawingArea(true)
+                      setPlacing(true)
+                    }}
+                    proposed={proposedArea}
+                    onPropose={setProposedArea}
+                  />
+                  {SHOW_FIND_SIMILAR && canRun && current.current_run && (
+                    <Button
+                      aria-pressed={findingSimilar}
+                      loading={findSimilar.isPending}
+                      title="Point at a column symbol Steelo missed: every mark drawn like it becomes a column"
+                      onClick={() => {
+                        if (findingSimilar) return cancelPlace()
+                        setAdding(null)
+                        setPickingReference(false)
+                        setDrawingArea(false)
+                        setPickingPen(false)
+                        setBoxRemoving(false)
+                        setFindingSimilar(true)
+                        setPlacing(true)
+                      }}
+                    >
+                      Find similar
+                    </Button>
+                  )}
+                  {canRun && !reviewLocked && current.current_run && (
+                    <Button
+                      aria-pressed={boxRemoving}
+                      title="Drag a box round columns or members Steelo found wrongly, to remove them together"
+                      onClick={() => {
+                        if (boxRemoving) return cancelPlace()
+                        setAdding(null)
+                        setPickingReference(false)
+                        setDrawingArea(false)
+                        setPickingPen(false)
+                        setFindingSimilar(false)
+                        setBoxRemoving(true)
+                        setPlacing(true)
+                      }}
+                    >
+                      Remove in box
+                    </Button>
+                  )}
                 </div>
               )}
-              {allMembers.length > 0 && (
-                <label className="checkbox">
-                  <input type="checkbox" checked={showLabels} onChange={(e) => setShowLabels(e.target.checked)} /> Labels
-                </label>
+              {current.current_run && kindGroup(current) === 'plan' && (
+                <div className="tool-group" role="group" aria-label="Export">
+                  <TeklaExport pageId={current.id} />
+                </div>
               )}
-              {canRun && current.current_run && (
-                <Button
-                  aria-pressed={pickingPen}
-                  title="Click a line to see its pen, and read the project's members or grid lines by it"
-                  onClick={() => {
-                    if (pickingPen) return cancelPlace()
-                    setAdding(null)
-                    setPickingReference(false)
-                    setFindingSimilar(false)
-                    setDrawingArea(false)
-                    setBoxRemoving(false)
-                    setPickingPen(true)
-                    setPlacing(true)
-                  }}
-                >
-                  Pens
-                </Button>
-              )}
-              {gridsEditable && (
-                <Button
-                  aria-pressed={gridPick === 'point'}
-                  title="Add grids (G): click on the drawing where the grid line is. Click a grid line to edit or delete it."
-                  onClick={() => (gridPick === 'point' ? cancelPlace() : startGridPick())}
-                >
-                  ⊞ Add grids
-                </Button>
-              )}
+            </>
+          }
+          status={
+            <>
               {gridsEditable && pageHistory.undo.length > 0 && (
                 <Button loading={gridRestore.isPending && !gridRestore.variables?.redo} onClick={() => undoGrids(false)} title="Ctrl+Z">
                   Undo grid
@@ -950,65 +1095,10 @@ export function PageViewerPage() {
                   </Button>
                 </>
               )}
-              <PageAreaControls
-                page={current}
-                canEdit={canRun}
-                drawing={drawingArea}
-                onDraw={() => {
-                  if (drawingArea) return cancelPlace()
-                  setAdding(null)
-                  setPickingReference(false)
-                  setFindingSimilar(false)
-                  setPickingPen(false)
-                  setBoxRemoving(false)
-                  setDrawingArea(true)
-                  setPlacing(true)
-                }}
-                proposed={proposedArea}
-                onPropose={setProposedArea}
-              />
-              {SHOW_FIND_SIMILAR && canRun && current.current_run && (
-                <Button
-                  aria-pressed={findingSimilar}
-                  loading={findSimilar.isPending}
-                  title="Point at a column symbol Steelo missed: every mark drawn like it becomes a column"
-                  onClick={() => {
-                    if (findingSimilar) return cancelPlace()
-                    setAdding(null)
-                    setPickingReference(false)
-                    setDrawingArea(false)
-                    setPickingPen(false)
-                    setBoxRemoving(false)
-                    setFindingSimilar(true)
-                    setPlacing(true)
-                  }}
-                >
-                  Find similar
+              {lastBoxRemoved?.pageId === pageId && canRun && (
+                <Button loading={undoBoxRemoval.isPending} onClick={() => undoBoxRemoval.mutate(lastBoxRemoved.removed)}>
+                  Undo box remove
                 </Button>
-              )}
-              {canRun && !reviewLocked && current.current_run && (
-                <Button
-                  aria-pressed={boxRemoving}
-                  title="Drag a box round columns or members Steelo found wrongly, to remove them together"
-                  onClick={() => {
-                    if (boxRemoving) return cancelPlace()
-                    setAdding(null)
-                    setPickingReference(false)
-                    setDrawingArea(false)
-                    setPickingPen(false)
-                    setFindingSimilar(false)
-                    setBoxRemoving(true)
-                    setPlacing(true)
-                  }}
-                >
-                  Remove in box
-                </Button>
-              )}
-              {current.current_run && kindGroup(current) === 'plan' && <TeklaExport pageId={current.id} />}
-              {current.current_run && isPlanPage && allMembers.length > 0 && (
-                <label className="checkbox" title="Colour each member as Push to Tekla classes it, in the old Wireframer's colours">
-                  <input type="checkbox" checked={showTeklaColours} onChange={(e) => setShowTeklaColours(e.target.checked)} /> Tekla colours
-                </label>
               )}
               {showTeklaColours && tekla.isFetching && !tekla.data && (
                 <span className="muted" role="status">
@@ -1019,11 +1109,6 @@ export function PageViewerPage() {
                 <span className="muted" role="status">
                   Colours not available: {toApiError(tekla.error).message}
                 </span>
-              )}
-              {lastBoxRemoved?.pageId === pageId && canRun && (
-                <Button loading={undoBoxRemoval.isPending} onClick={() => undoBoxRemoval.mutate(lastBoxRemoved.removed)}>
-                  Undo box remove
-                </Button>
               )}
               {findSimilar.error && (
                 <span className="field__error" role="alert">
@@ -1066,18 +1151,6 @@ export function PageViewerPage() {
                 <span className="muted" role="status">
                   Loading the drawing overlays…
                 </span>
-              )}
-              {Boolean(detailRun?.grids?.length) && (
-                <label className="checkbox">
-                  <input type="checkbox" checked={showGrids} onChange={(e) => setShowGrids(e.target.checked)} /> Grids (
-                  {detailRun!.grids!.filter((g) => !g.secondary).length})
-                </label>
-              )}
-              {Boolean(detailRun?.dimension_lines?.length) && (
-                <label className="checkbox" title="Lines at the ends of dimensions printed from a grid line. Shown only: they change no lengths.">
-                  <input type="checkbox" checked={showDimensionLines} onChange={(e) => setShowDimensionLines(e.target.checked)} /> Dimension lines (
-                  {detailRun!.dimension_lines.length})
-                </label>
               )}
             </>
           }
@@ -1169,6 +1242,16 @@ export function PageViewerPage() {
 
       {penPoint && project.data && (
         <PickedPenDialog project={project.data} pageId={pageId} point={penPoint} onClose={() => setPenPoint(null)} />
+      )}
+      {gridFileOpen && detail && (
+        <GridFileDialog
+          page={detail}
+          onSaved={(before, message) => {
+            setGridFileOpen(false)
+            afterGridSaved(before, message)
+          }}
+          onClose={() => setGridFileOpen(false)}
+        />
       )}
       {gridDialog && detail && (
         <GridDialog

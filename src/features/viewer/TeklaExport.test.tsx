@@ -40,7 +40,8 @@ describe('TeklaExport', () => {
   it('downloads the CSV of each kind the page has', async () => {
     const success = vi.spyOn(notify, 'success')
     render(<TeklaExport pageId="p1" />)
-    await userEvent.click(screen.getByRole('button', { name: 'Export CSV' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Export' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Export CSV' }))
     await waitFor(() => expect(mocks.downloads).toEqual(['beams_02=Stru_p15.csv']))
     expect(success).toHaveBeenCalledWith('Exported 1 beam and 0 columns', `1 left out: ${LEVEL} (1)`)
   })
@@ -48,7 +49,8 @@ describe('TeklaExport', () => {
   it('pushes the payload to Tekla', async () => {
     const success = vi.spyOn(notify, 'success')
     render(<TeklaExport pageId="p1" />)
-    await userEvent.click(screen.getByRole('button', { name: 'Push to Tekla' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Export' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Push to Tekla' }))
     await waitFor(() => expect(mocks.pushed).toEqual([mocks.data.payload]))
     expect(success).toHaveBeenCalledWith('Pushed to Tekla: grids 1, 1 beam, 0 columns', `1 left out: ${LEVEL} (1)`)
   })
@@ -57,7 +59,8 @@ describe('TeklaExport', () => {
     const error = vi.spyOn(notify, 'error')
     mocks.data = { ...mocks.data, counts: { beams: 0, columns: 0, skipped: 1 } }
     render(<TeklaExport pageId="p1" />)
-    await userEvent.click(screen.getByRole('button', { name: 'Push to Tekla' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Export' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Push to Tekla' }))
     await waitFor(() => expect(error).toHaveBeenCalledWith('Nothing on this page can be placed yet', `1 left out: ${LEVEL} (1)`))
     expect(mocks.pushed).toEqual([])
   })

@@ -24,6 +24,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   cleanup()
+  localStorage.clear() // remembered choices (page strip, tables) start fresh in each test
   server.resetHandlers()
   toastStore.clear()
   tokenStore.set(null)

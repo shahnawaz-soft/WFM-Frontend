@@ -1323,6 +1323,34 @@ export const drawingHandlers = [
     applyGridEdits(page)
     return HttpResponse.json(page)
   }),
+  // Upload grids (a Tekla file on the page), simplified: the file's grids on the page, the
+  // first measured from, the others get a distance; the rest left out.
+  http.post('*/api/v1/drawing-pages/:id/grids/import/', async ({ params, request }) => {
+    const page = pageById(params.id as string) as Mutable<DrawingPage>
+    const form = await request.formData()
+    // The test environment does not send the file's text: the file has grids 1, 4 and A.
+    const labels = ['1', '4', 'A']
+    const edits = gridEditsOfMock(page)
+    const onPage = currentGridLabels(page, edits)
+    const matched = labels.filter((l) => onPage.includes(l))
+    if (!matched.length) return err(400, 'validation_error', 'Some fields are invalid.', { file: ['No grid in the file is on this page: check the labels match the drawing.'] })
+    const grids = labels.map((label, i) =>
+      !onPage.includes(label)
+        ? { label, position_mm: String(i * 6096), status: 'not_on_page' }
+        : label === matched[0]
+          ? { label, position_mm: '0.0', status: 'reference' }
+          : { label, position_mm: String(i * 6096), status: 'set', reference: matched[0], distance: `${i * 20}' 0"`, drawn_distance: `${i * 20}' 1"` },
+    )
+    const apply = form.get('apply') === 'true'
+    if (apply) {
+      for (const g of grids.filter((r) => r.status === 'set')) {
+        edits.grids.push({ label: g.label, orientation: 'vertical', x: 0, y: 0, slope: null, real_angle: null, reference: g.reference!, distance_text: g.distance!, distance_in: null, base: false, replaces: g.label })
+      }
+      page.grid_edits = edits
+      applyGridEdits(page)
+    }
+    return HttpResponse.json({ format: 'tekla', applied: apply, grids })
+  }),
   http.put('*/api/v1/drawing-pages/:id/grids/', async ({ params, request }) => {
     const page = pageById(params.id as string) as Mutable<DrawingPage>
     page.grid_edits = ((await request.json()) as { grid_edits: unknown }).grid_edits

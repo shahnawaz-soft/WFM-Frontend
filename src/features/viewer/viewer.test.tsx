@@ -9,6 +9,12 @@ import { mockProjects } from '../../test/mockProjects'
 import { preloadRoutes, renderApp } from '../../test/renderApp'
 import { server } from '../../test/server'
 
+/** A "Show" option of the drawing toolbar: opens the menu when it is closed. */
+async function showOption(name: string | RegExp) {
+  if (!screen.queryByRole('menuitemcheckbox', { name })) await userEvent.click(await screen.findByRole('button', { name: 'Show' }))
+  return screen.findByRole('menuitemcheckbox', { name })
+}
+
 // PDF.js needs a real canvas. The stand-in renders nothing but reports a viewport with the
 // same contract as PDF.js (PDF points, y up → CSS pixels, y down) so overlays can be tested.
 vi.mock('./pdf', () => ({ loadPdf: async () => ({ numPages: 3 }) }))
@@ -63,6 +69,12 @@ async function openViewer(pageNumber = 1, role: 'owner' | 'viewer' = 'owner') {
     name: new RegExp(`^Page ${pageNumber} of 3`),
   })
   return { project, page, ...view }
+}
+
+/** Opens the page strip (closed until asked for). */
+async function openStrip() {
+  if (!screen.queryByRole('navigation', { name: 'Pages in this drawing set' })) await userEvent.click(screen.getByRole('button', { name: 'Pages' }))
+  return screen.findByRole('navigation', { name: 'Pages in this drawing set' })
 }
 
 const tab = (name: string) => screen.getByRole('tab', { name: new RegExp(`^${name}`) })
@@ -155,7 +167,7 @@ describe('Page workspace', () => {
     Object.assign(second!, { hidden: true })
     renderApp(`/projects/${project.id}/pages/${first!.id}`)
     await screen.findByRole('heading', { level: 1, name: /^Page 1 of 3/ })
-    await userEvent.click(screen.getByRole('button', { name: 'Next →' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Next page' }))
     expect(await screen.findByRole('heading', { level: 1, name: /^Page 3 of 3/ })).toBeInTheDocument()
   })
 
@@ -167,14 +179,14 @@ describe('Page workspace', () => {
     const batch = mockDrawings.addBatch(project.id, 'Level 2 framing', [third!.id, first!.id])
     renderApp(`/projects/${project.id}/pages/${third!.id}?batch=${batch}`)
     await screen.findByRole('heading', { level: 1, name: /^Page 3 of 3/ })
-    const strip = screen.getByRole('navigation', { name: 'Pages in this drawing set' })
+    const strip = await openStrip()
     await waitFor(() => expect(within(strip).getAllByRole('button')).toHaveLength(2))
     expect(screen.getByText('Level 2 framing only')).toBeInTheDocument()
     const back = `/projects/${project.id}/batches/${batch}`
     expect(screen.getByRole('link', { name: 'Close page review' })).toHaveAttribute('href', back)
     expect(screen.getByRole('link', { name: 'Level 2 framing' })).toHaveAttribute('href', back)
 
-    await userEvent.click(screen.getByRole('button', { name: 'Next →' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Next page' }))
     expect(await screen.findByRole('heading', { level: 1, name: /^Page 1 of 3/ })).toBeInTheDocument()
   })
 
@@ -188,12 +200,12 @@ describe('Page workspace', () => {
     Object.assign(third!, { sheet_kind: 'plan' })
     renderApp(`/projects/${project.id}/pages/${first!.id}?sheets=plan`)
     await screen.findByRole('heading', { level: 1, name: /^Page 1 of 3/ })
-    const strip = screen.getByRole('navigation', { name: 'Pages in this drawing set' })
+    const strip = await openStrip()
     await waitFor(() => expect(within(strip).getAllByRole('button')).toHaveLength(2))
     expect(screen.getByText('Plans only')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Warehouse' })).toHaveAttribute('href', `/projects/${project.id}?tab=plan`)
 
-    await userEvent.click(screen.getByRole('button', { name: 'Next →' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Next page' }))
     expect(await screen.findByRole('heading', { level: 1, name: /^Page 3 of 3/ })).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: 'Show all pages' }))
@@ -206,18 +218,27 @@ describe('Page workspace', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Warehouse' })).toBeInTheDocument()
   })
 
+  it('keeps the page strip closed until asked for, and remembers it', async () => {
+    await openViewer(1)
+    expect(screen.queryByRole('navigation', { name: 'Pages in this drawing set' })).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: 'Pages' }))
+    expect(screen.getByRole('navigation', { name: 'Pages in this drawing set' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Next page' }))
+    expect(await screen.findByRole('heading', { level: 1, name: /^Page 2 of 3/ })).toBeInTheDocument()
+    expect(screen.getByRole('navigation', { name: 'Pages in this drawing set' })).toBeInTheDocument()
+    expect(localStorage.getItem('steelo.viewer.page-strip')).toBe('1')
+  })
+
   it('moves between pages with Previous/Next and the page strip, keeping the zoom', async () => {
     await openViewer(1)
-    expect(screen.getByRole('button', { name: '← Previous' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Previous page' })).toBeDisabled()
     await zoomTo100()
-    await userEvent.click(screen.getByRole('button', { name: 'Next →' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Next page' }))
     expect(screen.queryByText('Opening page…')).not.toBeInTheDocument()
     expect(screen.getByRole('heading', { level: 1, name: /^Page 2 of 3/ })).toBeInTheDocument()
     expect(await screen.findByRole('img', { name: /Drawing: page 2/ })).toHaveAttribute('data-zoom', '1')
 
-    const strip = screen.getByRole('navigation', {
-      name: 'Pages in this drawing set',
-    })
+    const strip = await openStrip()
     expect(within(strip).getByRole('button', { name: /^Page 2/ })).toHaveAttribute('aria-current', 'page')
     await userEvent.click(within(strip).getByRole('button', { name: /^Page 3/ }))
     expect(await screen.findByRole('heading', { level: 1, name: /^Page 3 of 3/ })).toBeInTheDocument()
@@ -295,6 +316,22 @@ describe('Page workspace', () => {
     expect(legend.closest('[role="toolbar"]')).toBeNull()
   })
 
+  it('groups the drawing tools: what is shown, editing, export', async () => {
+    await openViewer()
+    await runPlan()
+    const toolbar = screen.getByRole('toolbar', { name: 'Drawing tools' })
+    const view = within(toolbar).getByRole('group', { name: 'View' })
+    expect(within(view).getByRole('group', { name: 'Show section types' })).toBeInTheDocument()
+    // The display switches sit in one Show menu, not as a row of boxes.
+    expect(within(toolbar).queryByRole('checkbox')).toBeNull()
+    await userEvent.click(within(view).getByRole('button', { name: 'Show' }))
+    expect(await screen.findByRole('menuitemcheckbox', { name: 'Labels' })).toBeChecked()
+    await userEvent.keyboard('{Escape}')
+    const edit = within(toolbar).getByRole('group', { name: 'Edit' })
+    expect(within(edit).getByRole('button', { name: 'Pens' })).toBeInTheDocument()
+    expect(within(edit).getByRole('button', { name: 'Remove in box' })).toBeInTheDocument()
+  })
+
   it('links the list and the drawing in both directions', async () => {
     const { container } = await openViewer()
     const table = await runPlan()
@@ -334,7 +371,7 @@ describe('Page workspace', () => {
     expect(within(table).getAllByRole('row')).toHaveLength(2) // header + 1
     await waitFor(() => expect(shapes(container)).toHaveLength(1))
 
-    await userEvent.click(screen.getByRole('checkbox', { name: 'Labels' }))
+    await userEvent.click(await showOption('Labels'))
     expect(shapes(container)).toHaveLength(0)
   })
 
@@ -411,7 +448,7 @@ describe('Page workspace', () => {
   it('asks before replacing review work when the scale changes', async () => {
     const { page } = await openViewer()
     await runPlan()
-    await userEvent.click(screen.getByRole('button', { name: /^Accept all remaining \(/ }))
+    await userEvent.click(screen.getByRole('button', { name: /^Accept all \(/ }))
     await userEvent.click(within(await screen.findByRole('dialog', { name: /^Accept \d+ remaining/ })).getByRole('button', { name: 'Accept all remaining' }))
     await screen.findByText(/^Accepted \d+ members?/)
     await userEvent.click(tab('Scale'))
@@ -444,7 +481,7 @@ describe('Page workspace', () => {
     expect(screen.getByRole('tabpanel')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Exit full drawing' }))
     expect(workspace).toHaveAttribute('data-full', 'off')
-    expect(container.querySelector('.workspace__strip')).not.toBeNull()
+    expect(container.querySelector('.workspace__strip')).toBeNull() // back as it was: closed until asked for
   })
 
   it('collapses the panel when its tab is chosen again', async () => {
@@ -522,7 +559,7 @@ describe('Slim page list (Step B)', () => {
     renderApp(`/projects/${project.id}/pages/${page1!.id}`)
     await screen.findByRole('heading', { level: 1, name: /^Page 1 of 3/ })
     expect(await screen.findByText('Column (3)')).toBeInTheDocument() // page 1's own overlays
-    await userEvent.click(screen.getByRole('button', { name: 'Next →' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Next page' }))
     await screen.findByRole('heading', { level: 1, name: /^Page 2 of 3/ })
     return { releaseDetail }
   }

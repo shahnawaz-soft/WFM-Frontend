@@ -157,9 +157,9 @@ describe('Page review', () => {
   it('accepts the rest, requires a decision on unsupported types, then locks the page', async () => {
     await openProcessedPage()
     await screen.findByRole('table', { name: /Detected members/ })
-    expect(screen.getByRole('button', { name: 'Mark page reviewed' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Mark reviewed' })).toBeDisabled()
 
-    await userEvent.click(screen.getByRole('button', { name: 'Accept all remaining (2)' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Accept all (2)' }))
     const dialog = await screen.findByRole('dialog', { name: 'Accept 2 remaining members?' })
     await userEvent.click(within(dialog).getByRole('button', { name: 'Accept all remaining' }))
     expect(await screen.findByText('Accepted 2 members')).toBeInTheDocument()
@@ -169,8 +169,8 @@ describe('Page review', () => {
     await userEvent.click(within(panel).getByRole('button', { name: 'Unsupported' }))
     await within(panel).findByText('Marked unsupported')
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Mark page reviewed' })).toBeEnabled())
-    await userEvent.click(screen.getByRole('button', { name: 'Mark page reviewed' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Mark reviewed' })).toBeEnabled())
+    await userEvent.click(screen.getByRole('button', { name: 'Mark reviewed' }))
     expect(await screen.findByText(/Page review complete/)).toBeInTheDocument()
 
     const locked = await select(1)
@@ -178,7 +178,7 @@ describe('Page review', () => {
     expect(within(locked).queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: 'Reopen review' }))
-    expect(await screen.findByRole('button', { name: 'Mark page reviewed' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Mark reviewed' })).toBeInTheDocument()
   })
 
   it('asks before re-running a page that has review work', async () => {
@@ -318,11 +318,17 @@ describe('Pens', () => {
   })
 })
 
+/** An item of the toolbar's Grids menu (Add grids, Upload grids). */
+async function gridsMenu(item: string) {
+  await userEvent.click(screen.getByRole('button', { name: /Grids$/ }))
+  await userEvent.click(await screen.findByRole('menuitem', { name: item }))
+}
+
 describe('Add grids (as the old Wireframer)', () => {
   it('adds a grid at the point clicked, with its reference and distance, and Undo takes it away', async () => {
     const { page } = await openProcessedPage()
     await screen.findByRole('table', { name: /Detected members/ })
-    await userEvent.click(screen.getByRole('button', { name: '⊞ Add grids' }))
+    await gridsMenu('Add grids (G)')
     expect(screen.getByText(/Click on the drawing where the grid line is/)).toBeInTheDocument()
     await userEvent.click(screen.getByRole('img', { name: /Drawing/ }))
     const dialog = await screen.findByRole('dialog', { name: 'Add Grid Line' })
@@ -382,10 +388,27 @@ describe('Add grids (as the old Wireframer)', () => {
     expect(within(dialog).getByLabelText(/^Slope/)).not.toHaveValue('')
   })
 
+  it('uploads a grids file from Tekla: previewed, then the grids of the page get its distances', async () => {
+    await openProcessedPage()
+    await screen.findByRole('table', { name: /Detected members/ })
+    await gridsMenu('Upload grids…')
+    const dialog = await screen.findByRole('dialog', { name: 'Upload grids' })
+    const file = new File(['COORDINATES\nX: 0 20\'-0"\nY: 0 20\'-0"\nLABELS\nX: 1 4\nY: A\n'], 'grids.txt', { type: 'text/plain' })
+    await userEvent.upload(within(dialog).getByLabelText('Grids file'), file)
+    const table = await within(dialog).findByRole('table', { name: /grids in the file/ })
+    const rows = within(table).getAllByRole('row').slice(1).map((r) => r.textContent)
+    expect(rows).toEqual(['1Measured from', "4Not on this page: left out", "A140' 0\"40' 1\"Gets the file’s distance"])
+    expect(mockDrawings.sets[0]!.pages[0]!.grid_edits ?? null).toEqual(null) // a preview changes nothing
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Apply to 1 grid' }))
+    expect(await screen.findByText(/Distances from the grids file set on 1 grid/)).toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: 'Upload grids' })).not.toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Undo grid' })).toBeInTheDocument()
+  })
+
   it('a label already on the page is refused', async () => {
     await openProcessedPage()
     await screen.findByRole('table', { name: /Detected members/ })
-    await userEvent.click(screen.getByRole('button', { name: '⊞ Add grids' }))
+    await gridsMenu('Add grids (G)')
     await userEvent.click(screen.getByRole('img', { name: /Drawing/ }))
     const dialog = await screen.findByRole('dialog', { name: 'Add Grid Line' })
     await userEvent.type(within(dialog).getByLabelText('Grid Label'), '1')
@@ -469,7 +492,7 @@ describe('Page area', () => {
   it('asks before replacing review work', async () => {
     await openProcessedPage()
     await screen.findByRole('table', { name: /Detected members/ })
-    await userEvent.click(screen.getByRole('button', { name: /^Accept all remaining \(/ }))
+    await userEvent.click(screen.getByRole('button', { name: /^Accept all \(/ }))
     await userEvent.click(within(await screen.findByRole('dialog', { name: /^Accept \d+ remaining/ })).getByRole('button', { name: 'Accept all remaining' }))
     await screen.findByText(/^Accepted \d+ members?/)
     await userEvent.click(screen.getByRole('button', { name: 'Area' }))
@@ -681,6 +704,6 @@ describe('Permissions', () => {
     expect(within(panel).getByLabelText('Section')).toBeDisabled()
     expect(screen.queryByRole('button', { name: '+ Add member' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Find similar' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Accept all remaining/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Accept all \(/ })).not.toBeInTheDocument()
   })
 })

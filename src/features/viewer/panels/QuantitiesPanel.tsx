@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
 import type { ExtractedMember } from '../../../api/types'
 import { Button } from '../../../components/ui/Button'
@@ -34,10 +34,23 @@ function memberFlags(member: ExtractedMember, kind: ReturnType<typeof memberKind
   return flags.join(' · ')
 }
 
+/** The row's Flags text. */
+function flagsText(member: ExtractedMember): string {
+  return member.origin === 'manual' ? 'Manual' : memberFlags(member, memberKind(member))
+}
+
+/** What a row shows: members that show the same are listed as one row (66 alike columns on a
+ *  sheet are one line, opened to the members on request). */
+function rowKey(member: ExtractedMember): string {
+  const length = member.length_mm != null ? member.length_display : (countedElsewhere(member) ?? (isColumnMember(member) ? 'levels' : '-'))
+  return [member.designation, labelExtras(member), length, weightPerFoot(member), member.review_status, member.is_corrected, flagsText(member)].join('|')
+}
+
 /** Every detected member on the page, linked both ways with the drawing. */
 export function QuantitiesPanel({ members, loading, selectedId, hoveredId, onSelect, onEdit, onHover, children, onAdd, bulkActions }: QuantitiesPanelProps) {
   const [search, setSearch] = useState('')
   const [ticked, setTicked] = useState<ReadonlySet<string>>(new Set())
+  const [opened, setOpened] = useState<ReadonlySet<string>>(new Set())
   const rowRefs = useRef(new Map<string, HTMLTableRowElement>())
 
   const query = search.trim().toUpperCase().replace(/\s+/g, '')
@@ -53,6 +66,24 @@ export function QuantitiesPanel({ members, loading, selectedId, hoveredId, onSel
   const number = useMemo(() => new Map(members.map((m, i) => [m.id, i + 1])), [members])
   // Ticked members still on the page (a re-run replaces them).
   const chosen = useMemo(() => members.filter((m) => ticked.has(m.id)), [members, ticked])
+  const groups = useMemo(() => {
+    const byKey = new Map<string, ExtractedMember[]>()
+    for (const m of visible) {
+      const key = rowKey(m)
+      const group = byKey.get(key)
+      if (group) group.push(m)
+      else byKey.set(key, [m])
+    }
+    return [...byKey]
+  }, [visible])
+  const showFlags = useMemo(() => visible.some((m) => flagsText(m) !== ''), [visible])
+  const toggleGroup = (key: string) =>
+    setOpened((current) => {
+      const next = new Set(current)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
   const allVisibleTicked = visible.length > 0 && visible.every((m) => ticked.has(m.id))
   const tick = (ids: string[], on: boolean) =>
     setTicked((current) => {
@@ -64,13 +95,104 @@ export function QuantitiesPanel({ members, loading, selectedId, hoveredId, onSel
       return next
     })
 
+  const memberRow = (m: ExtractedMember, nested: boolean) => {
+    const selected = m.id === selectedId
+    return (
+      <tr
+        key={m.id}
+        className={nested ? 'quantities__member' : undefined}
+        ref={(el) => {
+          if (el) rowRefs.current.set(m.id, el)
+          else rowRefs.current.delete(m.id)
+        }}
+        data-selected={selected || undefined}
+        data-hovered={m.id === hoveredId || undefined}
+        onPointerEnter={() => onHover(m.id)}
+        onPointerLeave={() => onHover(null)}
+      >
+        {bulkActions && (
+          <td>
+            <input
+              type="checkbox"
+              aria-label={`Choose ${sectionName(m)}, member ${number.get(m.id)}`}
+              checked={ticked.has(m.id)}
+              onChange={(e) => tick([m.id], e.target.checked)}
+            />
+          </td>
+        )}
+        <td>
+          <button
+            type="button"
+            className="link-button"
+            aria-pressed={selected}
+            aria-label={`${sectionName(m)}, member ${number.get(m.id)}. Show on drawing`}
+            onClick={() => onSelect(m.id)}
+          >
+            {m.designation || (
+              <span className="muted nowrap" title="No section label on the drawing for this member (its length is known). Enter the section, or add the sheet that lists it">
+                {sectionName(m)}
+              </span>
+            )}
+          </button>
+          {labelExtras(m) && (
+            <span className="muted nowrap" title="Studs and camber, as printed with the label">
+              {' '}
+              {labelExtras(m)}
+            </span>
+          )}
+        </td>
+        <td className="muted nowrap">
+          {m.length_mm != null ? (
+            m.length_display
+          ) : countedElsewhere(m) ? (
+            <span title="The same column is counted on another sheet: it has no length here and is not in the ABM">
+              {countedElsewhere(m)}
+            </span>
+          ) : isColumnMember(m) ? (
+            <span title="A column's length is its storey height: set the page's level and add it to the project">From levels</span>
+          ) : (
+            <>
+              <span aria-hidden="true">—</span>
+              <span className="visually-hidden">Not measured</span>
+            </>
+          )}
+        </td>
+        <td className="num nowrap">
+          {weightPerFoot(m)?.replace(' lb/ft', '') ?? (
+            <span className="muted" aria-label="No weight">
+              —
+            </span>
+          )}
+        </td>
+        <td className="nowrap">
+          {REVIEW_STATUS[m.review_status].label}
+          {m.is_corrected && <span className="muted"> · corrected</span>}
+        </td>
+        {showFlags && <td className="nowrap">{flagsText(m)}</td>}
+        {onEdit && (
+          <td>
+            <button
+              type="button"
+              className="link-button"
+              title="Edit"
+              aria-label={`Edit ${sectionName(m)}, member ${number.get(m.id)}`}
+              onClick={() => onEdit(m.id)}
+            >
+              ✎
+            </button>
+          </td>
+        )}
+      </tr>
+    )
+  }
+
   return (
     <div className="panel">
       <div className="panel__header panel__header--row">
         <div>
           <h2>Quantities</h2>
-          <p className="muted">
-            {total} {total === 1 ? 'member' : 'members'} · weight per foot from the project’s section data
+          <p className="muted" title="Weight per foot from the project’s section data">
+            {total} {total === 1 ? 'member' : 'members'}
           </p>
         </div>
         {onAdd && <Button onClick={onAdd}>+ Add member</Button>}
@@ -107,7 +229,7 @@ export function QuantitiesPanel({ members, loading, selectedId, hoveredId, onSel
                   Wt/ft
                 </th>
                 <th scope="col">Status</th>
-                <th scope="col">Flags</th>
+                {showFlags && <th scope="col">Flags</th>}
                 {onEdit && (
                   <th scope="col">
                     <span className="visually-hidden">Edit</span>
@@ -116,94 +238,49 @@ export function QuantitiesPanel({ members, loading, selectedId, hoveredId, onSel
               </tr>
             </thead>
             <tbody>
-              {visible.map((m) => {
-                const kind = memberKind(m)
-                const selected = m.id === selectedId
+              {groups.map(([key, group]) => {
+                const first = group[0]!
+                if (group.length === 1) return memberRow(first, false)
+                const open = opened.has(key) || group.some((m) => m.id === selectedId)
+                const name = sectionName(first)
                 return (
-                  <tr
-                    key={m.id}
-                    ref={(el) => {
-                      if (el) rowRefs.current.set(m.id, el)
-                      else rowRefs.current.delete(m.id)
-                    }}
-                    data-selected={selected || undefined}
-                    data-hovered={m.id === hoveredId || undefined}
-                    onPointerEnter={() => onHover(m.id)}
-                    onPointerLeave={() => onHover(null)}
-                  >
-                    {bulkActions && (
-                      <td>
-                        <input
-                          type="checkbox"
-                          aria-label={`Choose ${sectionName(m)}, member ${number.get(m.id)}`}
-                          checked={ticked.has(m.id)}
-                          onChange={(e) => tick([m.id], e.target.checked)}
-                        />
-                      </td>
-                    )}
-                    <td>
-                      <button
-                        type="button"
-                        className="link-button"
-                        aria-pressed={selected}
-                        aria-label={`${sectionName(m)}, member ${number.get(m.id)}. Show on drawing`}
-                        onClick={() => onSelect(m.id)}
-                      >
-                        {m.designation || (
-                          <span className="muted nowrap" title="No section label on the drawing for this member (its length is known). Enter the section, or add the sheet that lists it">
-                            {sectionName(m)}
-                          </span>
-                        )}
-                      </button>
-                      {labelExtras(m) && (
-                        <span className="muted nowrap" title="Studs and camber, as printed with the label">
-                          {' '}
-                          {labelExtras(m)}
-                        </span>
+                  <Fragment key={key}>
+                    <tr className="quantities__group">
+                      {bulkActions && (
+                        <td>
+                          <input
+                            type="checkbox"
+                            aria-label={`Choose all ${group.length} ${name}`}
+                            checked={group.every((m) => ticked.has(m.id))}
+                            onChange={(e) => tick(group.map((m) => m.id), e.target.checked)}
+                          />
+                        </td>
                       )}
-                    </td>
-                    <td className="muted nowrap">
-                      {m.length_mm != null ? (
-                        m.length_display
-                      ) : countedElsewhere(m) ? (
-                        <span title="The same column is counted on another sheet: it has no length here and is not in the ABM">
-                          {countedElsewhere(m)}
-                        </span>
-                      ) : isColumnMember(m) ? (
-                        <span title="A column's length is its storey height: set the page's level and add it to the project">From levels</span>
-                      ) : (
-                        <>
-                          <span aria-hidden="true">—</span>
-                          <span className="visually-hidden">Not measured</span>
-                        </>
-                      )}
-                    </td>
-                    <td className="num nowrap">
-                      {weightPerFoot(m)?.replace(' lb/ft', '') ?? (
-                        <span className="muted" aria-label="No weight">
-                          —
-                        </span>
-                      )}
-                    </td>
-                    <td className="nowrap">
-                      {REVIEW_STATUS[m.review_status].label}
-                      {m.is_corrected && <span className="muted"> · corrected</span>}
-                    </td>
-                    <td className="nowrap">{m.origin === 'manual' ? 'Manual' : memberFlags(m, kind)}</td>
-                    {onEdit && (
                       <td>
                         <button
                           type="button"
-                          className="link-button"
-                          title="Edit"
-                          aria-label={`Edit ${sectionName(m)}, member ${number.get(m.id)}`}
-                          onClick={() => onEdit(m.id)}
+                          className="link-button nowrap"
+                          aria-expanded={open}
+                          aria-label={`${name} × ${group.length}: show each member`}
+                          onClick={() => toggleGroup(key)}
                         >
-                          ✎
+                          <span aria-hidden="true">{open ? '▾' : '▸'} </span>
+                          {first.designation || name} <span className="quantities__count">× {group.length}</span>
                         </button>
                       </td>
-                    )}
-                  </tr>
+                      <td className="muted nowrap">
+                        {first.length_mm != null ? first.length_display : (countedElsewhere(first) ?? (isColumnMember(first) ? 'From levels' : '—'))}
+                      </td>
+                      <td className="num nowrap">{weightPerFoot(first)?.replace(' lb/ft', '') ?? '—'}</td>
+                      <td className="nowrap">
+                        {REVIEW_STATUS[first.review_status].label}
+                        {first.is_corrected && <span className="muted"> · corrected</span>}
+                      </td>
+                      {showFlags && <td className="nowrap">{flagsText(first)}</td>}
+                      {onEdit && <td />}
+                    </tr>
+                    {open && group.map((m) => memberRow(m, true))}
+                  </Fragment>
                 )
               })}
             </tbody>

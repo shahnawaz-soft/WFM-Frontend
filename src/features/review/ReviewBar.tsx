@@ -91,14 +91,16 @@ export function ReviewBar({ projectId, page, members, canEdit, onChanged }: Revi
           <div className="progress__bar" style={{ width: `${members.length ? (decided / members.length) * 100 : 100}%` }} />
         </div>
         <span>
-          <strong>{decided}</strong> of {members.length} decided
+          <strong>{decided}</strong> / {members.length} decided
           {open > 0 && <span className="muted"> · {open} to review</span>}
         </span>
       </div>
       {canEdit && page.status === 'processed' && (
         <div className="button-row button-row--tight">
           {acceptable > 0 && (
-            <Button onClick={() => setConfirmAll(true)}>Accept all remaining ({acceptable})</Button>
+            <Button onClick={() => setConfirmAll(true)} title="Accept every member still to review">
+              Accept all ({acceptable})
+            </Button>
           )}
           <Button
             variant="primary"
@@ -107,7 +109,7 @@ export function ReviewBar({ projectId, page, members, canEdit, onChanged }: Revi
             onClick={() => markReviewed.mutate()}
             title={open > 0 ? 'Decide every member first' : undefined}
           >
-            Mark page reviewed
+            Mark reviewed
           </Button>
         </div>
       )}

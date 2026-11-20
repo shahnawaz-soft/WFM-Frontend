@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from 'react'
 
 import type { ColumnSymbol, DimensionLine, ExtractedMember, GridLine } from '../../api/types'
 import { ErrorState, LoadingState } from '../../components/feedback/States'
 import { Button } from '../../components/ui/Button'
 import { describeColumn } from './columnSymbols'
 import { toViewportRect } from './geometry'
+import { gridsBox } from './grids'
 import { MemberOverlay } from './MemberOverlay'
 import type { loadPdf, PageViewport } from './pdf'
 import { PdfPageCanvas } from './PdfPageCanvas'
@@ -53,6 +54,8 @@ interface DrawingStageProps {
   onSelect: (id: string | null) => void
   onHover: (id: string | null) => void
   toolbar?: ReactNode
+  /** Undo buttons and messages for the tools: a line under the toolbar, only while there are any. */
+  status?: ReactNode
   /** The key to the overlays, in the drawing's corner (not in the one-row toolbar). */
   legend?: ReactNode
   /** When true, the next click on the drawing reports its PDF-space point instead of selecting. */
@@ -166,6 +169,34 @@ export function DrawingStage(props: DrawingStageProps) {
       behavior: 'smooth',
     })
   }, [focus, viewport, zoom, members])
+
+  // Fit plan: zoom to the plan's grids (not the title block and notes), then centre on them
+  // once the page has re-rendered at that zoom.
+  const planBox = useMemo(() => gridsBox(props.grids), [props.grids])
+  const [planRequest, setPlanRequest] = useState(0)
+  const handledPlan = useRef(0)
+  const fitPlan = () => {
+    const box = scrollRef.current
+    if (!planBox || !viewport || !box) return
+    const rect = toViewportRect(viewport, planBox)
+    const z = Math.min((box.clientWidth - 32) / (rect.width / viewport.scale), (box.clientHeight - 32) / (rect.height / viewport.scale))
+    setFit(null)
+    setZoom(Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z)))
+    setPlanRequest((n) => n + 1)
+  }
+  useEffect(() => {
+    if (!planRequest || handledPlan.current === planRequest || !viewport || !planBox) return
+    if (Math.abs(viewport.scale - zoom) > 0.001) return // wait for the re-rendered viewport
+    handledPlan.current = planRequest
+    const box = scrollRef.current
+    const layer = layerRef.current
+    if (!box || !layer) return
+    const rect = toViewportRect(viewport, planBox)
+    box.scrollTo({
+      left: layer.offsetLeft + rect.x + rect.width / 2 - box.clientWidth / 2,
+      top: layer.offsetTop + rect.y + rect.height / 2 - box.clientHeight / 2,
+    })
+  }, [planRequest, viewport, zoom, planBox])
 
   // Esc leaves placement mode.
   const { placing, onCancelPlace, onPlace } = props
@@ -299,6 +330,11 @@ export function DrawingStage(props: DrawingStageProps) {
       <div className="stage__toolbar" role="toolbar" aria-label="Drawing tools">
         {props.toolbar}
         <div className="stage__zoom">
+          {planBox && (
+            <Button onClick={fitPlan} disabled={!viewport} title="Zoom to the plan (its grids), leaving out the title block and notes">
+              Fit plan
+            </Button>
+          )}
           <Button onClick={() => step(-1)} disabled={zoom <= MIN_ZOOM} aria-label="Zoom out">
             −
           </Button>
@@ -310,6 +346,7 @@ export function DrawingStage(props: DrawingStageProps) {
           </Button>
         </div>
       </div>
+      <div className="stage__status">{props.status}</div>
       <div
         ref={scrollRef}
         className="viewer__scroll stage__scroll"

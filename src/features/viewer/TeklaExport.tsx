@@ -1,18 +1,18 @@
+import * as Menu from '@radix-ui/react-dropdown-menu'
 import { useState } from 'react'
 
 import { toApiError } from '../../api/errors'
 import type { PageTekla } from '../../api/types'
 import { getPageTekla } from '../../api/wireframe'
 import { notify } from '../../components/feedback/toastStore'
-import { Button } from '../../components/ui/Button'
 import { downloadText, pushToTekla, skippedSummary, type TeklaSkipped } from './tekla'
 
 function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? '' : 's'}`
 }
 
-/** Export CSV and Push to Tekla on a plan page: its members placed as the 3D wireframe places
- *  them (project mm from the reference point, Z from the level). */
+/** The Export menu of a plan page, Export CSV and Push to Tekla: its members placed as the 3D
+ *  wireframe places them (project mm from the reference point, Z from the level). */
 export function TeklaExport({ pageId }: { pageId: string }) {
   const [busy, setBusy] = useState<'csv' | 'push' | null>(null)
 
@@ -63,18 +63,25 @@ export function TeklaExport({ pageId }: { pageId: string }) {
     })
 
   return (
-    <>
-      <Button loading={busy === 'csv'} disabled={busy !== null} onClick={exportCsv} title="Download this page's beams and columns as CSV, in the old Wireframer's format (mm)">
-        Export CSV
-      </Button>
-      <Button
-        loading={busy === 'push'}
-        disabled={busy !== null}
-        onClick={push}
-        title="Send this page's grids, beams and columns to Tekla on this PC (the Tekla macro's HTTP server must be running)"
-      >
-        Push to Tekla
-      </Button>
-    </>
+    <Menu.Root>
+      <Menu.Trigger className="button button--secondary" disabled={busy !== null} aria-busy={busy !== null || undefined}>
+        {busy === 'csv' ? 'Exporting…' : busy === 'push' ? 'Pushing to Tekla…' : 'Export'}
+        <span aria-hidden="true"> ▾</span>
+      </Menu.Trigger>
+      <Menu.Portal>
+        <Menu.Content className="menu" align="end" sideOffset={6}>
+          <Menu.Item className="menu__item" onSelect={exportCsv} title="Download this page's beams and columns as CSV, in the old Wireframer's format (mm)">
+            Export CSV
+          </Menu.Item>
+          <Menu.Item
+            className="menu__item"
+            onSelect={push}
+            title="Send this page's grids, beams and columns to Tekla on this PC (the Tekla macro's HTTP server must be running)"
+          >
+            Push to Tekla
+          </Menu.Item>
+        </Menu.Content>
+      </Menu.Portal>
+    </Menu.Root>
   )
 }

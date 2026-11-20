@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { nearestGridPoint, sortedGridPoints } from './grids'
+import type { GridLine } from '../../api/types'
+import { gridsBox, nearestGridPoint, sortedGridPoints } from './grids'
 
 const points = [
   { label: 'B/10', x: 900, y: 500 },
@@ -19,5 +20,25 @@ describe('grid intersections', () => {
 
   it('lists each label once, in natural order', () => {
     expect(sortedGridPoints(points).map((p) => p.label)).toEqual(['A/1', 'A/2', 'B/2', 'B/10'])
+  })
+})
+
+const line = (x1: number, y1: number, x2: number, y2: number, extra: Partial<GridLine> = {}) =>
+  ({ label: 'A', x1, y1, x2, y2, bubbles: [], secondary: false, ...extra }) as unknown as GridLine
+
+describe('the plan box (Fit plan)', () => {
+  it('spans the grid lines and their bubbles, with a margin', () => {
+    const grids = [line(100, 200, 100, 600, { bubbles: [[100, 620, 10]] }), line(80, 300, 500, 300)]
+    expect(gridsBox(grids)).toEqual([80 - 20, 200 - 20, 500 + 20, 630 + 20])
+  })
+
+  it('leaves out lines that only repeat a grid elsewhere on the sheet (key plan, detail)', () => {
+    const grids = [line(100, 200, 100, 600), line(2000, 10, 2100, 20, { secondary: true })]
+    expect(gridsBox(grids)).toEqual([80, 180, 120, 620])
+  })
+
+  it('is none without grids', () => {
+    expect(gridsBox([])).toBeNull()
+    expect(gridsBox(null)).toBeNull()
   })
 })

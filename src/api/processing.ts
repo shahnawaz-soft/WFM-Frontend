@@ -235,3 +235,21 @@ export function gridEditsOf(raw: unknown): PageGridEdits {
   const value = (raw ?? {}) as Partial<PageGridEdits>
   return { grids: value.grids ?? [], deleted: value.deleted ?? [] }
 }
+
+export type PageGridImportResult = Schemas['PageGridImportResult']
+
+/** A Tekla grids file on the page (the old Wireframer's "Attach Grids CSV"): the page's grids
+ *  that are in the file get its distances, exact; ``apply`` false previews it. */
+export async function importPageGrids(
+  pageId: string,
+  file: File,
+  apply: boolean,
+  options: { discardReview?: boolean } = {},
+): Promise<PageGridImportResult> {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('apply', apply ? 'true' : 'false')
+  form.append('discard_review', options.discardReview ? 'true' : 'false')
+  const { data } = await apiClient.post<PageGridImportResult>(`/api/v1/drawing-pages/${pageId}/grids/import/`, form)
+  return data
+}

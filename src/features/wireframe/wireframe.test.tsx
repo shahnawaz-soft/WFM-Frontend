@@ -9,6 +9,12 @@ import { mockProjects } from '../../test/mockProjects'
 import { preloadRoutes, renderApp } from '../../test/renderApp'
 import { server } from '../../test/server'
 
+/** A "Show" option of the drawing toolbar: opens the menu when it is closed. */
+async function showOption(name: string | RegExp) {
+  if (!screen.queryByRole('menuitemcheckbox', { name })) await userEvent.click(await screen.findByRole('button', { name: 'Show' }))
+  return screen.findByRole('menuitemcheckbox', { name })
+}
+
 vi.mock('../viewer/pdf', () => ({ loadPdf: async () => ({ numPages: 1 }) }))
 vi.mock('../viewer/PdfPageCanvas', async () => {
   const { useEffect } = await import('react')
@@ -122,20 +128,21 @@ describe('Level set-up', () => {
   it('draws the grid lines and can hide them', async () => {
     const { project, page } = await addedPage()
     const { container } = renderApp(`/projects/${project.id}/pages/${page.id}`)
-    const toggle = await screen.findByRole('checkbox', { name: /Grids \(2\)/ })
+    const toggle = await showOption(/Grids \(2\)/)
+    expect(screen.getByRole('button', { name: 'Fit plan' })).toBeInTheDocument() // zoom to the grids
     await waitFor(() => expect(container.querySelectorAll('.grid-overlay line:not(.grid-overlay__hit)')).toHaveLength(2))
     expect(container.querySelector('.grid-overlay [data-drawn="false"] title')).toHaveTextContent(/Grid A \(only a stub is drawn/)
     // A dimension printed from grid 1 gives a reference line at its other end: hidden until asked
     // for, then drawn apart from the grids and named only on hover.
     expect(container.querySelector('.grid-overlay [data-reference="true"]')).toBeNull()
-    await userEvent.click(screen.getByRole('checkbox', { name: /Dimension lines \(1\)/ }))
+    await userEvent.click(await showOption(/Dimension lines \(1\)/))
     expect(container.querySelector('.grid-overlay [data-reference="true"] title')).toHaveTextContent(
       /Reference line DIM-X1: 3'-0" from grid 1 \(a printed dimension's end, not a grid\)/,
     )
     expect(container.querySelector('.grid-overlay [data-reference="true"] text')).toBeNull()
     await userEvent.click(toggle) // grids off: the reference line stays on its own
     expect(container.querySelectorAll('.grid-overlay line:not(.grid-overlay__hit)')).toHaveLength(1)
-    await userEvent.click(screen.getByRole('checkbox', { name: /Dimension lines \(1\)/ }))
+    await userEvent.click(await showOption(/Dimension lines \(1\)/))
     expect(container.querySelector('.grid-overlay')).toBeNull()
   })
 
@@ -550,7 +557,7 @@ describe('Column symbols on the drawing', () => {
       'Square tube column, drawn about 5"',
       'Round tube column, drawn about 6" diameter',
     ])
-    await userEvent.click(screen.getByRole('checkbox', { name: 'Labels' }))
+    await userEvent.click(await showOption('Labels'))
     expect(container.querySelectorAll('.column-overlay rect, .column-overlay circle')).toHaveLength(0)
   })
 })

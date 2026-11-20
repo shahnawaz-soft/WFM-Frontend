@@ -664,10 +664,26 @@ a.button { text-decoration: none; justify-content: center; }
 
 .workspace__stage { grid-area: stage; position: relative; min-width: 0; min-height: 0; padding: var(--space-2); }
 .stage { position: relative; height: 100%; display: flex; flex-direction: column; border: 1px solid var(--color-border); border-radius: var(--radius); overflow: hidden; background: var(--color-surface); }
-.stage__toolbar { display: flex; flex-wrap: nowrap; gap: var(--space-2); align-items: center; justify-content: space-between; padding: var(--space-2); border-bottom: 1px solid var(--color-border); overflow-x: auto; scrollbar-width: thin; }
+.stage__toolbar { display: flex; flex-wrap: nowrap; gap: var(--space-3); align-items: center; justify-content: flex-start; padding: var(--space-2); border-bottom: 1px solid var(--color-border); overflow-x: auto; scrollbar-width: thin; }
 /* One row on every page: tools keep their size and the row scrolls sideways when it is too narrow. */
 .stage__toolbar > *, .stage__toolbar .button { flex-shrink: 0; white-space: nowrap; }
 .stage__toolbar .button { min-height: 34px; padding: var(--space-1) var(--space-3); }
+/* The toolbar's groups: what is shown, editing tools, export — divided by a rule. */
+.tool-group { display: flex; gap: var(--space-2); align-items: center; }
+.tool-group + .tool-group { padding-left: var(--space-3); border-left: 1px solid var(--color-border); }
+.tool-group .button[data-active] { border-color: var(--color-primary); color: var(--color-primary); }
+.tool-group__label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--color-text-muted); }
+/* Undo buttons and messages of the tools: a second line, only while there are any. */
+.stage__status { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; padding: var(--space-1) var(--space-2); border-bottom: 1px solid var(--color-border); font-size: 0.85rem; }
+.stage__status:empty { display: none; }
+.stage__status .button { min-height: 30px; padding: var(--space-1) var(--space-3); }
+.menu__check { display: flex; gap: var(--space-2); align-items: center; }
+.menu__tick { font-size: 1.1rem; line-height: 1; }
+/* Previous / next page beside the title: ‹ Page 1 of 47 › */
+.viewer__title-row { display: flex; align-items: center; gap: var(--space-2); }
+.viewer__title-row .viewer__title { margin: 0; }
+.viewer__step.button { min-height: 32px; min-width: 32px; padding: 0 var(--space-2); font-size: 1.3rem; line-height: 1; }
+.workspace__close.button { min-width: 38px; padding: var(--space-1) var(--space-2); }
 .stage__zoom { display: flex; gap: var(--space-1); align-items: center; margin-left: auto; }
 .stage__zoom .button { min-height: 34px; padding: var(--space-1) var(--space-3); }
 .stage__zoom .button[aria-pressed='true'] { border-color: var(--color-primary); color: var(--color-primary); }
@@ -739,10 +755,19 @@ a.button { text-decoration: none; justify-content: center; }
 
 /* --- Review --------------------------------------------------------------------------- */
 .panel__header--row { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-3); }
-.review-bar { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius); background: var(--color-bg); }
+.review-bar { display: flex; flex-flow: row wrap; align-items: center; gap: var(--space-2) var(--space-3); padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius); background: var(--color-bg); }
 .bulk-bar { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; justify-content: space-between; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-primary); border-radius: var(--radius); background: var(--color-info-bg); }
 .bulk-bar .button-row { margin-top: 0; }
-.review-bar__progress { display: flex; flex-direction: column; gap: var(--space-1); font-size: 0.9rem; }
+.review-bar__progress { display: flex; flex-direction: column-reverse; gap: var(--space-1); flex: 1 1 110px; font-size: 0.85rem; }
+.review-bar__progress .progress { height: 4px; }
+.review-bar > :not(.review-bar__progress) { flex-basis: 100%; }
+.review-bar > .button-row:nth-child(2) { flex-basis: auto; }
+.review-bar .button { min-height: 30px; padding: var(--space-1) var(--space-3); font-size: 0.85rem; }
+/* Members that read alike: one row, opened to the members (indented) on request. */
+.quantities__group .link-button { font-weight: 700; }
+.quantities__count { font-weight: 400; color: var(--color-text-muted); }
+.quantities__member td:nth-child(-n + 2) .link-button { padding-left: var(--space-4); }
+.quantities__member td { background: color-mix(in srgb, var(--color-bg) 50%, transparent); }
 .review-bar__done { margin: 0; display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; color: var(--color-success); font-weight: 600; }
 .member-editor { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3); border: 2px solid var(--color-primary); border-radius: var(--radius); background: var(--color-surface); }
 .member-editor h3 { margin: 0; font-size: 1.05rem; }
