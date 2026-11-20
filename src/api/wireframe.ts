@@ -103,8 +103,9 @@ export async function getLevelProposals(projectId: string): Promise<LevelProposa
 }
 
 /** Set the proposed values on these pages (audited, as when typed). */
-export async function applyLevelProposals(projectId: string, pages: string[]): Promise<{ applied: number }> {
-  const { data } = await apiClient.post<{ applied: number }>(`/api/v1/projects/${projectId}/level-proposals/apply/`, { pages })
+/** ``replace``: also overwrite values a person saved (by default only blanks are filled). */
+export async function applyLevelProposals(projectId: string, pages: string[], replace = false): Promise<{ applied: number }> {
+  const { data } = await apiClient.post<{ applied: number }>(`/api/v1/projects/${projectId}/level-proposals/apply/`, { pages, replace })
   return data
 }
 

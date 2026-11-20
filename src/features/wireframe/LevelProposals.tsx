@@ -4,14 +4,14 @@ import { Link } from 'react-router'
 import { applyLevelProposals } from '../../api/wireframe'
 import { Button } from '../../components/ui/Button'
 import { signedFeetInches } from '../abm/format'
-import { differs, hasProposal, PROPOSAL_ISSUES, useLevelProposals } from './levelProposals'
+import { differs, elevationDiffers, fills, hasProposal, PROPOSAL_ISSUES, useLevelProposals } from './levelProposals'
 
 /** The level set-up read from the drawings, page by page, for a person to apply. */
 export function LevelProposalsCard({ projectId, canEdit }: { projectId: string; canEdit: boolean }) {
   const queryClient = useQueryClient()
   const proposals = useLevelProposals(projectId)
   const apply = useMutation({
-    mutationFn: (pages: string[]) => applyLevelProposals(projectId, pages),
+    mutationFn: ({ pages, replace = false }: { pages: string[]; replace?: boolean }) => applyLevelProposals(projectId, pages, replace),
     meta: { successMessage: 'Levels set from the drawings' },
     onSuccess: () => {
       for (const key of [['level-proposals', projectId], ['wireframe-setup', projectId], ['column-schedule', projectId]]) {
@@ -21,13 +21,14 @@ export function LevelProposalsCard({ projectId, canEdit }: { projectId: string; 
   })
   const rows = (proposals.data?.pages ?? []).filter(hasProposal)
   if (!rows.length) return null
-  const pending = rows.filter(differs)
+  // "Apply" fills only blanks; a value a person saved is replaced row by row, when asked.
+  const pending = rows.filter(fills)
   return (
     <section className="card" aria-labelledby="level-proposals">
       <div className="card__header">
         <h2 id="level-proposals">Proposed from the drawings</h2>
         {canEdit && pending.length > 0 && (
-          <Button variant="primary" loading={apply.isPending} onClick={() => apply.mutate(pending.map((p) => p.page_id))}>
+          <Button variant="primary" loading={apply.isPending} onClick={() => apply.mutate({ pages: pending.map((p) => p.page_id) })}>
             Apply to {pending.length} {pending.length === 1 ? 'page' : 'pages'}
           </Button>
         )}
@@ -64,7 +65,13 @@ export function LevelProposalsCard({ projectId, canEdit }: { projectId: string; 
                 </th>
                 <td>{p.level_label || <span className="muted">—</span>}</td>
                 <td>
-                  {p.elevation_mm != null ? (
+                  {elevationDiffers(p) ? (
+                    // Saved by a person, unlike the drawings: what the page has comes first.
+                    <>
+                      {signedFeetInches(p.current.elevation_mm!)} saved
+                      <div className="muted">Drawings say {p.elevation_display}</div>
+                    </>
+                  ) : p.elevation_mm != null ? (
                     <>
                       {p.elevation_display}
                       {p.elevation_source && <div className="muted">page {p.elevation_source.page_number}: {p.elevation_source.text}</div>}
@@ -96,9 +103,18 @@ export function LevelProposalsCard({ projectId, canEdit }: { projectId: string; 
                 </td>
                 {canEdit && (
                   <td>
-                    {differs(p) ? (
-                      <Button onClick={() => apply.mutate([p.page_id])} disabled={apply.isPending} aria-label={`Apply to page ${p.page_number}`}>
+                    {fills(p) ? (
+                      <Button onClick={() => apply.mutate({ pages: [p.page_id] })} disabled={apply.isPending} aria-label={`Apply to page ${p.page_number}`}>
                         Apply
+                      </Button>
+                    ) : differs(p) ? (
+                      <Button
+                        onClick={() => apply.mutate({ pages: [p.page_id], replace: true })}
+                        disabled={apply.isPending}
+                        aria-label={`Replace page ${p.page_number} with the drawings`}
+                        title="Replace what was saved on this page with the values from the drawings"
+                      >
+                        Replace with drawings
                       </Button>
                     ) : (
                       <span className="muted">Set</span>

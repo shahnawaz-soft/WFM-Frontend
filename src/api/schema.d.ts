@@ -2096,6 +2096,11 @@ export interface components {
         AddConnectionMaterialScopeEnum: "entry" | "page" | "project";
         ApplyProposalsRequest: {
             pages: string[];
+            /**
+             * @description Also replace values a person saved; by default only blanks are filled in
+             * @default false
+             */
+            replace: boolean;
         };
         ApplyResult: {
             applied: number;

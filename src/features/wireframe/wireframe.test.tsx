@@ -205,6 +205,27 @@ describe('Level set-up', () => {
     await waitFor(() => expect(within(screen.getByRole('region', { name: 'Proposed from the drawings' })).queryByRole('button', { name: /Apply to/ })).toBeNull())
   })
 
+  it('keeps an elevation a person saved, replacing it only when asked', async () => {
+    // PTC, 20 Nov 2026: 0'-0" saved on the foundation plans, then "Apply to 10 pages" put the
+    // drawings' 100'-0" back, and the table showed only the drawings' value.
+    const { project } = await addedPage()
+    Object.assign(mockDrawings.sets[0]!.pages[0]!, {
+      level_label: 'LEVEL 2',
+      elevation_mm: '0.0',
+      elevation_display: '0"',
+      reference_point: [150, 95],
+      reference_label: 'A/1',
+    })
+    renderApp(`/projects/${project.id}/wireframe`)
+    const card = await screen.findByRole('region', { name: 'Proposed from the drawings' })
+    const row = within(card).getByRole('row', { name: /Page 1/ })
+    expect(within(row).getByText(/0'-0" saved/)).toBeInTheDocument()
+    expect(within(row).getByText(/Drawings say 14'-0"/)).toBeInTheDocument()
+    expect(within(card).queryByRole('button', { name: /Apply to/ })).toBeNull() // nothing blank to fill
+    await userEvent.click(within(row).getByRole('button', { name: 'Replace page 1 with the drawings' }))
+    await waitFor(() => expect(mockDrawings.sets[0]!.pages[0]!.elevation_mm).toBe('4267.2'))
+  })
+
   it('explains a bad elevation', async () => {
     const { project, page } = await addedPage()
     renderApp(`/projects/${project.id}/pages/${page.id}?tab=level`)

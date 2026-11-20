@@ -21,6 +21,19 @@ export const PROPOSAL_ISSUES: Record<string, string> = {
 /** What a proposal would set: the fields it has a value for. */
 export const hasProposal = (p: LevelProposal) => Boolean(p.level_label || p.elevation_mm != null || p.reference_point)
 
+/** The proposals would fill something the page has blank ("Apply": never overwrites what a
+ * person saved, PTC 20 Nov 2026). */
+export const fills = (p: LevelProposal) =>
+  Boolean(
+    (p.level_label && !p.current.level_label) ||
+      (p.elevation_mm != null && p.current.elevation_mm == null) ||
+      (p.reference_point && !p.current.has_reference_point),
+  )
+
+/** The page's saved elevation differs from the drawings' (shown both ways). */
+export const elevationDiffers = (p: LevelProposal) =>
+  p.elevation_mm != null && p.current.elevation_mm != null && Number(p.elevation_mm) !== Number(p.current.elevation_mm)
+
 /** The proposals differ from what the page has now (worth applying). */
 export const differs = (p: LevelProposal) =>
   (p.level_label && p.level_label !== p.current.level_label) ||

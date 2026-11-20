@@ -1840,13 +1840,24 @@ export const drawingHandlers = [
 
   http.get('*/api/v1/projects/:id/level-proposals/', ({ params }) => HttpResponse.json(levelProposals(params.id as string))),
   http.post('*/api/v1/projects/:id/level-proposals/apply/', async ({ params, request }) => {
-    const { pages } = (await request.json()) as { pages: string[] }
+    // As the API: only blanks are filled, unless ``replace`` (values a person saved).
+    const { pages, replace = false } = (await request.json()) as { pages: string[]; replace?: boolean }
     const rows = levelProposals(params.id as string).pages.filter((r) => pages.includes(r.page_id))
+    let applied = 0
     for (const r of rows) {
       const p = pageById(r.page_id) as unknown as Record<string, unknown>
-      Object.assign(p, { level_label: r.level_label, elevation_mm: r.elevation_mm, elevation_display: r.elevation_display, reference_point: r.reference_point, reference_label: r.reference_label })
+      const changes: Record<string, unknown> = {}
+      if (r.level_label && (replace || !p.level_label)) changes.level_label = r.level_label
+      if (r.elevation_mm != null && (replace || p.elevation_mm == null))
+        Object.assign(changes, { elevation_mm: r.elevation_mm, elevation_display: r.elevation_display })
+      if (r.reference_point && (replace || !p.reference_point))
+        Object.assign(changes, { reference_point: r.reference_point, reference_label: r.reference_label })
+      if (Object.keys(changes).length) {
+        Object.assign(p, changes)
+        applied += 1
+      }
     }
-    return HttpResponse.json({ applied: rows.length })
+    return HttpResponse.json({ applied })
   }),
   // Column schedule: each added page with a level is one level; its column symbols are the
   // columns (the first one at grid A/1), symbols only until "Add to the ABM".
