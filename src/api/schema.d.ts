@@ -3163,9 +3163,10 @@ export interface components {
          *     * `elevation_of_first_floor` - elevation_of_first_floor
          *     * `elevation_by_level_order` - elevation_by_level_order
          *     * `views_at_several_levels` - views_at_several_levels
+         *     * `elevation_datum_shifted` - elevation_datum_shifted
          * @enum {string}
          */
-        IssuesEnum: "no_level_title" | "title_names_two_levels" | "no_elevation_marked" | "elevation_alternatives" | "no_common_grid_point" | "aligned_on_other_crossing" | "elevation_typed_on_other_page" | "elevation_of_first_floor" | "elevation_by_level_order" | "views_at_several_levels";
+        IssuesEnum: "no_level_title" | "title_names_two_levels" | "no_elevation_marked" | "elevation_alternatives" | "no_common_grid_point" | "aligned_on_other_crossing" | "elevation_typed_on_other_page" | "elevation_of_first_floor" | "elevation_by_level_order" | "views_at_several_levels" | "elevation_datum_shifted";
         /**
          * @description * `queued` - Queued
          *     * `processing` - Processing
@@ -3215,6 +3216,11 @@ export interface components {
             /** @description [x, y] PDF points */
             reference_point: number[] | null;
             issues: components["schemas"]["IssuesEnum"][];
+            /**
+             * Format: decimal
+             * @description How far the marked elevation was moved onto the datum a person saved on the lowest marked level's plans (elevation_datum_shifted)
+             */
+            datum_shift_mm?: string;
         };
         LevelProposals: {
             /** @description The grid crossing found on the most plans: the project origin. A plan that doesn't show it is aligned on another crossing those plans place */

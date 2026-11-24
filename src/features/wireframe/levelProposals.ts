@@ -16,6 +16,8 @@ export const PROPOSAL_ISSUES: Record<string, string> = {
     'Partial plans of several storeys on this sheet: no one level for it (its steel is placed by hand)',
   elevation_typed_on_other_page: 'Elevation typed on another plan of this level',
   elevation_of_first_floor: 'No 1st floor plan: the 1st floor elevation is proposed for the foundation plan',
+  elevation_datum_shifted:
+    'Moved onto the datum saved on the lowest level’s plans: the drawings mark it on another datum (e.g. 100\'-0") — the source shows the marked value',
 }
 
 /** What a proposal would set: the fields it has a value for. */

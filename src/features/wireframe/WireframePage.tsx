@@ -18,6 +18,8 @@ import {
 import { ErrorState, LoadingState } from '../../components/feedback/States'
 import { BackLink } from '../../components/ui/BackLink'
 import { Button } from '../../components/ui/Button'
+import { Pager } from '../../components/ui/Pager'
+import { usePage } from '../../components/ui/usePage'
 import { Dialog } from '../../components/ui/Dialog'
 import { SelectField, TextField } from '../../components/ui/Field'
 import { StatusBadge } from '../../components/ui/StatusBadge'
@@ -804,7 +806,11 @@ const ElementTable = memo(function ElementTable({
   selectedId: string | null
   onSelect: (id: string) => void
 }) {
+  const focus = useMemo(() => (selectedId ? elements.findIndex((e) => e.id === selectedId) : null), [elements, selectedId])
+  const view = usePage(elements.length, focus)
   return (
+    <>
+    <Pager label="Wireframe element pages" count={elements.length} view={view} />
     <div className="table-wrap wf-elements">
       <table className="table table--compact quantities">
         <caption className="visually-hidden">Wireframe elements</caption>
@@ -822,12 +828,13 @@ const ElementTable = memo(function ElementTable({
           </tr>
         </thead>
         <tbody>
-          {elements.map((e) => (
+          {elements.slice(view.start, view.end).map((e) => (
             <ElementRow key={e.id} projectId={projectId} e={e} selected={e.id === selectedId} onSelect={onSelect} />
           ))}
         </tbody>
       </table>
     </div>
+    </>
   )
 })
 

@@ -7,6 +7,8 @@ import type { ColumnChanges, SchedulerColumns, SchedulerLevel, SchedulerRow } fr
 import { applyColumnsToAbm, bulkEditColumns, downloadColumnsCsv, getSchedulerColumns } from '../../api/wireframe'
 import { LoadingState } from '../../components/feedback/States'
 import { Button } from '../../components/ui/Button'
+import { Pager } from '../../components/ui/Pager'
+import { usePage } from '../../components/ui/usePage'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { useDebouncedValue } from '../../lib/useDebouncedValue'
 
@@ -94,6 +96,9 @@ export function ColumnScheduler({
   const [applying, setApplying] = useState(false)
   const [applied, setApplied] = useState<string | null>(null)
   const rows = useMemo(() => schedule.data?.columns ?? [], [schedule.data])
+  // A page of rows at a time (thousands froze the page); the column picked in the 3D view turns to its page.
+  const focus = useMemo(() => (selectedId ? rows.findIndex((r) => r.id === selectedId) : null), [rows, selectedId])
+  const view = usePage(rows.length, focus)
   const levels = useMemo(() => schedule.data?.levels ?? [], [schedule.data])
 
   const edit = useMutation({
@@ -290,6 +295,8 @@ export function ColumnScheduler({
       {!rows.length ? (
         <p className="muted">This revision has no columns.</p>
       ) : (
+        <>
+        <Pager label="Column schedule pages" count={rows.length} view={view} />
         <div className="table-wrap col-sched__wrap">
           <table className="table table--compact col-sched__table" aria-label="Column schedule" aria-multiselectable="true">
             <thead>
@@ -315,11 +322,11 @@ export function ColumnScheduler({
               </tr>
             </thead>
             <tbody>
-              {rows.map((row, index) => (
+              {rows.slice(view.start, view.end).map((row, i) => (
                 <ScheduleRow
                   key={row.id}
                   row={row}
-                  index={index}
+                  index={view.start + i}
                   selected={selection.has(row.id)}
                   current={row.id === selectedId}
                   editable={editable}
@@ -331,6 +338,7 @@ export function ColumnScheduler({
             </tbody>
           </table>
         </div>
+        </>
       )}
       <ConfirmDialog
         open={applying}
