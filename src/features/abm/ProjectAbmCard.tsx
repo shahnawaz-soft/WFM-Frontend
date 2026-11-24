@@ -43,7 +43,7 @@ export function ProjectAbmCard({ project }: { project: Project }) {
       <div className="card__header">
         <h2 id="abm-card-heading">ABM</h2>
         <div className="button-row button-row--tight">
-          <Link className="button button--secondary" to={`/projects/${project.id}/wireframe?tab=columns`}>
+          <Link className="button button--secondary" to={`/projects/${project.id}/columns`}>
             Column scheduler
           </Link>
           <Button loading={download.isPending} onClick={() => download.mutate()}>

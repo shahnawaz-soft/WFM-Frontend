@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { lazy, memo, Suspense, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useParams, useSearchParams } from 'react-router'
+import { lazy, memo, Suspense, useEffect, useMemo, useState } from 'react'
+import { Link, Navigate, useParams, useSearchParams } from 'react-router'
 
 import { toApiError } from '../../api/errors'
 import { getProject } from '../../api/projects'
@@ -29,7 +29,6 @@ import { projectCan } from '../projects/useProjectPermissions'
 import { AddElementForm, ElementPanel } from './ElementPanel'
 import { EMPTY_HISTORY, record, step, valuesOf, type History } from './elementHistory'
 import { describeColumn } from '../viewer/columnSymbols'
-import { ColumnScheduler } from './ColumnScheduler'
 import { IsometricPreview } from './IsometricPreview'
 import { ColumnMarksCard } from './ColumnMarksCard'
 import { LevelProposalsCard } from './LevelProposals'
@@ -86,7 +85,8 @@ export function WireframePage() {
   const [chosen, setChosen] = useState<string | null>(null)
   const [params] = useSearchParams()
   const linkedMember = params.get('member')
-  const openTab = params.get('tab') === 'columns' ? 'columns' : 'elements'
+  // The column scheduler is a page of its own now: old links to its tab go there.
+  const toScheduler = params.get('tab') === 'columns'
 
   const project = useQuery({ queryKey: ['project', projectId], queryFn: () => getProject(projectId) })
   const setup = useQuery({ queryKey: ['wireframe-setup', projectId], queryFn: () => getWireframeSetup(projectId) })
@@ -118,6 +118,7 @@ export function WireframePage() {
   }
   if (!project.data || !setup.data || !revisions.data) return <LoadingState label="Opening wireframe…" />
 
+  if (toScheduler) return <Navigate to={`/projects/${projectId}/columns`} replace />
   const canEdit = projectCan(project.data, 'project.edit')
   const pages = setup.data.pages
   const generating = revisions.data.some((w) => w.status === 'generating')
@@ -246,8 +247,6 @@ export function WireframePage() {
           revisions={revisions.data}
           canEdit={canEdit}
           linkedMember={linkedMember}
-          openTab={openTab}
-          datasetId={project.data.section_dataset?.id ?? null}
           onChoose={setChosen}
           onUpdate={canEdit && pages.length ? () => generate.mutate(false) : undefined}
           updating={generate.isPending || generating}
@@ -270,8 +269,6 @@ function RevisionSection({
   revisions,
   canEdit,
   linkedMember,
-  openTab,
-  datasetId,
   onChoose,
   onUpdate,
   updating = false,
@@ -281,9 +278,6 @@ function RevisionSection({
   revisions: Wireframe[]
   canEdit: boolean
   linkedMember: string | null
-  /** Open on the Column scheduler (the project page's link) or the element list. */
-  openTab: 'elements' | 'columns'
-  datasetId: string | null
   onChoose: (id: string) => void
   /** Generate again (the page's own action), offered where the model is out of date. */
   onUpdate?: () => void
@@ -293,12 +287,6 @@ function RevisionSection({
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [onlyProblems, setOnlyProblems] = useState(false)
   const [showCopies, setShowCopies] = useState(false)
-  const [tab, setTab] = useState<'elements' | 'columns'>(openTab)
-  const tabs = useRef<HTMLDivElement>(null)
-  // Opened on the scheduler: bring it into view once the revision is shown.
-  useEffect(() => {
-    if (openTab === 'columns') tabs.current?.scrollIntoView?.({ block: 'start' })
-  }, [openTab])
   // Columns picked in the schedule or in the view (Ctrl+click): one selection for both.
   const [picked, setPicked] = useState<Set<string>>(new Set())
   // Undo/redo of element changes made here (old Wireframer's Ctrl+Z): per revision.
@@ -700,28 +688,13 @@ function RevisionSection({
             )}
           </div>
 
-          <div className="family-tabs wf-tabs" role="group" aria-label="Table" ref={tabs}>
-            <button type="button" aria-pressed={tab === 'elements'} onClick={() => setTab('elements')}>
-              Elements
-            </button>
-            <button type="button" aria-pressed={tab === 'columns'} onClick={() => setTab('columns')}>
-              Column scheduler
-            </button>
+          <div className="wf-tabs">
+            <h3 className="wf-tabs__title">Elements</h3>
+            <Link className="button button--secondary" to={`/projects/${projectId}/columns?revision=${current.id}`}>
+              Open column scheduler →
+            </Link>
           </div>
-          {tab === 'columns' ? (
-            <ColumnScheduler
-              projectId={projectId}
-              wireframeId={current.id}
-              revisionNo={current.revision_no}
-              datasetId={datasetId}
-              editable={editable}
-              selectedId={selectedId}
-              selection={picked}
-              onSelectionChange={setPicked}
-              onSelect={setSelectedId}
-              onChanged={refresh}
-            />
-          ) : (
+          {
             <>
               <div className="button-row button-row--tight">
                 <label className="checkbox">
@@ -738,7 +711,7 @@ function RevisionSection({
               {elements.isPending && <LoadingState label="Loading elements…" />}
               {shown.length > 0 && <ElementTable projectId={projectId} elements={shown} selectedId={selectedId} onSelect={setSelectedId} />}
             </>
-          )}
+          }
           {reviewing && (
             <ReviewDialog
               wireframe={current}

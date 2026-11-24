@@ -1769,6 +1769,7 @@ export const drawingHandlers = [
   }),
   // Level proposals: every processed page reads as LEVEL 2 at 14'-0", reference A/1 (150, 95).
   http.get('*/api/v1/projects/:id/column-marks/', ({ params }) => HttpResponse.json(columnMarks(params.id as string))),
+  http.get('*/api/v1/projects/:id/column-groups/', () => HttpResponse.json([])),
   http.post('*/api/v1/projects/:id/column-marks/', async ({ params, request }) => {
     const { sizes } = (await request.json()) as { sizes: Record<string, string> }
     const bad = Object.entries(sizes).filter(([, v]) => v && !/^(W\d+X[\d.]+|HSS[\d./]+X[\d./]+X[\d./]+)$/i.test(v.trim()))

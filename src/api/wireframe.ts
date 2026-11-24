@@ -1,5 +1,6 @@
 import { apiClient } from './client'
 import type {
+  ColumnMetaGroup,
   ApplyToAbmResult,
   ColumnChanges,
   DrawingPage,
@@ -215,4 +216,19 @@ export async function getPageTekla(pageId: string): Promise<PageTekla> {
 export async function getProjectTekla(projectId: string): Promise<PageTekla> {
   const { data } = await apiClient.get<PageTekla>(`/api/v1/projects/${projectId}/tekla/`)
   return data
+}
+
+/** The project's column meta-groups: named groups of columns (by their members). */
+export async function listColumnMetaGroups(projectId: string): Promise<ColumnMetaGroup[]> {
+  const { data } = await apiClient.get<ColumnMetaGroup[]>(`/api/v1/projects/${projectId}/column-groups/`)
+  return data
+}
+
+export async function createColumnMetaGroup(projectId: string, name: string, members: string[]): Promise<ColumnMetaGroup> {
+  const { data } = await apiClient.post<ColumnMetaGroup>(`/api/v1/projects/${projectId}/column-groups/`, { name, members })
+  return data
+}
+
+export async function deleteColumnMetaGroup(projectId: string, groupId: string): Promise<void> {
+  await apiClient.delete(`/api/v1/projects/${projectId}/column-groups/${groupId}/`)
 }

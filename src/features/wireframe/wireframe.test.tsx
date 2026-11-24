@@ -427,6 +427,26 @@ describe('Wireframe', () => {
     expect(within(elements).getByText('No measured span.')).toBeInTheDocument()
   })
 
+  it('opens the column scheduler on a page of its own, and back', async () => {
+    const { project } = await addedPage()
+    renderApp(`/projects/${project.id}/wireframe`)
+    await userEvent.click(await screen.findByRole('button', { name: 'Generate wireframe' }))
+    await screen.findByRole('region', { name: /Revision 1/ })
+    await userEvent.click(screen.getByRole('link', { name: 'Open column scheduler →' }))
+    expect(await screen.findByRole('heading', { level: 1, name: 'Column Schedule' })).toBeInTheDocument()
+    expect(screen.getByText('Revision 1')).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: /Revision 1/ })).not.toBeInTheDocument() // not the wireframe page
+    await userEvent.click(screen.getByRole('link', { name: /Back to wireframe/ }))
+    expect(await screen.findByRole('region', { name: /Revision 1/ })).toBeInTheDocument()
+  })
+
+  it('takes an old link to the scheduler tab to its page', async () => {
+    const { project } = await addedPage()
+    await call('POST', `/projects/${project.id}/wireframes/`, {})
+    renderApp(`/projects/${project.id}/wireframe?tab=columns`)
+    expect(await screen.findByRole('heading', { level: 1, name: 'Column Schedule' })).toBeInTheDocument()
+  })
+
   it('keeps earlier revisions', async () => {
     const { project } = await addedPage()
     renderApp(`/projects/${project.id}/wireframe`)

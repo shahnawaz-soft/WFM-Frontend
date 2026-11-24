@@ -1088,6 +1088,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{id}/column-groups/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The project's column meta-groups (the old Wireframer's column scheduler). */
+        get: operations["projects_column_groups_list"];
+        put?: never;
+        /** @description The project's column meta-groups (the old Wireframer's column scheduler). */
+        post: operations["projects_column_groups_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/column-groups/{group_pk}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["projects_column_groups_destroy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/column-marks/": {
         parameters: {
             query?: never;
@@ -2329,6 +2363,20 @@ export interface components {
             schedule_sheets: string[];
             /** @description Of those, the ones this project doesn't have */
             missing_sheets: string[];
+        };
+        ColumnMetaGroup: {
+            /** Format: uuid */
+            readonly id: string;
+            name: string;
+            /** @description The columns' extracted member ids (an element id for a column added in the model) */
+            members: string[];
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        ColumnMetaGroupRequest: {
+            name: string;
+            /** @description The columns' extracted member ids (an element id for a column added in the model) */
+            members: string[];
         };
         ColumnRow: {
             /** Format: uuid */
@@ -6907,6 +6955,73 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Project"];
                 };
+            };
+        };
+    };
+    projects_column_groups_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ColumnMetaGroup"][];
+                };
+            };
+        };
+    };
+    projects_column_groups_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ColumnMetaGroupRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ColumnMetaGroup"];
+                };
+            };
+        };
+    };
+    projects_column_groups_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                group_pk: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
