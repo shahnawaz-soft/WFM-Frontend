@@ -3645,6 +3645,8 @@ export interface components {
             beams_csv: string;
             /** @description The old Wireframer's columns CSV (mm) */
             columns_csv: string;
+            /** @description The grid lines as a grids CSV (index, direction, values, labels; mm) */
+            grids_csv: string;
             /** @description The Tekla macro's POST /insert body */
             payload: unknown;
             /** @description CLASS of each member sent, by its COMPONENT_ID: 3 green, 13 orange, 2 red (scaled), 4 column */
@@ -4526,6 +4528,8 @@ export interface components {
         TeklaCounts: {
             beams: number;
             columns: number;
+            /** @description Straight grid lines sent */
+            grids: number;
             skipped: number;
         };
         TeklaSkipped: {

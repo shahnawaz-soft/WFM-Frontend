@@ -27,9 +27,10 @@ beforeEach(() => {
     file_stem: '02=Stru_p15',
     beams_csv: 'COMPONENT_ID…',
     columns_csv: 'COMPONENT_ID…',
+    grids_csv: 'index,direction,values,labels…',
     payload: { replaceExisting: true, beams: [{ profile: 'W12X26' }] },
     classes: { b1: '3' },
-    counts: { beams: 1, columns: 0, skipped: 1 },
+    counts: { beams: 1, columns: 0, grids: 0, skipped: 1 },
     skipped: [{ id: 'x', kind: 'column', designation: '', reasons: [LEVEL] }],
     elevation_assumed: false,
     reference_assumed: false,
@@ -43,7 +44,7 @@ describe('TeklaExport', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Export' }))
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Export CSV' }))
     await waitFor(() => expect(mocks.downloads).toEqual(['beams_02=Stru_p15.csv']))
-    expect(success).toHaveBeenCalledWith('Exported 1 beam and 0 columns', `1 left out: ${LEVEL} (1)`)
+    expect(success).toHaveBeenCalledWith('Exported 1 beam, 0 columns and 0 grid lines', `1 left out: ${LEVEL} (1)`)
   })
 
   it('pushes the payload to Tekla', async () => {
@@ -57,11 +58,24 @@ describe('TeklaExport', () => {
 
   it('says why when nothing can be placed', async () => {
     const error = vi.spyOn(notify, 'error')
-    mocks.data = { ...mocks.data, counts: { beams: 0, columns: 0, skipped: 1 } }
+    mocks.data = { ...mocks.data, counts: { beams: 0, columns: 0, grids: 0, skipped: 1 } }
     render(<TeklaExport pageId="p1" />)
     await userEvent.click(screen.getByRole('button', { name: 'Export' }))
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Push to Tekla' }))
     await waitFor(() => expect(error).toHaveBeenCalledWith('Nothing on this page can be placed yet', `1 left out: ${LEVEL} (1)`))
     expect(mocks.pushed).toEqual([])
+  })
+
+  it('exports and pushes a page of grids only', async () => {
+    const success = vi.spyOn(notify, 'success')
+    mocks.data = { ...mocks.data, counts: { beams: 0, columns: 0, grids: 51, skipped: 0 }, skipped: [] }
+    render(<TeklaExport pageId="p1" />)
+    await userEvent.click(screen.getByRole('button', { name: 'Export' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Export CSV' }))
+    await waitFor(() => expect(mocks.downloads).toEqual(['grids_02=Stru_p15.csv']))
+    expect(success).toHaveBeenCalledWith('Exported 0 beams, 0 columns and 51 grid lines', undefined)
+    await userEvent.click(screen.getByRole('button', { name: 'Export' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Push to Tekla' }))
+    await waitFor(() => expect(mocks.pushed).toEqual([mocks.data.payload]))
   })
 })

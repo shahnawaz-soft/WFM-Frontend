@@ -24,8 +24,9 @@ export function TeklaExport({ pageId }: { pageId: string }) {
     // No reference point and no grid: placed from the sheet's corner (one page needs no other).
     const corner = data.reference_assumed ? "No reference point: placed from the sheet's corner." : ''
     const left = [assumed, corner, skipped].filter(Boolean).join(' ')
-    if (data.counts.beams + data.counts.columns === 0) {
-      notify.error('Nothing on this page can be placed yet', left || 'No members found on this page.')
+    // A page of grids only (no members yet) still exports and pushes its grids.
+    if (data.counts.beams + data.counts.columns + data.counts.grids === 0) {
+      notify.error('Nothing on this page can be placed yet', left || 'No members or grids found on this page.')
       return null
     }
     return { data, left }
@@ -49,7 +50,11 @@ export function TeklaExport({ pageId }: { pageId: string }) {
       const { data, left } = loaded
       if (data.counts.beams) downloadText(data.beams_csv, `beams_${data.file_stem}.csv`)
       if (data.counts.columns) downloadText(data.columns_csv, `columns_${data.file_stem}.csv`)
-      notify.success(`Exported ${plural(data.counts.beams, 'beam')} and ${plural(data.counts.columns, 'column')}`, left || undefined)
+      if (data.counts.grids) downloadText(data.grids_csv, `grids_${data.file_stem}.csv`)
+      notify.success(
+        `Exported ${plural(data.counts.beams, 'beam')}, ${plural(data.counts.columns, 'column')} and ${plural(data.counts.grids, 'grid line')}`,
+        left || undefined,
+      )
     })
 
   const push = () =>
@@ -70,7 +75,7 @@ export function TeklaExport({ pageId }: { pageId: string }) {
       </Menu.Trigger>
       <Menu.Portal>
         <Menu.Content className="menu" align="end" sideOffset={6}>
-          <Menu.Item className="menu__item" onSelect={exportCsv} title="Download this page's beams and columns as CSV, in the old Wireframer's format (mm)">
+          <Menu.Item className="menu__item" onSelect={exportCsv} title="Download this page's beams, columns and grids as CSV, in the old Wireframer's format (mm)">
             Export CSV
           </Menu.Item>
           <Menu.Item
