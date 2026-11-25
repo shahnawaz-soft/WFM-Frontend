@@ -1231,3 +1231,5 @@ a.button { text-decoration: none; justify-content: center; }
 .col-grid__side { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
 .col-page .col-grid__layout { grid-template-columns: minmax(0, 1fr) 320px; }
 @media (max-width: 1100px) { .col-page .col-grid__layout { grid-template-columns: minmax(0, 1fr); } }
+.col-grid__picked { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); padding: 2px var(--space-2); border-radius: var(--radius); background: var(--color-info-bg); }
+.col-grid__plan[data-mode='select'] { cursor: crosshair; }

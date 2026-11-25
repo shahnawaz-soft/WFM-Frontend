@@ -16,6 +16,7 @@ export function ColumnMetaGroups({
   onPick,
   onCreate,
   onDelete,
+  creates = true,
 }: {
   groups: ColumnMetaGroup[]
   rows: SchedulerRow[]
@@ -26,6 +27,8 @@ export function ColumnMetaGroups({
   onPick: (ids: string[]) => void
   onCreate: (name: string) => void
   onDelete: (group: ColumnMetaGroup) => void
+  /** Offers "Group Selected" here (the Grid view offers it in its own toolbar). */
+  creates?: boolean
 }) {
   const [naming, setNaming] = useState(false)
   const [name, setName] = useState('')
@@ -62,7 +65,7 @@ export function ColumnMetaGroups({
           })}
         </ul>
       )}
-      {canEdit && selection.size > 1 && !naming && (
+      {creates && canEdit && selection.size > 1 && !naming && (
         <Button onClick={() => setNaming(true)}>➕ Group Selected ({selection.size})</Button>
       )}
       {naming && (

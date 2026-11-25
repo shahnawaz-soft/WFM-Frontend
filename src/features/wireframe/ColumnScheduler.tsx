@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Fragment, memo, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
+import { cloneElement, Fragment, memo, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 
 import { toApiError } from '../../api/errors'
 import { searchProfiles } from '../../api/sections'
@@ -491,9 +491,18 @@ export function ColumnScheduler({
         <ColumnVisual groups={groups} levels={levels} selection={selection} onPick={pickIds} meta={metaPanel} />
       ) : (
         <div className="col-grid__layout">
-          <ColumnGridView rows={rows} grids={grids} metaGroups={metaGroups.data ?? []} selection={selection} onPick={pickIds} />
+          <ColumnGridView
+            rows={rows}
+            grids={grids}
+            metaGroups={metaGroups.data ?? []}
+            selection={selection}
+            onPick={pickIds}
+            onClear={() => setSelection(new Set())}
+            onGroup={canEditProject ? (name) => createMeta.mutate(name) : undefined}
+            grouping={createMeta.isPending}
+          />
           <div className="col-grid__side">
-            {metaPanel}
+            {cloneElement(metaPanel, { creates: false })}
             {selectionPanel}
           </div>
         </div>
