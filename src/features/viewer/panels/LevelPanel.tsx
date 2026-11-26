@@ -9,7 +9,7 @@ import { Button } from '../../../components/ui/Button'
 import { FormAlert, SelectField, TextField } from '../../../components/ui/Field'
 import { StatusBadge } from '../../../components/ui/StatusBadge'
 import { NO_ERRORS, toFormErrors, type FormErrors } from '../../../lib/formErrors'
-import { PROPOSAL_ISSUES, hasProposal, proposalState, useLevelProposals } from '../../wireframe/levelProposals'
+import { PROPOSAL_ISSUES, hasProposal, proposalState, useLevelProposals } from '../../wireframe/useLevelProposals'
 import { sortedGridPoints } from '../grids'
 
 const STILL_NEEDED: Record<string, string> = {

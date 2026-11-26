@@ -4,7 +4,7 @@ import { Link } from 'react-router'
 import { applyLevelProposals } from '../../api/wireframe'
 import { Button } from '../../components/ui/Button'
 import { signedFeetInches } from '../abm/format'
-import { differs, elevationDiffers, fills, hasProposal, PROPOSAL_ISSUES, useLevelProposals } from './levelProposals'
+import { differs, elevationDiffers, fills, hasProposal, PROPOSAL_ISSUES, useLevelProposals } from './useLevelProposals'
 
 /** The level set-up read from the drawings, page by page, for a person to apply. */
 export function LevelProposalsCard({ projectId, canEdit }: { projectId: string; canEdit: boolean }) {

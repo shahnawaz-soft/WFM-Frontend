@@ -419,10 +419,11 @@ describe('Page workspace', () => {
     await userEvent.clear(field)
     await userEvent.type(field, '1/4" = 1\'-0"')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save and run again' }))
+    // asserted first: a success toast without a description is gone after 1 s, before the refetches finish
+    expect(await screen.findByText(/Scale 1\/4" = 1'-0" saved: 1 page run again/)).toBeInTheDocument()
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expect(await within(panel).findByText('Set by you')).toBeInTheDocument()
     expect(within(panel).getByText(/^1\/4" = 1'-0"/)).toBeInTheDocument()
-    expect(await screen.findByText(/Scale 1\/4" = 1'-0" saved: 1 page run again/)).toBeInTheDocument()
 
     await userEvent.click(within(panel).getByRole('button', { name: 'Use the drawing’s scale' }))
     await waitFor(() => expect(within(panel).queryByText('Set by you')).not.toBeInTheDocument())
