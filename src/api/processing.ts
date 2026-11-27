@@ -109,14 +109,17 @@ export interface RemovedInBox {
   columns: [number, number][]
   members: string[]
   kept: { id: string; designation: string; why: string }[]
+  /** Grids deleted (each with a bubble or a line end in the box). */
+  grids: string[]
 }
 
 /** Remove the false finds inside a box on the sheet (PDF points: left, bottom, right, top):
- *  columns whose centre is in it, members whose label is; what a person reviewed is kept. */
+ *  columns whose centre is in it, members whose label is, grids with a bubble or a line end in it
+ *  (deleted as Delete does); what a person reviewed is kept. */
 export async function removeInBox(
   pageId: string,
   box: [number, number, number, number],
-  kinds: { columns: boolean; members: boolean },
+  kinds: { columns: boolean; members: boolean; grids: boolean },
 ): Promise<RemovedInBox> {
   const { data } = await apiClient.post<RemovedInBox>(`/api/v1/drawing-pages/${pageId}/remove-in-box/`, { box, ...kinds })
   return data
@@ -126,7 +129,7 @@ export async function removeInBox(
 export async function undoRemoveInBox(pageId: string, removed: RemovedInBox): Promise<void> {
   await apiClient.post(`/api/v1/drawing-pages/${pageId}/remove-in-box/`, {
     box: [0, 0, 1, 1],
-    undo: { columns: removed.columns, members: removed.members },
+    undo: { columns: removed.columns, members: removed.members, grids: removed.grids },
   })
 }
 

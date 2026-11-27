@@ -1221,14 +1221,16 @@ export const drawingHandlers = [
     }
     return HttpResponse.json({ removed: removedColumns[page.id]!.length })
   }),
-  // Remove in box: columns whose centre is in it, members whose label is (unless reviewed).
+  // Remove in box: columns whose centre is in it, members whose label is (unless reviewed),
+  // grids the engine drew with a bubble or a line end in it (deleted, as Delete does).
   http.post('*/api/v1/drawing-pages/:id/remove-in-box/', async ({ params, request }) => {
     const page = pageById(params.id as string) as Mutable<DrawingPage>
     const body = (await request.json()) as {
       box: [number, number, number, number]
       columns?: boolean
       members?: boolean
-      undo?: { columns: [number, number][]; members: string[] }
+      grids?: boolean
+      undo?: { columns: [number, number][]; members: string[]; grids?: string[] }
     }
     const run = page.current_run as unknown as { columns: { x: number; y: number }[] }
     const aside = (removedColumns[page.id] ??= [])
@@ -1238,7 +1240,13 @@ export const drawingHandlers = [
       removedColumns[page.id] = aside.filter((c) => !back.includes(c))
       run.columns = [...run.columns, ...back]
       for (const m of list) if (body.undo.members.includes(m.id)) (m as { review_status: string }).review_status = 'unreviewed'
-      return HttpResponse.json({ columns: [], members: [], kept: [] })
+      const backGrids = body.undo.grids ?? []
+      if (backGrids.length) {
+        const edits = gridEditsOfMock(page)
+        page.grid_edits = { ...edits, deleted: edits.deleted.filter((l) => !backGrids.includes(l)) }
+        applyGridEdits(page)
+      }
+      return HttpResponse.json({ columns: [], members: [], kept: [], grids: [] })
     }
     const [l, b, r, t] = body.box
     const inside = (x: number, y: number) => l <= x && x <= r && b <= y && y <= t
@@ -1256,8 +1264,27 @@ export const drawingHandlers = [
         removed.push(m.id)
       }
     }
-    if (!columns.length && !removed.length && !kept.length) return err(404, 'nothing_in_box', 'Nothing Steelo found is in that box.')
-    return HttpResponse.json({ columns: columns.map((c) => [c.x, c.y]), members: removed, kept })
+    const edits = gridEditsOfMock(page)
+    const drawn = drawnGridsOf.get(page.id) ?? ((page.current_run?.grids ?? []) as Record<string, unknown>[]).filter((g) => !g.person)
+    const grids =
+      body.grids === false
+        ? []
+        : [
+            ...new Set(
+              drawn
+                .filter((g) => !edits.deleted.includes(g.label as string))
+                .filter((g) =>
+                  [...(g.bubbles as number[][]), [g.x1, g.y1], [g.x2, g.y2]].some(([x, y]) => inside(x as number, y as number)),
+                )
+                .map((g) => g.label as string),
+            ),
+          ]
+    if (!columns.length && !removed.length && !kept.length && !grids.length) return err(404, 'nothing_in_box', 'Nothing Steelo found is in that box.')
+    if (grids.length) {
+      page.grid_edits = { ...edits, deleted: [...edits.deleted, ...grids] }
+      applyGridEdits(page)
+    }
+    return HttpResponse.json({ columns: columns.map((c) => [c.x, c.y]), members: removed, kept, grids })
   }),
   // Remove all like this: the mock calls columns of the removed one's shape alike.
   http.post('*/api/v1/drawing-pages/:id/columns/remove-like/', async ({ params, request }) => {

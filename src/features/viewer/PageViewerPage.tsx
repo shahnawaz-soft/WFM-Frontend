@@ -144,7 +144,8 @@ export function PageViewerPage() {
     box: [number, number, number, number]
     columns: number
     members: number
-    take: { columns: boolean; members: boolean }
+    grids: string[]
+    take: { columns: boolean; members: boolean; grids: boolean }
   } | null>(null)
   const [lastBoxRemoved, setLastBoxRemoved] = useState<{ pageId: string; removed: RemovedInBox } | null>(null)
   // Picking a pen: the next click on the drawing reads the pen of the line there.
@@ -303,15 +304,16 @@ export function PageViewerPage() {
     },
   })
   const boxRemoval = useMutation({
-    mutationFn: ({ box, take }: { box: [number, number, number, number]; take: { columns: boolean; members: boolean } }) =>
+    mutationFn: ({ box, take }: { box: [number, number, number, number]; take: { columns: boolean; members: boolean; grids: boolean } }) =>
       removeInBox(pageId, box, take),
     meta: { suppressErrorToast: true },
     onSuccess: (removed) => {
       setBoxFound(null)
       const n = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`
       const kept = removed.kept.length ? `; ${n(removed.kept.length, 'member')} you reviewed or added kept` : ''
-      notify.success(`Removed ${n(removed.columns.length, 'column')} and ${n(removed.members.length, 'member')}${kept}.`)
-      setLastBoxRemoved(removed.columns.length || removed.members.length ? { pageId, removed } : null)
+      const grids = removed.grids.length ? `, ${n(removed.grids.length, 'grid')}` : ''
+      notify.success(`Removed ${n(removed.columns.length, 'column')}${grids} and ${n(removed.members.length, 'member')}${kept}.`)
+      setLastBoxRemoved(removed.columns.length || removed.members.length || removed.grids.length ? { pageId, removed } : null)
       refreshColumns()
     },
   })
@@ -868,7 +870,7 @@ export function PageViewerPage() {
               : pickingPen
               ? 'Click a line on the drawing to see its pen (line width and colour)'
               : boxRemoving
-              ? 'Drag a box around the false finds to remove: the columns and members inside it'
+              ? 'Drag a box around the false finds to remove: the columns, members and grid bubbles inside it'
               : drawingArea
               ? 'Drag a box around the part of the sheet to count: what is outside is not counted'
               : findingSimilar
@@ -913,8 +915,23 @@ export function PageViewerPage() {
                 const [ml, mb, mr, mt] = m.label_bbox
                 return inside((ml! + mr!) / 2, (mb! + mt!) / 2)
               }).length
+              // Grids the engine drew with a bubble or a line end in the box (those a person added stay).
+              const grids = [
+                ...new Set(
+                  (detailRun?.grids ?? [])
+                    .filter((g) => !g.person)
+                    .filter((g) => [...g.bubbles, [g.x1, g.y1], [g.x2, g.y2]].some(([x = NaN, y = NaN]) => inside(x, y)))
+                    .map((g) => g.label),
+                ),
+              ]
               boxRemoval.reset()
-              return setBoxFound({ box, columns, members, take: { columns: columns > 0, members: members > 0 } })
+              return setBoxFound({
+                box,
+                columns,
+                members,
+                grids,
+                take: { columns: columns > 0, members: members > 0, grids: grids.length > 0 },
+              })
             }
             if (drawingArea) {
               setDrawingArea(false)
@@ -1192,7 +1209,8 @@ export function PageViewerPage() {
         pending={boxRemoval.isPending}
         error={boxRemoval.error ? toApiError(boxRemoval.error).message : null}
         onConfirm={() => {
-          if (boxFound && (boxFound.take.columns || boxFound.take.members)) boxRemoval.mutate({ box: boxFound.box, take: boxFound.take })
+          if (boxFound && (boxFound.take.columns || boxFound.take.members || boxFound.take.grids))
+            boxRemoval.mutate({ box: boxFound.box, take: boxFound.take })
         }}
         onCancel={() => setBoxFound(null)}
       >
@@ -1216,9 +1234,20 @@ export function PageViewerPage() {
               />{' '}
               {boxFound.members} member{boxFound.members === 1 ? '' : 's'}
             </label>
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                disabled={!boxFound.grids.length}
+                checked={boxFound.take.grids}
+                onChange={(e) => setBoxFound({ ...boxFound, take: { ...boxFound.take, grids: e.target.checked } })}
+              />{' '}
+              {boxFound.grids.length} grid{boxFound.grids.length === 1 ? '' : 's'}
+              {boxFound.grids.length > 0 && ` (${boxFound.grids.join(', ')})`}
+            </label>
             <p className="muted">
-              Columns are taken off this page and stay off when it runs again; members are rejected. Members you accepted,
-              edited or added are kept. Undo box remove brings it all back.
+              Columns are taken off this page and stay off when it runs again; members are rejected; grids are deleted
+              (every grid of that name on the page), as Delete does. Members you accepted, edited or added, and grids you
+              added, are kept. Undo box remove brings it all back.
             </p>
           </>
         )}

@@ -532,7 +532,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Remove the false finds in a box dragged on the sheet (columns, members), or undo that. */
+        /**
+         * @description Remove the false finds in a box dragged on the sheet (columns, members, grids), or undo
+         *     that.
+         */
         post: operations["drawing_pages_remove_in_box_create"];
         delete?: never;
         options?: never;
@@ -4132,6 +4135,11 @@ export interface components {
              * @default true
              */
             members: boolean;
+            /**
+             * @description Delete the grids with a bubble or a line end in it
+             * @default true
+             */
+            grids: boolean;
             /** @description Bring back what a removal returned (the box is not used) */
             undo?: components["schemas"]["RemoveInBoxUndoRequest"];
         };
@@ -4142,10 +4150,13 @@ export interface components {
             members: string[];
             /** @description In the box, but reviewed or added: kept */
             kept: components["schemas"]["KeptMember"][];
+            /** @description Grids deleted */
+            grids: string[];
         };
         RemoveInBoxUndoRequest: {
             columns?: number[][];
             members?: string[];
+            grids?: string[];
         };
         RemoveLikeRequest: {
             /**

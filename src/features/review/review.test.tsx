@@ -229,6 +229,21 @@ describe('Choosing several members', () => {
     expect(await screen.findByText('Rejected 3 members')).toBeInTheDocument()
   })
 
+  it('fills in the values the chosen members share, and Mixed where they differ', async () => {
+    await openProcessedPage()
+    await screen.findByRole('table', { name: /Detected members/ })
+    await userEvent.click(tickBox(1))
+    await userEvent.click(tickBox(2))
+    await userEvent.click(within(screen.getByRole('group', { name: 'Chosen members' })).getByRole('button', { name: 'Edit…' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Edit 2 members' })
+    expect(within(dialog).getByLabelText('Section')).toHaveValue('W12X26') // both W12X26
+    expect(within(dialog).getByLabelText('Quantity')).toHaveValue(1)
+    const studs = within(dialog).getByLabelText('Studs')
+    expect(studs).toHaveValue('') // (12) on one, none on the other
+    expect(studs).toHaveAttribute('placeholder', 'Mixed')
+    expect(within(dialog).getByRole('button', { name: 'Save 2 members' })).toBeDisabled() // nothing changed yet
+  })
+
   it('edits only the fields filled in, for every chosen member', async () => {
     await openProcessedPage()
     await screen.findByRole('table', { name: /Detected members/ })
@@ -242,6 +257,7 @@ describe('Choosing several members', () => {
     await userEvent.click(save)
     expect(await within(dialog).findByText(/Use feet and inches/)).toBeInTheDocument()
     await userEvent.clear(within(dialog).getByLabelText('Length'))
+    await userEvent.clear(within(dialog).getByLabelText('Section'))
     await userEvent.type(within(dialog).getByLabelText('Section'), 'w14x22')
     await userEvent.selectOptions(within(dialog).getByLabelText('Type'), 'column')
     await userEvent.type(within(dialog).getByLabelText('Studs'), '20')
@@ -535,6 +551,19 @@ describe('Remove in box', () => {
     expect(await screen.findByText('Column (2)')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Undo box remove' }))
     expect(await screen.findByText('Column (3)')).toBeInTheDocument()
+  })
+
+  it('deletes the grids with a bubble in the box, and Undo brings them back', async () => {
+    await openProcessedPage()
+    await screen.findByRole('table', { name: /Detected members/ })
+    await userEvent.click(screen.getByRole('button', { name: 'Remove in box' }))
+    await dragBox([130, 640], [170, 600]) // round grid 1's bubble at (150, 620)
+    const dialog = await screen.findByRole('dialog', { name: 'Remove what is in this box?' })
+    expect(within(dialog).getByLabelText(/1 grid \(1\)/)).toBeChecked()
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Remove' }))
+    expect(await screen.findByText(/Removed .*1 grid/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Undo box remove' }))
+    expect(await screen.findByText('Brought back what the box removed')).toBeInTheDocument()
   })
 
   it('offers no box removal to viewers', async () => {
