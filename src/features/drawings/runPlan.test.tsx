@@ -101,7 +101,8 @@ describe('Run Plan', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Run all pages' }))
     expect(await screen.findByText('Every page has already been run')).toBeInTheDocument()
-    expect(screen.getByText(/use “Run all again”/)).toBeInTheDocument()
+    // the toast text can also be mirrored in the screen-reader announcement
+    expect((await screen.findAllByText(/use “Run all again”/)).length).toBeGreaterThan(0)
   })
 
   it('runs processed pages again with "Run all again", after asking', async () => {
